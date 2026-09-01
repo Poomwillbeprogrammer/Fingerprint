@@ -1,0 +1,453 @@
+// ==========================================
+// Fingerprint Admin Dashboard Client Logic
+// ==========================================
+
+const socket = io();
+
+// Web Audio Beep Notifications
+function playSound(type = 'granted') {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if (type === 'granted') {
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime); // A5 note
+      osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.15); // E6 note
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.2);
+    } else {
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      osc.frequency.setValueAtTime(160, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch (e) {
+    // Audio context not allowed before user interaction
+  }
+}
+
+// Check Authentication
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (!res.ok) {
+      window.location.href = '/login.html';
+    } else {
+      const data = await res.json();
+      const userEl = document.getElementById('navUsername');
+      if (userEl) userEl.innerText = data.username || 'Admin';
+    }
+  } catch (e) {
+    window.location.href = '/login.html';
+  }
+}
+
+// Logout Handler
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    localStorage.removeItem('admin_user');
+    window.location.href = '/login.html';
+  });
+}
+
+// Change Password Modal Handler
+const passwordModal = document.getElementById('passwordModal');
+const openPasswordModalBtn = document.getElementById('openChangePasswordBtn');
+const closePasswordModalBtn = document.getElementById('closePasswordModalBtn');
+const cancelPasswordBtn = document.getElementById('cancelPasswordBtn');
+const changePasswordForm = document.getElementById('changePasswordForm');
+const pwdAlert = document.getElementById('pwdAlert');
+
+if (openPasswordModalBtn && passwordModal) {
+  openPasswordModalBtn.addEventListener('click', () => {
+    document.getElementById('currentPassword').value = '';
+    document.getElementById('newPassword').value = '';
+    document.getElementById('confirmPassword').value = '';
+    pwdAlert.className = 'hidden mb-4 p-3 rounded-xl text-xs flex items-center gap-2';
+    pwdAlert.innerHTML = '';
+    passwordModal.classList.remove('hidden');
+  });
+
+  function closePasswordModal() {
+    passwordModal.classList.add('hidden');
+  }
+
+  if (closePasswordModalBtn) closePasswordModalBtn.addEventListener('click', closePasswordModal);
+  if (cancelPasswordBtn) cancelPasswordBtn.addEventListener('click', closePasswordModal);
+
+  if (changePasswordForm) {
+    changePasswordForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const submitBtn = document.getElementById('submitPasswordBtn');
+
+      if (newPassword !== confirmPassword) {
+        pwdAlert.className = 'mb-4 p-3 rounded-xl text-xs bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center gap-2';
+        pwdAlert.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> รหัสผ่านใหม่และการยืนยันรหัสผ่านไม่ตรงกัน';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
+
+      try {
+        const res = await fetch('/api/auth/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          pwdAlert.className = 'mb-4 p-3 rounded-xl text-xs bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center gap-2';
+          pwdAlert.innerHTML = '<i class="fa-solid fa-circle-check"></i> ' + (data.message || 'เปลี่ยนรหัสผ่านสำเร็จ');
+          setTimeout(() => {
+            closePasswordModal();
+          }, 1500);
+        } else {
+          pwdAlert.className = 'mb-4 p-3 rounded-xl text-xs bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center gap-2';
+          pwdAlert.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> ' + (data.error || 'เปลี่ยนรหัสผ่านไม่สำเร็จ');
+        }
+      } catch (err) {
+        pwdAlert.className = 'mb-4 p-3 rounded-xl text-xs bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center gap-2';
+        pwdAlert.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-check"></i> <span>บันทึกรหัสผ่าน</span>';
+      }
+    });
+  }
+}
+
+
+// Format Date & Time
+function formatDateTime(isoString) {
+  if (!isoString) return '-';
+  const d = new Date(isoString);
+  return d.toLocaleString('th-TH', {
+    day: '2-digit',
+    month: 'short',
+    year: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+// ==========================================
+// 1. Dashboard Page Logic (index.html)
+// ==========================================
+if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
+  checkAuth();
+
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/stats');
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('statTotalUsers').innerText = data.totalUsers;
+        document.getElementById('statTodayScans').innerText = data.grantedToday + data.deniedToday;
+        document.getElementById('statGrantedToday').innerText = data.grantedToday;
+        document.getElementById('statDeniedToday').innerText = data.deniedToday;
+      }
+    } catch (e) {
+      console.error('Error loading stats:', e);
+    }
+  }
+
+  async function loadLogs() {
+    try {
+      const res = await fetch('/api/logs?limit=50');
+      if (res.ok) {
+        const logs = await res.json();
+        const tbody = document.getElementById('logsTableBody');
+        tbody.innerHTML = '';
+
+        if (logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-slate-500">ยังไม่มีประวัติการสแกน</td></tr>`;
+          return;
+        }
+
+        logs.forEach(log => appendLogRow(log, false));
+      }
+    } catch (e) {
+      console.error('Error loading logs:', e);
+    }
+  }
+
+  function appendLogRow(log, isLive = true) {
+    const tbody = document.getElementById('logsTableBody');
+    const isGranted = (log.status === 'GRANTED' || log.status === 'OK');
+    const tr = document.createElement('tr');
+    tr.className = `border-b border-slate-800/60 hover:bg-slate-800/40 transition ${isLive ? 'animate-new-row' : ''}`;
+
+    tr.innerHTML = `
+      <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(log.timestamp)}</td>
+      <td class="px-5 py-3.5 font-medium text-white flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full ${isGranted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} flex items-center justify-center text-xs">
+          <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
+        </div>
+        <span>${log.user_name || 'Unknown User'}</span>
+      </td>
+      <td class="px-5 py-3.5 font-mono text-xs text-cyan-400 font-semibold">${log.fingerprint_id > 0 ? '#' + log.fingerprint_id : '-'}</td>
+      <td class="px-5 py-3.5">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isGranted ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}">
+          <i class="fa-solid ${isGranted ? 'fa-check' : 'fa-xmark'} text-[10px]"></i>
+          ${isGranted ? 'ผ่าน (Granted)' : 'ปฏิเสธ (Denied)'}
+        </span>
+      </td>
+      <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${log.score || 0}</td>
+    `;
+
+    if (isLive) {
+      // เอาแถวเปล่าออกถ้ามี
+      if (tbody.children.length === 1 && tbody.children[0].innerText.includes('ยังไม่มีประวัติ')) {
+        tbody.innerHTML = '';
+      }
+      tbody.insertBefore(tr, tbody.firstChild);
+      // จำกัด 50 แถว
+      if (tbody.children.length > 50) {
+        tbody.removeChild(tbody.lastChild);
+      }
+    } else {
+      tbody.appendChild(tr);
+    }
+  }
+
+  // Socket.io: รับ Event การสแกนนิ้วสดทันทีที่เซนเซอร์แตะ!
+  socket.on('new_log', (log) => {
+    appendLogRow(log, true);
+    playSound(log.status === 'GRANTED' ? 'granted' : 'denied');
+    loadStats();
+  });
+
+  const refreshBtn = document.getElementById('refreshBtn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', () => {
+      loadStats();
+      loadLogs();
+    });
+  }
+
+  // Initial Load
+  loadStats();
+  loadLogs();
+}
+
+// ==========================================
+// 2. Users Page Logic (users.html)
+// ==========================================
+if (window.location.pathname.endsWith('users.html')) {
+  checkAuth();
+
+  let allUsers = [];
+
+  async function loadUsers() {
+    try {
+      const res = await fetch('/api/users');
+      if (res.ok) {
+        allUsers = await res.json();
+        renderUserTable(allUsers);
+      }
+    } catch (e) {
+      console.error('Error loading users:', e);
+    }
+  }
+
+  function renderUserTable(users) {
+    const tbody = document.getElementById('usersTableBody');
+    const countEl = document.getElementById('userCount');
+    countEl.innerText = users.length;
+    tbody.innerHTML = '';
+
+    if (users.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
+      return;
+    }
+
+    users.forEach(user => {
+      const tr = document.createElement('tr');
+      tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
+      tr.innerHTML = `
+        <td class="px-5 py-3.5 font-mono text-sm font-bold text-cyan-400">#${user.id}</td>
+        <td class="px-5 py-3.5 font-medium text-white">${user.name}</td>
+        <td class="px-5 py-3.5 text-xs text-slate-400">${user.department || '-'}</td>
+        <td class="px-5 py-3.5">
+          <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'Admin' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}">
+            ${user.role}
+          </span>
+        </td>
+        <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
+        <td class="px-5 py-3.5 text-right">
+          <button onclick="deleteUser(${user.id}, '${user.name}')" class="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ml-auto">
+            <i class="fa-regular fa-trash-can"></i> ลบ
+          </button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Search Filter
+  const searchInput = document.getElementById('searchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filtered = allUsers.filter(u => 
+        u.name.toLowerCase().includes(q) || 
+        (u.department && u.department.toLowerCase().includes(q)) || 
+        u.id.toString().includes(q)
+      );
+      renderUserTable(filtered);
+    });
+  }
+
+  // Delete User
+  window.deleteUser = async function(id, name) {
+    if (!confirm(`คุณต้องการลบผู้ใช้งาน ID #${id} (${name}) ใช่หรือไม่?\n(ระบบจะสั่งลบลายนิ้วมือออกจากเซนเซอร์ R307 ให้อัตโนมัติ)`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadUsers();
+      } else {
+        const data = await res.json();
+        alert(data.error || 'ลบไม่สำเร็จ');
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  // Modal Handlers
+  const modal = document.getElementById('enrollModal');
+  const openModalBtn = document.getElementById('openEnrollModalBtn');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+  const cancelEnrollBtn = document.getElementById('cancelEnrollBtn');
+  const enrollForm = document.getElementById('enrollForm');
+
+  openModalBtn.addEventListener('click', () => {
+    // Auto-suggest next Slot ID
+    const usedIds = allUsers.map(u => u.id);
+    let nextId = 1;
+    while (usedIds.includes(nextId) && nextId <= 300) nextId++;
+    document.getElementById('enrollSlotId').value = nextId;
+    document.getElementById('enrollName').value = '';
+    document.getElementById('enrollDept').value = '';
+    updateGuidance('ready', 'พร้อมลงทะเบียน', 'กรอกข้อมูลแล้วกดปุ่ม "บันทึกข้อมูล" ด้านล่าง');
+    modal.classList.remove('hidden');
+  });
+
+  function closeModal() {
+    modal.classList.add('hidden');
+  }
+
+  closeModalBtn.addEventListener('click', closeModal);
+  cancelEnrollBtn.addEventListener('click', closeModal);
+
+  function updateGuidance(state, title, desc) {
+    const icon = document.getElementById('stepIcon');
+    const titleEl = document.getElementById('stepTitle');
+    const descEl = document.getElementById('stepDesc');
+
+    titleEl.innerText = title;
+    descEl.innerText = desc;
+
+    if (state === 'step1') {
+      icon.innerHTML = '<i class="fa-solid fa-fingerprint animate-bounce text-cyan-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl';
+    } else if (state === 'remove') {
+      icon.innerHTML = '<i class="fa-solid fa-hand text-amber-400 animate-pulse"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl';
+    } else if (state === 'success') {
+      icon.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-xl';
+    } else if (state === 'failed') {
+      icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-xl';
+    } else {
+      icon.innerHTML = '<i class="fa-solid fa-hand-pointer text-slate-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-slate-800 flex items-center justify-center text-xl';
+    }
+  }
+
+  // Submit Enroll Form
+  enrollForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = parseInt(document.getElementById('enrollSlotId').value);
+    const name = document.getElementById('enrollName').value.trim();
+    const department = document.getElementById('enrollDept').value.trim();
+    const role = document.getElementById('enrollRole').value;
+
+    const submitBtn = document.getElementById('submitEnrollBtn');
+    submitBtn.disabled = true;
+
+    // 1. บันทึกลง SQLite
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, department, role })
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || 'บันทึกไม่สำเร็จ');
+        submitBtn.disabled = false;
+        return;
+      }
+
+      // 2. ส่งคำสั่งให้ Arduino เริ่มขั้นตอนสแกนนิ้วสด
+      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก ID #${id}`);
+      socket.emit('start_enroll', { id, name });
+
+    } catch (err) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Socket.io: รับสถานะขั้นตอนสแกนสดจาก Arduino
+  socket.on('enroll_step_update', (data) => {
+    if (data.status === 'STEP1_WAIT') {
+      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', 'วางนิ้วที่ต้องการบันทึก');
+    } else if (data.status === 'REMOVE_FINGER') {
+      updateGuidance('remove', 'ขั้นตอนที่ 2: กรุณายกนิ้วออก', 'ยกนิ้วออกจากเซนเซอร์สักครู่');
+    } else if (data.status === 'STEP2_WAIT') {
+      updateGuidance('step1', 'ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง', 'วางนิ้วเดิมอีกครั้งเพื่อยืนยัน');
+    } else if (data.status === 'SUCCESS') {
+      updateGuidance('success', 'บันทึกลายนิ้วมือสำเร็จ!', `บันทึก ID #${data.id} เรียบร้อยแล้ว`);
+      playSound('granted');
+      setTimeout(() => {
+        closeModal();
+        loadUsers();
+        document.getElementById('submitEnrollBtn').disabled = false;
+      }, 2000);
+    } else if (data.status === 'FAILED') {
+      updateGuidance('failed', 'การบันทึกล้มเหลว', data.message || 'ลายนิ้วมือไม่ตรงกัน กรุณาลองใหม่');
+      playSound('denied');
+      document.getElementById('submitEnrollBtn').disabled = false;
+    }
+  });
+
+  socket.on('user_updated', () => {
+    loadUsers();
+  });
+
+  // Initial Load
+  loadUsers();
+}
