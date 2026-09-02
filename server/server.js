@@ -6,8 +6,9 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const path = require('path');
+const { SerialPort } = require('serialport');
+const { ReadlineParser } = require('@serialport/parser-readline');
 const { dbAsync, initDatabase } = require('./database');
-
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,8 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fingerprint_super_secret_key_2026';
+const TARGET_PORT = process.env.SERIAL_PORT || 'COM12';
+const BAUD_RATE = 115200;
 
 // Middleware
 app.use(cors());
@@ -43,7 +46,256 @@ function authRequired(req, res, next) {
 }
 
 // ==========================================
-// 1. Authentication Routes
+// 1. SerialPort Hardware Bridge (Arduino UNO Q & R307)
+// ==========================================
+let serialPort = null;
+let serialParser = null;
+let currentEnrollId = null;
+let serialConnected = false;
+let reconnectTimer = null;
+
+function initSerial() {
+  if (serialPort && serialPort.isOpen) return;
+
+  console.log(`🔌 [Serial] กำลังเชื่อมต่อไปยัง Arduino บนพอร์ต ${TARGET_PORT}...`);
+
+  try {
+    serialPort = new SerialPort({
+      path: TARGET_PORT,
+      baudRate: BAUD_RATE,
+      autoOpen: false
+    });
+
+    serialParser = serialPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+
+    serialPort.open((err) => {
+      if (err) {
+        serialConnected = false;
+        console.warn(`⚠️ [Serial] ไม่สามารถเปิดพอร์ต ${TARGET_PORT}: ${err.message}`);
+        if (err.message.includes('Access denied')) {
+          console.warn(`💡 [คำแนะนำ] พอร์ต ${TARGET_PORT} กำลังถูกใช้งานโดยโปรแกรมอื่น (เช่น Serial Monitor ใน Arduino IDE) กรุณาปิด Serial Monitor ก่อน`);
+        }
+        scheduleReconnect();
+        return;
+      }
+
+      serialConnected = true;
+      console.log(`✅ [Serial] เชื่อมต่อบอร์ด Arduino บน ${TARGET_PORT} สำเร็จ!`);
+      io.emit('serial_status', { connected: true, port: TARGET_PORT });
+    });
+
+    serialParser.on('data', handleSerialData);
+
+    serialPort.on('error', (err) => {
+      console.error(`❌ [Serial Error] ${err.message}`);
+      serialConnected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT, error: err.message });
+      scheduleReconnect();
+    });
+
+    serialPort.on('close', () => {
+      console.warn(`🔌 [Serial] พอร์ต ${TARGET_PORT} ปิดการเชื่อมต่อ`);
+      serialConnected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT });
+      scheduleReconnect();
+    });
+
+  } catch (err) {
+    console.error(`❌ [Serial Exception] ${err.message}`);
+    scheduleReconnect();
+  }
+}
+
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    if (!serialConnected) {
+      initSerial();
+    }
+  }, 4000);
+}
+
+function sendSerialCommand(cmd) {
+  if (serialPort && serialPort.isOpen) {
+    const fullCmd = cmd + '\n';
+    console.log(`📤 [Serial Send] -> ${cmd.length > 50 ? cmd.substring(0, 35) + '... (' + cmd.length + ' chars)' : cmd}`);
+    if (fullCmd.length > 60) {
+      let offset = 0;
+      const writeSlice = () => {
+        if (offset < fullCmd.length) {
+          const slice = fullCmd.substring(offset, offset + 48);
+          offset += 48;
+          serialPort.write(slice, (err) => {
+            if (!err) setTimeout(writeSlice, 10);
+          });
+        } else {
+          console.log('✅ [Serial Write Done]');
+        }
+      };
+      writeSlice();
+    } else {
+      serialPort.write(fullCmd, (err) => {
+        if (err) console.error(`❌ [Serial Write Error] ${err.message}`);
+      });
+    }
+    return true;
+  } else {
+    console.warn(`⚠️ [Serial] พอร์ตไม่พร้อมใช้งาน ไม่สามารถส่งคำสั่ง: ${cmd}`);
+    return false;
+  }
+}
+
+let pendingRestore = null;
+
+function sendNextRestoreChunk() {
+  if (!pendingRestore) return;
+  pendingRestore.currentChunk++;
+  const part = pendingRestore.currentChunk;
+  if (part <= 4) {
+    const start = (part - 1) * 256;
+    const hexPart = pendingRestore.template.substring(start, start + 256);
+    console.log(`📤 [Restore] ส่งข้อมูลส่วนที่ ${part}/4 ของ ID #${pendingRestore.id}`);
+    sendSerialCommand(`RESTORE_CHUNK ${part} ${hexPart}`);
+  }
+}
+
+// ประมวลผลเหตุการณ์เมื่อมีการสแกนนิ้ว
+async function processScanEvent(fingerprint_id, score, status) {
+  try {
+    let userName = 'Unknown User';
+    let userId = null;
+    const isGranted = (status === 'GRANTED');
+
+    if (fingerprint_id > 0) {
+      const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [fingerprint_id]);
+      if (user) {
+        userName = user.name;
+        userId = user.id;
+      }
+    }
+
+    const insertResult = await dbAsync.run(`
+      INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score, timestamp)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+    `, [userId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
+
+    const newLogEntry = {
+      id: insertResult.lastID,
+      user_id: userId,
+      user_name: userName,
+      fingerprint_id: fingerprint_id || 0,
+      status: isGranted ? 'GRANTED' : 'DENIED',
+      score: score || 0,
+      timestamp: new Date().toISOString()
+    };
+
+    io.emit('new_log', newLogEntry);
+    console.log(`🔔 [Access Log] ${userName} (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (Score: ${score})`);
+  } catch (err) {
+    console.error('Error in processScanEvent:', err);
+  }
+}
+
+// ประมวลผลข้อมูลที่ส่งมาจาก Arduino ผ่าน Serial
+async function handleSerialData(rawLine) {
+  const line = rawLine.trim();
+  if (!line) return;
+  console.log(`📥 [Arduino] ${line}`);
+
+  // 1. สถานะขั้นตอนบันทึกลายนิ้วมือ (Enrollment Guide)
+  if (line === 'STATUS:ENROLL_STEP1_WAIT') {
+    io.emit('enroll_step_update', { status: 'STEP1_WAIT', id: currentEnrollId });
+  } else if (line === 'STATUS:ENROLL_REMOVE_FINGER') {
+    io.emit('enroll_step_update', { status: 'REMOVE_FINGER', id: currentEnrollId });
+  } else if (line === 'STATUS:ENROLL_STEP2_WAIT') {
+    io.emit('enroll_step_update', { status: 'STEP2_WAIT', id: currentEnrollId });
+  } else if (line.startsWith('RESP:ENROLL_OK')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : currentEnrollId;
+    console.log(`🎉 [Enroll Success] บันทึกลายนิ้วมือ ID #${id} สำเร็จ!`);
+    io.emit('enroll_step_update', { status: 'SUCCESS', id });
+    io.emit('user_updated');
+  } else if (line.startsWith('RESP:ENROLL_FAIL')) {
+    let message = 'การบันทึกล้มเหลว กรุณาลองใหม่';
+    if (line.includes('IMAGE1')) message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
+    else if (line.includes('IMAGE2')) message = 'ภาพลายนิ้วมือรอบสองไม่ชัด กรุณาวางนิ้วใหม่';
+    else if (line.includes('MISMATCH')) message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก กรุณาลองใหม่';
+    else if (line.includes('STORE')) message = 'หน่วยความจำ R307 ขัดข้อง บันทึกไม่สำเร็จ';
+    console.warn(`⚠️ [Enroll Failed] ${message} (${line})`);
+    io.emit('enroll_step_update', { status: 'FAILED', message });
+  }
+
+  // 2. การลบลายนิ้วมือ
+  else if (line.startsWith('RESP:DELETE_OK')) {
+    console.log(`🗑️ [Delete OK] ${line}`);
+    io.emit('user_updated');
+  } else if (line.startsWith('RESP:DELETE_FAIL')) {
+    console.warn(`⚠️ [Delete Fail] ${line}`);
+  }
+
+  // 3. สแกนเข้า-ออกประตู (Scan Event)
+  else if (line.startsWith('EVENT:MATCH')) {
+    // รูปแบบ: EVENT:MATCH ID=1 SCORE=145
+    const idMatch = line.match(/ID=(\d+)/);
+    const scoreMatch = line.match(/SCORE=(\d+)/);
+    const fingerId = idMatch ? parseInt(idMatch[1]) : 0;
+    const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+    await processScanEvent(fingerId, score, 'GRANTED');
+  } else if (line === 'EVENT:NO_MATCH') {
+    await processScanEvent(0, 0, 'DENIED');
+  }
+
+  // 4. ข้อมูล Template สำหรับ Backup & Restore
+  else if (line.startsWith('TEMPLATE:')) {
+    // รูปแบบ: TEMPLATE:ID=1 DATA=0123456789ABCDEF...
+    const idMatch = line.match(/ID=(\d+)/);
+    const dataMatch = line.match(/DATA=([0-9A-Fa-f]+)/);
+    if (idMatch && dataMatch) {
+      const templateId = parseInt(idMatch[1]);
+      const templateData = dataMatch[1];
+      try {
+        await dbAsync.run('UPDATE users SET fingerprint_template = ? WHERE id = ?', [templateData, templateId]);
+        console.log(`💾 [DB Backup] บันทึก Template ลายนิ้วมือ ID #${templateId} (${templateData.length / 2} Bytes) ลง SQLite สำเร็จ!`);
+        io.emit('template_saved', { id: templateId, success: true });
+        io.emit('user_updated');
+      } catch (err) {
+        console.error('Error saving template to DB:', err);
+      }
+    }
+  } else if (line.startsWith('RESP:RESTORE_READY')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    console.log(`📡 [Restore Ready] R307 พร้อมรับ Template ID #${id}`);
+    if (pendingRestore && pendingRestore.id === id) {
+      sendNextRestoreChunk();
+    }
+  } else if (line.startsWith('RESP:CHUNK_ACK')) {
+    if (pendingRestore) {
+      setTimeout(sendNextRestoreChunk, 35);
+    }
+  } else if (line.startsWith('RESP:RESTORE_OK')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    console.log(`✅ [Restore OK] กู้คืนลายนิ้วมือ ID #${id} ลงเซนเซอร์ R307 สำเร็จ!`);
+    pendingRestore = null;
+    io.emit('restore_progress', { id, status: 'SUCCESS', message: `กู้คืน ID #${id} สำเร็จ` });
+  } else if (line.startsWith('RESP:RESTORE_FAIL')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    console.warn(`❌ [Restore Fail] กู้คืนลายนิ้วมือ ID #${id} ล้มเหลว (${line})`);
+    pendingRestore = null;
+    io.emit('restore_progress', { id, status: 'FAILED', message: `กู้คืน ID #${id} ไม่สำเร็จ` });
+  } else if (line.startsWith('RESP:BACKUP_FAIL')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    console.warn(`❌ [Backup Fail] ไม่สามารถดึง Template ID #${id} จากเซนเซอร์ได้ (${line})`);
+    io.emit('backup_progress', { id, status: 'FAILED', message: `ไม่พบลายนิ้วมือ ID #${id} ในเซนเซอร์` });
+  }
+}
+
+// ==========================================
+// 2. Authentication Routes
 // ==========================================
 app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body;
@@ -108,9 +360,8 @@ app.post('/api/auth/change-password', authRequired, async (req, res) => {
   }
 });
 
-
 // ==========================================
-// 2. User Management Routes
+// 3. User Management Routes
 // ==========================================
 app.get('/api/users', authRequired, async (req, res) => {
   try {
@@ -130,16 +381,19 @@ app.post('/api/users', authRequired, async (req, res) => {
   try {
     const existing = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
     if (existing) {
-      return res.status(400).json({ error: `หมายเลข ID #${id} มีผู้ใช้งานในระบบแล้ว` });
+      await dbAsync.run(
+        'UPDATE users SET name = ?, department = ?, role = ? WHERE id = ?',
+        [name, department || '', role || 'User', id]
+      );
+    } else {
+      await dbAsync.run(
+        "INSERT INTO users (id, name, department, role, created_at) VALUES (?, ?, ?, ?, datetime('now', '+7 hours'))",
+        [id, name, department || '', role || 'User']
+      );
     }
 
-    await dbAsync.run(
-      "INSERT INTO users (id, name, department, role, created_at) VALUES (?, ?, ?, ?, datetime('now', '+7 hours'))",
-      [id, name, department || '', role || 'User']
-    );
-
     io.emit('user_updated');
-    res.json({ success: true, message: `เพิ่มผู้ใช้งาน ID #${id} เรียบร้อย` });
+    res.json({ success: true, message: `เตรียมข้อมูลผู้ใช้งาน ID #${id} เรียบร้อย` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -149,7 +403,10 @@ app.delete('/api/users/:id', authRequired, async (req, res) => {
   const id = parseInt(req.params.id);
   try {
     await dbAsync.run('DELETE FROM users WHERE id = ?', [id]);
-    // แจ้งเตือนบอร์ด Arduino ผ่าน WebSocket ให้ลบลายนิ้วมือออกจากเซนเซอร์ R307 ด้วย
+    
+    // สั่งเซนเซอร์ R307 บนบอร์ด Arduino ให้ลบลายนิ้วมือตาม ID ออกด้วยทันที
+    sendSerialCommand(`DELETE ${id}`);
+
     io.emit('cmd_delete_fingerprint', { id });
     io.emit('user_updated');
     res.json({ success: true, message: `ลบผู้ใช้งาน ID #${id} เรียบร้อยแล้ว` });
@@ -159,7 +416,7 @@ app.delete('/api/users/:id', authRequired, async (req, res) => {
 });
 
 // ==========================================
-// 3. Access Logs & Analytics Routes
+// 4. Access Logs & Analytics Routes
 // ==========================================
 app.get('/api/logs', authRequired, async (req, res) => {
   try {
@@ -186,7 +443,6 @@ app.get('/api/logs', authRequired, async (req, res) => {
   }
 });
 
-
 app.get('/api/stats', authRequired, async (req, res) => {
   try {
     const totalUsers = (await dbAsync.get('SELECT COUNT(*) as count FROM users')).count;
@@ -212,74 +468,131 @@ app.get('/api/stats', authRequired, async (req, res) => {
 });
 
 // ==========================================
-// 4. IoT Device Endpoints (สำหรับ Arduino UNO Q)
+// 5. IoT Device Endpoints & Biometric Backup/Restore
 // ==========================================
+app.get('/api/device/serial-status', (req, res) => {
+  res.json({
+    connected: serialConnected,
+    port: TARGET_PORT
+  });
+});
 
-// Endpoint เมื่อ Arduino สแกนลายนิ้วมือ
-app.post('/api/device/scan-event', async (req, res) => {
-  const { fingerprint_id, score, status } = req.body;
-  console.log(`📡 [IoT Scan Event] ID: ${fingerprint_id}, Score: ${score}, Status: ${status}`);
-
-  try {
-    let userName = 'Unknown User';
-    let userId = null;
-    const isGranted = (status === 'GRANTED' || status === 'OK');
-
-    if (fingerprint_id) {
-      const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [fingerprint_id]);
-      if (user) {
-        userName = user.name;
-        userId = user.id;
-      }
-    }
-
-    // บันทึกลงฐานข้อมูล access_logs (เวลาไทย +7)
-    const insertResult = await dbAsync.run(`
-      INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score, timestamp)
-      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'))
-    `, [userId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
-
-    const newLogEntry = {
-      id: insertResult.lastID,
-      user_id: userId,
-      user_name: userName,
-      fingerprint_id: fingerprint_id || 0,
-      status: isGranted ? 'GRANTED' : 'DENIED',
-      score: score || 0,
-      timestamp: new Date().toISOString()
-    };
-
-    // ส่งข้อมูล Real-time ไปยังทุกหน้า Dashboard ผ่าน WebSocket ทันที!
-    io.emit('new_log', newLogEntry);
-
-    res.json({ success: true, user_name: userName, status: isGranted ? 'GRANTED' : 'DENIED' });
-  } catch (err) {
-    console.error('Error saving scan log:', err);
-    res.status(500).json({ error: err.message });
+// ดึงข้อมูล Template จาก R307 มาเก็บสำรองใน SQLite ทีละคน
+app.post('/api/device/backup/:id', authRequired, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const sent = sendSerialCommand(`BACKUP ${id}`);
+  if (sent) {
+    res.json({ success: true, message: `ส่งคำสั่งดึงข้อมูลลายนิ้วมือ ID #${id} จากเซนเซอร์แล้ว` });
+  } else {
+    res.status(500).json({ error: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้' });
   }
 });
 
-// Endpoint แจ้งเตือนสถานะขั้นตอนลงทะเบียนลายนิ้วมือ (Enrollment Guide)
-app.post('/api/device/enroll-status', async (req, res) => {
-  const { step, status, id, message } = req.body;
-  console.log(`🖐️ [Enroll Status] Step: ${step}, Status: ${status}, ID: ${id}`);
-  
-  // ส่งสถานะขั้นตอนไปยัง Web Admin แบบ Real-time
-  io.emit('enroll_step_update', { step, status, id, message });
-  res.json({ success: true });
+// กู้คืนลายนิ้วมือจาก SQLite ลงเซนเซอร์ R307 ทีละคน
+app.post('/api/device/restore/:id', authRequired, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
+  if (!user || !user.fingerprint_template || user.fingerprint_template.length < 1024) {
+    return res.status(404).json({ error: `ไม่พบข้อมูลลายนิ้วมือสำรองของ ID #${id} ในฐานข้อมูล` });
+  }
+
+  pendingRestore = {
+    id: user.id,
+    template: user.fingerprint_template,
+    currentChunk: 0
+  };
+
+  const sent = sendSerialCommand(`RESTORE_INIT ${id}`);
+  if (sent) {
+    res.json({ success: true, message: `เริ่มกู้คืนข้อมูลลายนิ้วมือ ID #${id} ลงเซนเซอร์ R307 แล้ว` });
+  } else {
+    pendingRestore = null;
+    res.status(500).json({ error: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้' });
+  }
+});
+
+// กู้คืนลายนิ้วมือทั้งหมดจาก SQLite ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
+app.post('/api/device/restore-all', authRequired, async (req, res) => {
+  const usersWithTemplate = await dbAsync.all('SELECT id, fingerprint_template FROM users WHERE fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 1024');
+  if (usersWithTemplate.length === 0) {
+    return res.status(400).json({ error: 'ไม่มีข้อมูลลายนิ้วมือสำรองในฐานข้อมูล' });
+  }
+
+  (async () => {
+    for (let i = 0; i < usersWithTemplate.length; i++) {
+      const u = usersWithTemplate[i];
+      io.emit('restore_progress', { id: u.id, current: i + 1, total: usersWithTemplate.length, status: 'IN_PROGRESS' });
+      
+      pendingRestore = {
+        id: u.id,
+        template: u.fingerprint_template,
+        currentChunk: 0
+      };
+      sendSerialCommand(`RESTORE_INIT ${u.id}`);
+      
+      // รอกระบวนการกู้คืนของแต่ละคนให้เสร็จสิ้น (สูงสุด 10 วินาที)
+      let waitCount = 0;
+      while (pendingRestore !== null && waitCount < 100) {
+        await new Promise(r => setTimeout(r, 100));
+        waitCount++;
+      }
+      await new Promise(r => setTimeout(r, 1200));
+    }
+    io.emit('restore_progress', { status: 'ALL_COMPLETED', total: usersWithTemplate.length });
+  })();
+
+  res.json({
+    success: true,
+    total: usersWithTemplate.length,
+    message: `กำลังเริ่มกู้คืนลายนิ้วมือทั้งหมด ${usersWithTemplate.length} รายการลงเซนเซอร์ R307`
+  });
+});
+
+// ดึงข้อมูลสำรองจากเซนเซอร์ R307 เข้าสู่ SQLite ทั้งหมด
+app.post('/api/device/backup-all', authRequired, async (req, res) => {
+  const allUsers = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+  if (allUsers.length === 0) {
+    return res.status(400).json({ error: 'ไม่มีรายชื่อผู้ใช้ในระบบ' });
+  }
+
+  (async () => {
+    for (let i = 0; i < allUsers.length; i++) {
+      const u = allUsers[i];
+      io.emit('backup_progress', { id: u.id, current: i + 1, total: allUsers.length, status: 'IN_PROGRESS' });
+      sendSerialCommand(`BACKUP ${u.id}`);
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    io.emit('backup_progress', { status: 'ALL_COMPLETED', total: allUsers.length });
+  })();
+
+  res.json({
+    success: true,
+    total: allUsers.length,
+    message: `กำลังดึงข้อมูลสำรองลายนิ้วมือจากเซนเซอร์ R307 ทั้งหมด ${allUsers.length} รายการ`
+  });
 });
 
 // ==========================================
-// 5. Socket.io Real-time Event Handlers
+// 6. Socket.io Real-time Event Handlers
 // ==========================================
 io.on('connection', (socket) => {
-  console.log('💻 Web Client / Device Connected:', socket.id);
+  console.log('💻 Web Client Connected:', socket.id);
+
+  // แจ้งสถานะ Serial ให้ client ที่เพิ่งเชื่อมต่อ
+  socket.emit('serial_status', { connected: serialConnected, port: TARGET_PORT });
 
   // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ
   socket.on('start_enroll', (data) => {
     console.log('🚀 สั่งเริ่มลงทะเบียนนิ้ว ID:', data.id, 'Name:', data.name);
-    // ส่งคำสั่งไปยังบอร์ด Arduino ผ่าน WebSocket
-    io.emit('cmd_start_enroll', data);
+    currentEnrollId = data.id;
+    // ส่งคำสั่งผ่าน Serial ไปสั่งเซนเซอร์ R307
+    const sent = sendSerialCommand(`ENROLL ${data.id}`);
+    if (!sent) {
+      socket.emit('enroll_step_update', {
+        status: 'FAILED',
+        message: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้ (กรุณาตรวจสอบการเชื่อมต่อ COM12 หรือปิด Serial Monitor ใน Arduino IDE)'
+      });
+    }
   });
 
   socket.on('disconnect', () => {
@@ -290,14 +603,16 @@ io.on('connection', (socket) => {
 // Start Server
 async function start() {
   await initDatabase();
+  initSerial();
+
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`====================================================`);
     console.log(`🚀 Fingerprint Admin Server running on: http://localhost:${PORT}`);
     console.log(`📊 Dashboard UI ready at: http://localhost:${PORT}/index.html`);
     console.log(`🔑 Login Page ready at: http://localhost:${PORT}/login.html`);
+    console.log(`🔌 Serial Target Port: ${TARGET_PORT} (Baud: ${BAUD_RATE})`);
     console.log(`====================================================`);
   });
 }
 
 start();
-

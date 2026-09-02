@@ -35,6 +35,23 @@ function playSound(type = 'granted') {
   }
 }
 
+// Hardware Serial Connection Status Listener
+socket.on('serial_status', (data) => {
+  const dot = document.getElementById('serialStatusDot');
+  const text = document.getElementById('serialStatusText');
+  if (!dot || !text) return;
+
+  if (data.connected) {
+    dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
+    text.innerText = `R307 Online (${data.port})`;
+    text.className = 'text-[11px] text-emerald-400 font-medium';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-rose-400 animate-pulse';
+    text.innerText = `R307 Offline (${data.port})`;
+    text.className = 'text-[11px] text-rose-400 font-medium';
+  }
+});
+
 // Check Authentication
 async function checkAuth() {
   try {
@@ -285,11 +302,20 @@ if (window.location.pathname.endsWith('users.html')) {
     tbody.innerHTML = '';
 
     if (users.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
       return;
     }
 
     users.forEach(user => {
+      const hasTemplate = user.fingerprint_template && user.fingerprint_template.length >= 512;
+      const templateBadge = hasTemplate
+        ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
+             <i class="fa-solid fa-cloud-check text-[10px]"></i> สำรองแล้ว (512B)
+           </span>`
+        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+             <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> ยังไม่มีข้อมูล
+           </span>`;
+
       const tr = document.createElement('tr');
       tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
       tr.innerHTML = `
@@ -301,11 +327,20 @@ if (window.location.pathname.endsWith('users.html')) {
             ${user.role}
           </span>
         </td>
+        <td class="px-5 py-3.5">${templateBadge}</td>
         <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
         <td class="px-5 py-3.5 text-right">
-          <button onclick="deleteUser(${user.id}, '${user.name}')" class="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ml-auto">
-            <i class="fa-regular fa-trash-can"></i> ลบ
-          </button>
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="backupUser(${user.id})" title="ดึงลายนิ้วมือจากเซนเซอร์ R307 มาสำรองใน Database" class="px-2.5 py-1.5 text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/25 border border-indigo-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
+              <i class="fa-solid fa-cloud-arrow-up"></i> สำรอง
+            </button>
+            <button onclick="restoreUser(${user.id})" title="กู้คืนลายนิ้วมือลงเซนเซอร์ R307" class="px-2.5 py-1.5 text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1 ${!hasTemplate ? 'opacity-40 pointer-events-none' : ''}">
+              <i class="fa-solid fa-cloud-arrow-down"></i> กู้คืน
+            </button>
+            <button onclick="deleteUser(${user.id}, '${user.name}')" title="ลบผู้ใช้และลายนิ้วมือ" class="px-2.5 py-1.5 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
+              <i class="fa-regular fa-trash-can"></i> ลบ
+            </button>
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
@@ -343,6 +378,76 @@ if (window.location.pathname.endsWith('users.html')) {
       alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
     }
   };
+
+  // ดึงลายนิ้วมือจากเซนเซอร์ R307 มาเก็บสำรองใน Database ทีละคน
+  window.backupUser = async function(id) {
+    try {
+      const res = await fetch(`/api/device/backup/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        // แจ้งเตือนผู้ใช้
+        alert(`กำลังดึงข้อมูลลายนิ้วมือ ID #${id} จากเซนเซอร์ R307 กรุณารอสักครู่...`);
+      } else {
+        alert(data.error || 'ไม่สามารถส่งคำสั่งดึงข้อมูลได้');
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  // กู้คืนลายนิ้วมือจาก Database ลงเซนเซอร์ R307 ทีละคน
+  window.restoreUser = async function(id) {
+    if (!confirm(`ต้องการกู้คืนลายนิ้วมือของ ID #${id} ลงในเซนเซอร์ R307 ใช่หรือไม่?`)) return;
+    try {
+      const res = await fetch(`/api/device/restore/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`กำลังเขียนลายนิ้วมือ ID #${id} ลงเซนเซอร์ R307...`);
+      } else {
+        alert(data.error || 'กู้คืนไม่สำเร็จ');
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  // ปุ่มสำรองข้อมูลทั้งหมดจาก R307 เข้า Database
+  const backupAllBtn = document.getElementById('backupAllBtn');
+  if (backupAllBtn) {
+    backupAllBtn.addEventListener('click', async () => {
+      if (!confirm('คุณต้องการดึงข้อมูลลายนิ้วมือทั้งหมดที่มีในเซนเซอร์ R307 มาบันทึกสำรองใน Database ใช่หรือไม่?')) return;
+      try {
+        const res = await fetch('/api/device/backup-all', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'กำลังเริ่มสำรองข้อมูลลายนิ้วมือทั้งหมด...');
+        } else {
+          alert(data.error || 'ดำเนินการไม่สำเร็จ');
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      }
+    });
+  }
+
+  // ปุ่มกู้คืนลายนิ้วมือทั้งหมดจาก Database ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
+  const restoreAllBtn = document.getElementById('restoreAllBtn');
+  if (restoreAllBtn) {
+    restoreAllBtn.addEventListener('click', async () => {
+      if (!confirm('คุณต้องการกู้คืนลายนิ้วมือทั้งหมดจาก Database ลงในเซนเซอร์ R307 ใช่หรือไม่?\n(แนะนำเมื่อเพิ่งเปลี่ยนเซนเซอร์ R307 ตัวใหม่ หรือข้อมูลในเซนเซอร์หาย)')) return;
+      try {
+        const res = await fetch('/api/device/restore-all', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'กำลังเริ่มกู้คืนข้อมูลลายนิ้วมือลงเซนเซอร์...');
+        } else {
+          alert(data.error || 'ดำเนินการไม่สำเร็จ');
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      }
+    });
+  }
 
   // Modal Handlers
   const modal = document.getElementById('enrollModal');
@@ -452,6 +557,38 @@ if (window.location.pathname.endsWith('users.html')) {
       updateGuidance('failed', 'การบันทึกล้มเหลว', data.message || 'ลายนิ้วมือไม่ตรงกัน กรุณาลองใหม่');
       playSound('denied');
       document.getElementById('submitEnrollBtn').disabled = false;
+    }
+  });
+
+  // Socket.io: รับสถานะการสำรองและกู้คืนลายนิ้วมือ
+  socket.on('template_saved', (data) => {
+    playSound('granted');
+    loadUsers();
+  });
+
+  socket.on('restore_progress', (data) => {
+    if (data.status === 'SUCCESS') {
+      playSound('granted');
+      alert(`✅ กู้คืนลายนิ้วมือ ID #${data.id} ลงในเซนเซอร์ R307 เรียบร้อยแล้ว!`);
+      loadUsers();
+    } else if (data.status === 'ALL_COMPLETED') {
+      playSound('granted');
+      alert(`🎉 กู้คืนข้อมูลลายนิ้วมือทั้งหมด (${data.total} คน) ลงเซนเซอร์ R307 เรียบร้อยแล้ว!`);
+      loadUsers();
+    } else if (data.status === 'FAILED') {
+      playSound('denied');
+      alert(`❌ ${data.message || 'กู้คืนไม่สำเร็จ'}`);
+    }
+  });
+
+  socket.on('backup_progress', (data) => {
+    if (data.status === 'ALL_COMPLETED') {
+      playSound('granted');
+      alert('🎉 ดึงข้อมูลสำรองลายนิ้วมือจากเซนเซอร์ R307 ครบถ้วนแล้ว!');
+      loadUsers();
+    } else if (data.status === 'FAILED') {
+      playSound('denied');
+      alert(`⚠️ ${data.message || 'สำรองข้อมูลไม่สำเร็จ'}`);
     }
   });
 

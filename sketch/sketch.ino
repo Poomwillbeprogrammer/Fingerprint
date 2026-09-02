@@ -340,10 +340,222 @@ int scanFingerprint() {
 }
 
 
+// ==========================================
+// 6.1 ฟังก์ชันสำรองข้อมูล (Backup) และกู้คืนลายนิ้วมือ (Restore)
+// ==========================================
+
+// ส่งข้อมูล Data Packet 256 bytes ไปยัง R307
+void sendFingerprintDataPacket(uint8_t type, const uint8_t* data, uint16_t length) {
+  mySerial.write((uint8_t)0xEF);
+  mySerial.write((uint8_t)0x01);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write(type);
+
+  uint16_t packetLen = length + 2;
+  mySerial.write((uint8_t)(packetLen >> 8));
+  mySerial.write((uint8_t)(packetLen & 0xFF));
+
+  uint16_t checksum = type + (uint8_t)(packetLen >> 8) + (uint8_t)(packetLen & 0xFF);
+  for (uint16_t i = 0; i < length; i++) {
+    mySerial.write(data[i]);
+    checksum += data[i];
+  }
+
+  mySerial.write((uint8_t)(checksum >> 8));
+  mySerial.write((uint8_t)(checksum & 0xFF));
+}
+
+// ส่งคำสั่ง DownChar (0x09) ไปยัง Buffer 1 ของ R307 เพื่อเตรียมรับข้อมูล Template
+bool sendDownCharCommand() {
+  while (mySerial.available()) mySerial.read();
+
+  mySerial.write((uint8_t)0xEF);
+  mySerial.write((uint8_t)0x01);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0xFF);
+  mySerial.write((uint8_t)0x01); // Command packet
+  mySerial.write((uint8_t)0x00); // Length high
+  mySerial.write((uint8_t)0x04); // Length low
+  mySerial.write((uint8_t)0x09); // FINGERPRINT_DOWNLOAD (DownChar)
+  mySerial.write((uint8_t)0x01); // Buffer 1
+  mySerial.write((uint8_t)0x00); // Checksum high
+  mySerial.write((uint8_t)0x0F); // Checksum low
+
+  uint32_t start = millis();
+  uint8_t ackBuf[12];
+  int idx = 0;
+  while (idx < 12 && (millis() - start) < 1500) {
+    if (mySerial.available()) {
+      ackBuf[idx++] = mySerial.read();
+    }
+  }
+
+  if (idx >= 12 && ackBuf[6] == 0x07 && ackBuf[9] == 0x00) {
+    return true;
+  }
+  return false;
+}
+
+uint8_t hexCharToByte(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  return 0;
+}
+
+// ดึง Template 512 Bytes จาก R307 แล้วส่งออกทาง Serial เป็น HEX
+bool extractAndSendTemplate(int id) {
+  while (mySerial.available()) mySerial.read();
+
+  // 1. โหลดข้อมูลโมเดลจาก Flash ID เข้า Buffer 1 ของ R307 ก่อนเสมอ
+  uint8_t p = finger.loadModel(id);
+  if (p != FINGERPRINT_OK) {
+    Serial.print("RESP:BACKUP_FAIL ID=");
+    Serial.print(id);
+    Serial.println(" ERR=NOT_FOUND_IN_SENSOR");
+    return false;
+  }
+
+  // 2. สั่ง R307 ให้อัปโหลด Template จาก Buffer 1 ออกมา
+  p = finger.getModel();
+  if (p != FINGERPRINT_OK) {
+    Serial.print("RESP:BACKUP_FAIL ID=");
+    Serial.print(id);
+    Serial.println(" ERR=GET_MODEL_FAILED");
+    return false;
+  }
+
+  uint8_t rawBuf[700];
+  int count = 0;
+  uint32_t starttime = millis();
+  while (count < 700 && (millis() - starttime) < 4000) {
+    if (mySerial.available()) {
+      rawBuf[count++] = mySerial.read();
+    }
+  }
+
+  uint8_t templateData[512];
+  memset(templateData, 0, sizeof(templateData));
+  int totalBytes = 0;
+  int pos = 0;
+
+  while (pos < count - 9 && totalBytes < 512) {
+    if (rawBuf[pos] == 0xEF && rawBuf[pos + 1] == 0x01) {
+      uint8_t pktType = rawBuf[pos + 6];
+      uint16_t pktLen = (rawBuf[pos + 7] << 8) | rawBuf[pos + 8];
+      uint16_t dataLen = (pktLen >= 2) ? (pktLen - 2) : 0;
+      if (pos + 9 + dataLen <= count && (pktType == 0x02 || pktType == 0x08)) {
+        int toCopy = min((int)dataLen, 512 - totalBytes);
+        memcpy(templateData + totalBytes, rawBuf + pos + 9, toCopy);
+        totalBytes += toCopy;
+        pos += (9 + pktLen);
+        continue;
+      }
+    }
+    pos++;
+  }
+
+  if (totalBytes < 512) {
+    Serial.print("RESP:BACKUP_FAIL ID=");
+    Serial.print(id);
+    Serial.print(" ERR=INCOMPLETE_DATA_");
+    Serial.println(totalBytes);
+    return false;
+  }
+
+  Serial.print("TEMPLATE:ID=");
+  Serial.print(id);
+  Serial.print(" DATA=");
+  for (int i = 0; i < 512; i++) {
+    if (templateData[i] < 0x10) Serial.print('0');
+    Serial.print(templateData[i], HEX);
+  }
+  Serial.println();
+
+  return true;
+}
+
+int restoreTargetId = 0;
+uint32_t restoreStartTime = 0;
+
+// เริ่มต้นเตรียม R307 สำหรับเขียน Template คืน
+void handleRestoreInit(int id) {
+  restoreTargetId = id;
+  restoreStartTime = millis();
+  char restoreMsg[25];
+  snprintf(restoreMsg, sizeof(restoreMsg), "Restoring ID #%d...", id);
+  showUI("RESTORE TEMPLATE", restoreMsg, "Preparing sensor...");
+
+  if (sendDownCharCommand()) {
+    Serial.print("RESP:RESTORE_READY ID=");
+    Serial.println(id);
+  } else {
+    Serial.print("RESP:RESTORE_FAIL ID=");
+    Serial.print(id);
+    Serial.println(" ERR=DOWNCHAR_REJECTED");
+    showUI("RESTORE FAILED", "Sensor rejected write", "Try again");
+    delay(1500);
+    showIdleScreen();
+    restoreTargetId = 0;
+  }
+}
+
+// รับข้อมูลทีละ Chunk (128 Bytes / 256 HEX chars) และส่งให้ R307
+void handleRestoreChunk(int chunkNum, const String& hexChunk) {
+  if (restoreTargetId <= 0) {
+    Serial.println("RESP:RESTORE_FAIL ERR=NO_TARGET_ID");
+    return;
+  }
+
+  uint8_t buf[128];
+  memset(buf, 0, sizeof(buf));
+  int hexLen = hexChunk.length();
+  int byteLen = hexLen / 2;
+  if (byteLen > 128) byteLen = 128;
+
+  for (int i = 0; i < byteLen; i++) {
+    char h = hexChunk.charAt(i * 2);
+    char l = hexChunk.charAt(i * 2 + 1);
+    buf[i] = (hexCharToByte(h) << 4) | hexCharToByte(l);
+  }
+
+  uint8_t pktType = (chunkNum == 4) ? 0x08 : 0x02;
+  sendFingerprintDataPacket(pktType, buf, 128);
+
+  if (chunkNum == 4) {
+    delay(60);
+    uint8_t p = finger.storeModel(restoreTargetId);
+    if (p == FINGERPRINT_OK) {
+      char okMsg[25];
+      snprintf(okMsg, sizeof(okMsg), "ID #%d Restored!", restoreTargetId);
+      showUI("RESTORE SUCCESS", okMsg, "Saved to R307");
+      Serial.print("RESP:RESTORE_OK ID=");
+      Serial.println(restoreTargetId);
+    } else {
+      Serial.print("RESP:RESTORE_FAIL ID=");
+      Serial.print(restoreTargetId);
+      Serial.print(" ERR=STORE_FAILED_");
+      Serial.println(p);
+      showUI("RESTORE FAILED", "Flash write error", "Check sensor");
+    }
+    restoreTargetId = 0;
+    delay(1500);
+    showIdleScreen();
+  } else {
+    Serial.print("RESP:CHUNK_ACK PART=");
+    Serial.println(chunkNum);
+  }
+}
+
 // 2. บันทึกลายนิ้วมือใหม่ (Enroll)
 void handleEnroll(int id) {
-  if (id < 1 || id > 300) {
-    showUI("ENROLL ERROR", "Invalid ID (1-300)");
+  if (id < 1 || id > 1000) {
+    showUI("ENROLL ERROR", "Invalid ID (1-1000)");
     Serial.println("RESP:ENROLL_INVALID_ID");
     delay(2000);
     showIdleScreen();
@@ -422,12 +634,15 @@ void handleEnroll(int id) {
     // บันทึกสำเร็จ: แสดงผลบนหน้าจอ
     char savedMsg[25];
     snprintf(savedMsg, sizeof(savedMsg), "Saved as ID: #%d", id);
-    showUI("ENROLL SUCCESS!", savedMsg, "Finger registered!");
+    showUI("ENROLL SUCCESS!", savedMsg, "Backing up to DB...");
     
     Serial.print("RESP:ENROLL_OK ID=");
     Serial.println(id);
+
+    // ดึง Template 512 Bytes ส่งขึ้น Database ทันที
+    extractAndSendTemplate(id);
     
-    delay(3000); // แสดงผลความสำเร็จ 3 วินาที
+    delay(2000);
   } else {
     showUI("ENROLL FAILED", "Flash write error", "Try again");
     Serial.println("RESP:ENROLL_FAIL_STORE");
@@ -528,11 +743,27 @@ void loop() {
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
+    Serial.print("ECHO:");
+    Serial.println(cmd.substring(0, 20));
 
     if (cmd.startsWith("ENROLL ")) {
       int id = cmd.substring(7).toInt();
       handleEnroll(id);
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    } else if (cmd.startsWith("BACKUP ")) {
+      int id = cmd.substring(7).toInt();
+      extractAndSendTemplate(id);
+    } else if (cmd.startsWith("RESTORE_INIT ")) {
+      int id = cmd.substring(13).toInt();
+      handleRestoreInit(id);
+    } else if (cmd.startsWith("RESTORE_CHUNK ")) {
+      int spaceIdx = cmd.indexOf(' ', 14);
+      if (spaceIdx > 0) {
+        int part = cmd.substring(14, spaceIdx).toInt();
+        String hexChunk = cmd.substring(spaceIdx + 1);
+        hexChunk.trim();
+        handleRestoreChunk(part, hexChunk);
+      }
     } else if (cmd.startsWith("DELETE ")) {
       int id = cmd.substring(7).toInt();
       handleDelete(id);
@@ -546,6 +777,17 @@ void loop() {
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
     }
+  }
+
+  // หากอยู่ในระหว่าง Restore ลายนิ้วมือ ห้ามสแกนนิ้วแทรกแซง UART ของ R307
+  if (restoreTargetId > 0) {
+    if (millis() - restoreStartTime > 10000) {
+      restoreTargetId = 0;
+      Serial.println("RESP:RESTORE_FAIL ERR=TIMEOUT");
+      showIdleScreen();
+    }
+    delay(5);
+    return;
   }
 
   // 2. Smart Polling ตรวจจับลายนิ้วมืออัตโนมัติ (100% สแกนติดทันทีเมื่อวางนิ้ว)

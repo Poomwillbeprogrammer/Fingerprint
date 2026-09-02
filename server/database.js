@@ -63,6 +63,7 @@ async function initDatabase() {
       name TEXT NOT NULL,
       department TEXT,
       role TEXT DEFAULT 'User',
+      fingerprint_template TEXT,
       created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
     );
 
@@ -99,6 +100,14 @@ async function initDatabase() {
   `;
 
   await dbAsync.exec(initSql);
+
+  // Migration: เพิ่มคอลัมน์ fingerprint_template หากฐานข้อมูลเดิมยังไม่มี
+  try {
+    await dbAsync.run("ALTER TABLE users ADD COLUMN fingerprint_template TEXT;");
+  } catch (e) {
+    // Column already exists, ignore
+  }
+
   console.log('✅ Database schema and initial records ready!');
 }
 
