@@ -1,0 +1,10 @@
+profiles:
+  default:
+    fqbn: 
+    platforms:
+      - platform: arduino:zephyr
+    libraries:
+      - Adafruit Fingerprint Sensor Library (2.1.4)
+
+default_profile: default
+

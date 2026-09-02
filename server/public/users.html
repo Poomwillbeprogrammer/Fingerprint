@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Management - Fingerprint Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+
+  <!-- Sidebar -->
+  <aside class="w-full md:w-64 glass border-r border-slate-800 p-5 flex flex-col justify-between">
+    <div>
+      <!-- Brand -->
+      <div class="flex items-center gap-3 px-2 py-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+          <i class="fa-solid fa-fingerprint text-xl"></i>
+        </div>
+        <div>
+          <h2 class="font-bold text-white tracking-wide text-sm">FINGERPRINT</h2>
+          <p class="text-xs text-cyan-400 font-mono">UNO Q IoT System</p>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="space-y-1.5">
+        <a href="/index.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium text-sm transition">
+          <i class="fa-solid fa-chart-line w-4 text-center"></i>
+          <span>แดชบอร์ดสด</span>
+        </a>
+        <a href="/users.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 font-medium border border-cyan-500/20 text-sm transition">
+          <i class="fa-solid fa-users w-4 text-center"></i>
+          <span>จัดการผู้ใช้งาน</span>
+        </a>
+      </nav>
+    </div>
+
+    <!-- User / Logout -->
+    <div class="pt-4 border-t border-slate-800/80">
+      <div class="flex items-center justify-between px-2 py-2">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs">
+            <i class="fa-solid fa-user-shield"></i>
+          </div>
+          <div>
+            <p id="navUsername" class="text-xs font-semibold text-white">Admin</p>
+            <p class="text-[10px] text-emerald-400 flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
+            </p>
+          </div>
+        <div class="flex items-center gap-1">
+          <button id="openChangePasswordBtn" title="เปลี่ยนรหัสผ่าน" class="text-slate-400 hover:text-cyan-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+            <i class="fa-solid fa-key text-sm"></i>
+          </button>
+          <button id="logoutBtn" title="ออกจากระบบ" class="text-slate-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+            <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-6 md:p-8 overflow-y-auto max-h-screen">
+    
+    <!-- Top Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-white flex items-center gap-2.5">
+          <span>รายชื่อผู้ใช้งานและลายนิ้วมือ (User Management)</span>
+        </h1>
+        <p class="text-sm text-slate-400 mt-1">จัดการรายชื่อผู้ใช้งาน, สิทธิ์การเข้าถึง และการลงทะเบียนลายนิ้วมือใหม่</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button id="openEnrollModalBtn" class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition">
+          <i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งาน / บันทึกลายนิ้วมือ
+        </button>
+      </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="glass-card rounded-2xl p-4 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="relative w-full sm:w-80">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+          <i class="fa-solid fa-magnifying-glass text-xs"></i>
+        </span>
+        <input type="text" id="searchInput"
+          class="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs transition"
+          placeholder="ค้นหาชื่อ, แผนก หรือ Slot ID...">
+      </div>
+      <div class="text-xs text-slate-400 flex items-center gap-2">
+        <span>จำนวนผู้ใช้: <span id="userCount" class="font-bold text-white font-mono">0</span> คน</span>
+      </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="glass-card rounded-2xl border border-slate-800/80 shadow-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+            <tr>
+              <th class="px-5 py-3.5">Slot ID</th>
+              <th class="px-5 py-3.5">ชื่อผู้ใช้งาน</th>
+              <th class="px-5 py-3.5">แผนก / ตำแหน่ง</th>
+              <th class="px-5 py-3.5">บทบาท</th>
+              <th class="px-5 py-3.5">วันที่ลงทะเบียน</th>
+              <th class="px-5 py-3.5 text-right">การจัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody" class="divide-y divide-slate-800/60">
+            <tr>
+              <td colspan="6" class="px-5 py-8 text-center text-slate-500">
+                <i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังโหลดรายชื่อ...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Interactive Fingerprint Enrollment Modal -->
+  <div id="enrollModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-lg rounded-2xl border border-slate-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
+      
+      <!-- Close Button -->
+      <button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <!-- Modal Title -->
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-fingerprint"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">ลงทะเบียนลายนิ้วมือใหม่</h3>
+          <p class="text-xs text-slate-400">กรอกข้อมูลผู้ใช้งานและทำตามขั้นตอนสแกนสด</p>
+        </div>
+      </div>
+
+      <!-- Form Inputs -->
+      <form id="enrollForm" class="space-y-4">
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">Slot ID (1-300) *</label>
+            <input type="number" id="enrollSlotId" min="1" max="300" required
+              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
+              placeholder="1">
+          </div>
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-300 mb-1">ชื่อ-นามสกุล *</label>
+            <input type="text" id="enrollName" required
+              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+              placeholder="เช่น Poom Wang">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">แผนก / ตำแหน่ง</label>
+            <input type="text" id="enrollDept"
+              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+              placeholder="Engineering">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1">บทบาท (Role)</label>
+            <select id="enrollRole"
+              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500">
+              <option value="User">User (ทั่วไป)</option>
+              <option value="Admin">Admin (ผู้ดูแล)</option>
+              <option value="VIP">VIP</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Live Step-by-Step Guidance Box -->
+        <div id="guidanceBox" class="mt-4 p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-center">
+          <div id="stepIcon" class="w-12 h-12 mx-auto mb-2 rounded-full bg-slate-800 flex items-center justify-center text-xl text-cyan-400">
+            <i class="fa-solid fa-hand-pointer"></i>
+          </div>
+          <h4 id="stepTitle" class="text-sm font-semibold text-white">พร้อมลงทะเบียน</h4>
+          <p id="stepDesc" class="text-xs text-slate-400 mt-1">กดปุ่ม "บันทึกและเริ่มสแกน" ด้านล่างเพื่อเริ่มบันทึก</p>
+        </div>
+
+        <!-- Submit Button -->
+        <div class="pt-3 flex gap-3">
+          <button type="button" id="cancelEnrollBtn" class="w-1/2 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+            ยกเลิก
+          </button>
+          <button type="submit" id="submitEnrollBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-floppy-disk"></i>
+            <span>บันทึกข้อมูล</span>
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <!-- Change Password Modal -->
+  <div id="passwordModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
+      <button id="closePasswordModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">เปลี่ยนรหัสผ่าน Admin</h3>
+          <p class="text-xs text-slate-400">กำหนดรหัสผ่านใหม่เพื่อความปลอดภัย</p>
+        </div>
+      </div>
+
+      <div id="pwdAlert" class="hidden mb-4 p-3 rounded-xl text-xs flex items-center gap-2"></div>
+
+      <form id="changePasswordForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">รหัสผ่านเดิม (Current Password) *</label>
+          <input type="password" id="currentPassword" required
+            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            placeholder="••••••••">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">รหัสผ่านใหม่ (New Password) *</label>
+          <input type="password" id="newPassword" required minlength="6"
+            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            placeholder="อย่างน้อย 6 ตัวอักษร">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1">ยืนยันรหัสผ่านใหม่ (Confirm Password) *</label>
+          <input type="password" id="confirmPassword" required minlength="6"
+            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง">
+        </div>
+
+        <div class="pt-3 flex gap-3">
+          <button type="button" id="cancelPasswordBtn" class="w-1/2 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+            ยกเลิก
+          </button>
+          <button type="submit" id="submitPasswordBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-check"></i>
+            <span>บันทึกรหัสผ่าน</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
