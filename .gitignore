@@ -1,5 +1,5 @@
 # ignore app cache folder
 .cache/
 node_modules/
+**/node_modules/
 server/node_modules/
-
