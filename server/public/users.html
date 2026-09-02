@@ -85,12 +85,6 @@
         <p class="text-sm text-slate-400 mt-1">จัดการรายชื่อผู้ใช้งาน, สิทธิ์การเข้าถึง และการลงทะเบียนลายนิ้วมือใหม่</p>
       </div>
       <div class="flex items-center gap-2.5 flex-wrap">
-        <button id="backupAllBtn" title="ดึงข้อมูลลายนิ้วมือที่มีในเซนเซอร์ R307 มาเก็บสำรองใน Database ทั้งหมด" class="px-3.5 py-2.5 bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center gap-2 transition">
-          <i class="fa-solid fa-cloud-arrow-up"></i> สำรองข้อมูลทั้งหมด (Backup All)
-        </button>
-        <button id="restoreAllBtn" title="กู้คืนลายนิ้วมือทั้งหมดลงเซนเซอร์ R307 (เหมาะมากเมื่อเปลี่ยนเซนเซอร์ใหม่)" class="px-3.5 py-2.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-medium flex items-center gap-2 transition">
-          <i class="fa-solid fa-cloud-arrow-down"></i> กู้คืนลงเซนเซอร์ (Restore All)
-        </button>
         <button id="openEnrollModalBtn" class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition">
           <i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งาน / บันทึกนิ้ว
         </button>
@@ -122,7 +116,7 @@
               <th class="px-5 py-3.5">ชื่อผู้ใช้งาน</th>
               <th class="px-5 py-3.5">แผนก / ตำแหน่ง</th>
               <th class="px-5 py-3.5">บทบาท</th>
-              <th class="px-5 py-3.5">ข้อมูลสำรอง (DB)</th>
+              <th class="px-5 py-3.5">ระดับความเร็ว (Tier)</th>
               <th class="px-5 py-3.5">วันที่ลงทะเบียน</th>
               <th class="px-5 py-3.5 text-right">การจัดการ</th>
             </tr>

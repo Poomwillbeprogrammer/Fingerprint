@@ -319,17 +319,17 @@ void showIdleScreen() {
 // 6. ฟังก์ชันจัดการลายนิ้วมือ (Continuous Polling เหมือน test.ino)
 // ==========================================
 
-// ฟังก์ชันสแกนภาพและค้นหาลายนิ้วมือใน Buffer 1
+// ฟังก์ชันสแกนภาพและค้นหาลายนิ้วมือใน Buffer 2 (Tier 1 Flash Search)
 int scanFingerprint() {
   uint8_t p = finger.getImage();
   if (p != FINGERPRINT_OK) return p;
 
-  // แปลงภาพลายนิ้วมือเป็น Character File เก็บไว้ใน Buffer 1
-  p = finger.image2Tz(1);
+  // แปลงภาพลายนิ้วมือเป็น Character File เก็บไว้ใน Buffer 2 (เพื่อคงไว้เปรียบเทียบใน Tier 2 ได้)
+  p = finger.image2Tz(2);
   if (p != FINGERPRINT_OK) return p;
 
-  // ค้นหา ID ที่ตรงกันในฐานข้อมูล
-  p = finger.fingerSearch();
+  // ค้นหา ID ที่ตรงกันใน Flash ออนบอร์ด (Tier 1) โดยใช้ Buffer 2
+  p = finger.fingerSearch(2);
   if (p == FINGERPRINT_OK) {
     return FINGERPRINT_OK;
   } else if (p == FINGERPRINT_NOTFOUND) {
@@ -552,6 +552,103 @@ void handleRestoreChunk(int chunkNum, const String& hexChunk) {
   }
 }
 
+// ==========================================
+// 6.2 ฟังก์ชันสำหรับค้นหา Tier 2 (เปรียบเทียบกับ Candidate จาก Database)
+// ==========================================
+bool tier2Searching = false;
+uint32_t tier2StartTime = 0;
+int tier2CandidateId = 0;
+
+// ส่งคำสั่ง 0x03 เพื่อเปรียบเทียบลายนิ้วมือ Buffer 1 (Candidate) กับ Buffer 2 (Scanned Finger)
+uint8_t matchCharBuffers(uint16_t &score) {
+  while (mySerial.available()) mySerial.read();
+
+  // Command 0x03: EF 01 FF FF FF FF 01 00 03 03 00 07
+  uint8_t packet[] = {0xEF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x03, 0x03, 0x00, 0x07};
+  mySerial.write(packet, sizeof(packet));
+
+  uint8_t reply[14];
+  uint32_t start = millis();
+  int idx = 0;
+  while ((millis() - start) < 200 && idx < 14) {
+    if (mySerial.available()) {
+      reply[idx++] = mySerial.read();
+    }
+  }
+
+  if (idx >= 12 && reply[0] == 0xEF && reply[1] == 0x01 && reply[6] == 0x07) {
+    uint8_t ack = reply[9];
+    score = ((uint16_t)reply[10] << 8) | reply[11];
+    return ack; // 0x00 = Match, 0x08 = Mismatch
+  }
+  return 0xFF;
+}
+
+void handleCompareInit(int id) {
+  tier2CandidateId = id;
+  if (sendDownCharCommand()) {
+    Serial.print("RESP:COMPARE_READY ID=");
+    Serial.println(id);
+  } else {
+    Serial.print("RESP:COMPARE_FAIL ID=");
+    Serial.print(id);
+    Serial.println(" ERR=DOWNCHAR_FAILED");
+  }
+}
+
+void handleCompareChunk(int chunkNum, const String& hexChunk) {
+  uint8_t buf[128];
+  memset(buf, 0, sizeof(buf));
+  int hexLen = hexChunk.length();
+  int byteLen = hexLen / 2;
+  if (byteLen > 128) byteLen = 128;
+
+  for (int i = 0; i < byteLen; i++) {
+    char h = hexChunk.charAt(i * 2);
+    char l = hexChunk.charAt(i * 2 + 1);
+    buf[i] = (hexCharToByte(h) << 4) | hexCharToByte(l);
+  }
+
+  uint8_t pktType = (chunkNum == 4) ? 0x08 : 0x02;
+  sendFingerprintDataPacket(pktType, buf, 128);
+
+  if (chunkNum == 4) {
+    delay(20);
+    uint16_t score = 0;
+    uint8_t ack = matchCharBuffers(score);
+    if (ack == 0x00 && score >= 45) {
+      // ตรวจพบว่าตรงกันใน Tier 2!
+      tier2Searching = false;
+      finger.LEDcontrol(FINGERPRINT_LED_ON, 0, FINGERPRINT_LED_RED);
+
+      char idStr[25];
+      char scoreStr[25];
+      snprintf(idStr, sizeof(idStr), "Found ID: #%d", tier2CandidateId);
+      snprintf(scoreStr, sizeof(scoreStr), "Score: %d (Tier 2)", score);
+      showUI("SCAN SUCCESS!", idStr, scoreStr, "ACCESS GRANTED");
+
+      Serial.print("RESP:TIER2_MATCH ID=");
+      Serial.print(tier2CandidateId);
+      Serial.print(" SCORE=");
+      Serial.println(score);
+
+      delay(1800);
+      while (finger.getImage() != FINGERPRINT_NOFINGER) {
+        delay(50);
+      }
+      finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+      showIdleScreen();
+    } else {
+      // ลายนิ้วมือไม่ตรงกัน ส่งผลกลับไปยัง Server เพื่อตรวจ candidate ถัดไป
+      Serial.print("RESP:TIER2_MISMATCH ID=");
+      Serial.println(tier2CandidateId);
+    }
+  } else {
+    Serial.print("RESP:COMPARE_CHUNK_ACK PART=");
+    Serial.println(chunkNum);
+  }
+}
+
 // 2. บันทึกลายนิ้วมือใหม่ (Enroll)
 void handleEnroll(int id) {
   if (id < 1 || id > 1000) {
@@ -764,6 +861,24 @@ void loop() {
         hexChunk.trim();
         handleRestoreChunk(part, hexChunk);
       }
+    } else if (cmd.startsWith("COMPARE_INIT ")) {
+      int id = cmd.substring(13).toInt();
+      handleCompareInit(id);
+    } else if (cmd.startsWith("COMPARE_CHUNK ")) {
+      int spaceIdx = cmd.indexOf(' ', 14);
+      if (spaceIdx > 0) {
+        int part = cmd.substring(14, spaceIdx).toInt();
+        String hexChunk = cmd.substring(spaceIdx + 1);
+        hexChunk.trim();
+        handleCompareChunk(part, hexChunk);
+      }
+    } else if (cmd.startsWith("CANCEL_TIER2")) {
+      tier2Searching = false;
+      finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+      showUI("ACCESS DENIED", "No match in DB", "Unauthorized finger");
+      Serial.println("EVENT:NO_MATCH");
+      delay(1500);
+      showIdleScreen();
     } else if (cmd.startsWith("DELETE ")) {
       int id = cmd.substring(7).toInt();
       handleDelete(id);
@@ -784,6 +899,20 @@ void loop() {
     if (millis() - restoreStartTime > 10000) {
       restoreTargetId = 0;
       Serial.println("RESP:RESTORE_FAIL ERR=TIMEOUT");
+      showIdleScreen();
+    }
+    delay(5);
+    return;
+  }
+
+  // หากอยู่ในระหว่างค้นหา Tier 2 ตรวจสอบ Timeout
+  if (tier2Searching) {
+    if (millis() - tier2StartTime > 5500) {
+      tier2Searching = false;
+      finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+      showUI("ACCESS DENIED", "No match in DB", "Unauthorized finger");
+      Serial.println("EVENT:NO_MATCH");
+      delay(1500);
       showIdleScreen();
     }
     delay(5);
@@ -818,20 +947,12 @@ void loop() {
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     showIdleScreen();
   } else if (result == FINGERPRINT_NOTFOUND) {
-    // สแกนไม่ผ่าน: ไฟกระพริบเตือน 2 ครั้ง
-    finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
-
-    showUI("ACCESS DENIED", "No match found", "Unauthorized finger");
-    Serial.println("EVENT:NO_MATCH");
-    
-    delay(2000);
-    // รอยกนิ้วออกก่อนเพื่อไม่ให้สแกนซ้ำ
-    while (finger.getImage() != FINGERPRINT_NOFINGER) {
-      delay(50);
-    }
-    // กลับสู่โหมดไฟหายใจ Breathing นุ่มนวล
-    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-    showIdleScreen();
+    // Tier 1 Flash ไม่พบ: เริ่มต้นเข้าสู่โหมดค้นหา Tier 2 ใน Database
+    tier2Searching = true;
+    tier2StartTime = millis();
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 80, FINGERPRINT_LED_RED);
+    showUI("SEARCHING DB...", "Checking Tier 2...", "Please wait...");
+    Serial.println("EVENT:TIER1_NO_MATCH");
   }
 
   delay(120); // หน่วงเวลาให้นุ่มนวล ไม่แยงตา

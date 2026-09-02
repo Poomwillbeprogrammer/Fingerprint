@@ -104,9 +104,15 @@ async function initDatabase() {
   // Migration: เพิ่มคอลัมน์ fingerprint_template หากฐานข้อมูลเดิมยังไม่มี
   try {
     await dbAsync.run("ALTER TABLE users ADD COLUMN fingerprint_template TEXT;");
-  } catch (e) {
-    // Column already exists, ignore
-  }
+  } catch (e) {}
+
+  try {
+    await dbAsync.run("ALTER TABLE users ADD COLUMN in_sensor INTEGER DEFAULT 1;");
+  } catch (e) {}
+
+  try {
+    await dbAsync.run("ALTER TABLE users ADD COLUMN last_scanned_at DATETIME;");
+  } catch (e) {}
 
   console.log('✅ Database schema and initial records ready!');
 }

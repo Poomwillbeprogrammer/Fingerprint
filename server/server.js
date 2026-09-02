@@ -167,8 +167,123 @@ function sendNextRestoreChunk() {
   }
 }
 
+// ==========================================
+// 1.1 Tier 2 Database Candidate Search & Auto-Promote
+// ==========================================
+let tier2SearchQueue = [];
+let tier2ActiveCandidate = null;
+let tier2SearchTimer = null;
+let pendingCompare = null;
+
+function sendNextCompareChunk() {
+  if (!pendingCompare) return;
+  pendingCompare.currentChunk++;
+  const part = pendingCompare.currentChunk;
+  if (part <= 4) {
+    const start = (part - 1) * 256;
+    const hexPart = pendingCompare.template.substring(start, start + 256);
+    sendSerialCommand(`COMPARE_CHUNK ${part} ${hexPart}`);
+  }
+}
+
+async function startTier2Search() {
+  console.log('🔍 [Tier 2] เริ่มต้นค้นหา candidate จาก Database...');
+  // ค้นหาผู้ใช้ที่อยู่นอกเซนเซอร์ (in_sensor = 0 หรือถูก demote ออกไป)
+  // เรียงลำดับตามผู้ที่สแกนล่าสุด หรือสร้างล่าสุดก่อน (Most likely candidate first)
+  const candidates = await dbAsync.all(`
+    SELECT id, name, fingerprint_template 
+    FROM users 
+    WHERE (in_sensor = 0 OR in_sensor IS NULL) AND fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 512
+    ORDER BY COALESCE(last_scanned_at, created_at) DESC
+    LIMIT 60
+  `);
+
+  if (!candidates || candidates.length === 0) {
+    console.log('⚠️ [Tier 2] ไม่มี candidate ใน Database ที่อยู่นอกเซนเซอร์');
+    sendSerialCommand('CANCEL_TIER2');
+    return;
+  }
+
+  console.log(`📋 [Tier 2] พบผู้ใช้ ${candidates.length} รายใน Database ที่ต้องตรวจสอบ`);
+  tier2SearchQueue = [...candidates];
+  
+  if (tier2SearchTimer) clearTimeout(tier2SearchTimer);
+  tier2SearchTimer = setTimeout(() => {
+    console.log('⏰ [Tier 2] ค้นหาหมดเวลา (Timeout 4.5s)');
+    tier2SearchQueue = [];
+    pendingCompare = null;
+    sendSerialCommand('CANCEL_TIER2');
+  }, 4500);
+
+  checkNextTier2Candidate();
+}
+
+function checkNextTier2Candidate() {
+  if (tier2SearchQueue.length === 0) {
+    console.log('❌ [Tier 2] ตรวจสอบครบทุก candidate แล้ว ไม่พบข้อมูลที่ตรงกัน');
+    if (tier2SearchTimer) clearTimeout(tier2SearchTimer);
+    sendSerialCommand('CANCEL_TIER2');
+    return;
+  }
+
+  tier2ActiveCandidate = tier2SearchQueue.shift();
+  console.log(`🔎 [Tier 2] กำลังทดสอบเทียบกับ ID #${tier2ActiveCandidate.id} (${tier2ActiveCandidate.name})...`);
+  
+  pendingCompare = {
+    id: tier2ActiveCandidate.id,
+    template: tier2ActiveCandidate.fingerprint_template,
+    currentChunk: 0
+  };
+
+  sendSerialCommand(`COMPARE_INIT ${tier2ActiveCandidate.id}`);
+}
+
+// Auto-Promote (LRU Hardware Cache Eviction & Promotion)
+async function autoPromoteToSensor(userId) {
+  try {
+    const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [userId]);
+    if (!user || !user.fingerprint_template) return;
+
+    // ตรวจสอบจำนวนผู้ใช้ที่อยู่ในเซนเซอร์ปัจจุบัน
+    const countRow = await dbAsync.get('SELECT COUNT(*) as count FROM users WHERE in_sensor = 1');
+    const currentInSensor = countRow ? countRow.count : 0;
+    
+    let targetSlot = userId;
+
+    if (currentInSensor >= 1000) {
+      // เซนเซอร์เต็ม (1,000 คน) ต้องปลดผู้ใช้ที่ไม่ค่อยใช้งาน (LRU) ออก 1 คน
+      const lruUser = await dbAsync.get(`
+        SELECT id, name FROM users 
+        WHERE in_sensor = 1 AND id != ?
+        ORDER BY COALESCE(last_scanned_at, created_at) ASC 
+        LIMIT 1
+      `, [userId]);
+
+      if (lruUser) {
+        console.log(`🔄 [Auto-Promote] เซนเซอร์เต็ม: ย้าย ID #${lruUser.id} (${lruUser.name}) ไปอยู่ Tier 2 แทน`);
+        await dbAsync.run('UPDATE users SET in_sensor = 0 WHERE id = ?', [lruUser.id]);
+        targetSlot = lruUser.id; // ใช้ slot เดิมของคนนั้น
+      }
+    }
+
+    console.log(`🚀 [Auto-Promote] บันทึก Template ของ ID #${userId} (${user.name}) ลง Flash Slot #${targetSlot} ของ R307`);
+    await dbAsync.run('UPDATE users SET in_sensor = 1 WHERE id = ?', [userId]);
+    io.emit('user_updated');
+
+    // ส่งคำสั่ง Restore เพื่อเขียน Template ลง Slot ใน R307
+    pendingRestore = {
+      id: targetSlot,
+      template: user.fingerprint_template,
+      currentChunk: 0
+    };
+    sendSerialCommand(`RESTORE_INIT ${targetSlot}`);
+  } catch (err) {
+    console.error('Error in autoPromoteToSensor:', err);
+  }
+}
+
 // ประมวลผลเหตุการณ์เมื่อมีการสแกนนิ้ว
-async function processScanEvent(fingerprint_id, score, status) {
+async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') {
   try {
     let userName = 'Unknown User';
     let userId = null;
@@ -179,6 +294,8 @@ async function processScanEvent(fingerprint_id, score, status) {
       if (user) {
         userName = user.name;
         userId = user.id;
+        // บันทึกเวลาที่สแกนล่าสุด
+        await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
       }
     }
 
@@ -194,11 +311,12 @@ async function processScanEvent(fingerprint_id, score, status) {
       fingerprint_id: fingerprint_id || 0,
       status: isGranted ? 'GRANTED' : 'DENIED',
       score: score || 0,
+      tier: tier,
       timestamp: new Date().toISOString()
     };
 
     io.emit('new_log', newLogEntry);
-    console.log(`🔔 [Access Log] ${userName} (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (Score: ${score})`);
+    console.log(`🔔 [Access Log] ${userName} (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score})`);
   } catch (err) {
     console.error('Error in processScanEvent:', err);
   }
@@ -248,9 +366,44 @@ async function handleSerialData(rawLine) {
     const scoreMatch = line.match(/SCORE=(\d+)/);
     const fingerId = idMatch ? parseInt(idMatch[1]) : 0;
     const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
-    await processScanEvent(fingerId, score, 'GRANTED');
+    await processScanEvent(fingerId, score, 'GRANTED', 'Tier 1 Flash Match');
+  } else if (line === 'EVENT:TIER1_NO_MATCH') {
+    console.log('📡 [Tier 1] ไม่พบใน Flash ออนบอร์ด -> เริ่มต้นตรวจสอบ Tier 2 ใน Database...');
+    startTier2Search();
   } else if (line === 'EVENT:NO_MATCH') {
     await processScanEvent(0, 0, 'DENIED');
+  }
+
+  // 3.1 การเปรียบเทียบใน Tier 2
+  else if (line.startsWith('RESP:COMPARE_READY')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    if (pendingCompare && pendingCompare.id === id) {
+      sendNextCompareChunk();
+    }
+  } else if (line.startsWith('RESP:COMPARE_CHUNK_ACK')) {
+    if (pendingCompare) {
+      setTimeout(sendNextCompareChunk, 20);
+    }
+  } else if (line.startsWith('RESP:TIER2_MISMATCH')) {
+    const match = line.match(/ID=(\d+)/);
+    const id = match ? parseInt(match[1]) : 0;
+    console.log(`⏭️ [Tier 2] ID #${id} ไม่ตรง -> ตรวจสอบ candidate ถัดไป...`);
+    pendingCompare = null;
+    checkNextTier2Candidate();
+  } else if (line.startsWith('RESP:TIER2_MATCH')) {
+    const idMatch = line.match(/ID=(\d+)/);
+    const scoreMatch = line.match(/SCORE=(\d+)/);
+    const candidateId = idMatch ? parseInt(idMatch[1]) : 0;
+    const score = scoreMatch ? parseInt(scoreMatch[1]) : 0;
+
+    console.log(`🎉 [Tier 2 MATCH!] สแกนนิ้วตรงกับ ID #${candidateId} ใน Database (Score: ${score})`);
+    if (tier2SearchTimer) clearTimeout(tier2SearchTimer);
+    tier2SearchQueue = [];
+    pendingCompare = null;
+
+    await processScanEvent(candidateId, score, 'GRANTED', 'Tier 2 Cloud Match');
+    autoPromoteToSensor(candidateId);
   }
 
   // 4. ข้อมูล Template สำหรับ Backup & Restore
@@ -262,7 +415,7 @@ async function handleSerialData(rawLine) {
       const templateId = parseInt(idMatch[1]);
       const templateData = dataMatch[1];
       try {
-        await dbAsync.run('UPDATE users SET fingerprint_template = ? WHERE id = ?', [templateData, templateId]);
+        await dbAsync.run('UPDATE users SET fingerprint_template = ?, in_sensor = 1 WHERE id = ?', [templateData, templateId]);
         console.log(`💾 [DB Backup] บันทึก Template ลายนิ้วมือ ID #${templateId} (${templateData.length / 2} Bytes) ลง SQLite สำเร็จ!`);
         io.emit('template_saved', { id: templateId, success: true });
         io.emit('user_updated');

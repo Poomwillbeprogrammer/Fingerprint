@@ -308,13 +308,25 @@ if (window.location.pathname.endsWith('users.html')) {
 
     users.forEach(user => {
       const hasTemplate = user.fingerprint_template && user.fingerprint_template.length >= 512;
-      const templateBadge = hasTemplate
-        ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm">
-             <i class="fa-solid fa-cloud-check text-[10px]"></i> สำรองแล้ว (512B)
-           </span>`
-        : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
-             <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> ยังไม่มีข้อมูล
-           </span>`;
+      const inSensor = user.in_sensor !== 0; // default true/1
+      
+      let tierBadge = '';
+      if (hasTemplate && inSensor) {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm" title="บันทึกใน Flash ของ R307 สแกนผ่านเร็ว < 0.2 วินาที">
+            <i class="fa-solid fa-bolt text-[10px] text-amber-300"></i> Tier 1 (ในเซนเซอร์)
+          </span>`;
+      } else if (hasTemplate && !inSensor) {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/25 shadow-sm" title="จัดเก็บใน Database สแกนตรวจอัตโนมัติ">
+            <i class="fa-solid fa-cloud text-[10px]"></i> Tier 2 (ในคลาวด์)
+          </span>`;
+      } else {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+            <i class="fa-solid fa-fingerprint text-[10px]"></i> ยังไม่ลงทะเบียน
+          </span>`;
+      }
 
       const tr = document.createElement('tr');
       tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
@@ -327,16 +339,10 @@ if (window.location.pathname.endsWith('users.html')) {
             ${user.role}
           </span>
         </td>
-        <td class="px-5 py-3.5">${templateBadge}</td>
+        <td class="px-5 py-3.5">${tierBadge}</td>
         <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
         <td class="px-5 py-3.5 text-right">
           <div class="flex items-center justify-end gap-1.5">
-            <button onclick="backupUser(${user.id})" title="ดึงลายนิ้วมือจากเซนเซอร์ R307 มาสำรองใน Database" class="px-2.5 py-1.5 text-indigo-300 hover:text-white bg-indigo-500/10 hover:bg-indigo-500/25 border border-indigo-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
-              <i class="fa-solid fa-cloud-arrow-up"></i> สำรอง
-            </button>
-            <button onclick="restoreUser(${user.id})" title="กู้คืนลายนิ้วมือลงเซนเซอร์ R307" class="px-2.5 py-1.5 text-emerald-300 hover:text-white bg-emerald-500/10 hover:bg-emerald-500/25 border border-emerald-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1 ${!hasTemplate ? 'opacity-40 pointer-events-none' : ''}">
-              <i class="fa-solid fa-cloud-arrow-down"></i> กู้คืน
-            </button>
             <button onclick="deleteUser(${user.id}, '${user.name}')" title="ลบผู้ใช้และลายนิ้วมือ" class="px-2.5 py-1.5 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
               <i class="fa-regular fa-trash-can"></i> ลบ
             </button>
