@@ -22,6 +22,7 @@ const io = new Server(server, {
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'fingerprint_super_secret_key_2026';
 const TARGET_PORT = process.env.SERIAL_PORT || 'COM12';
+const SERIAL_ENABLED = process.env.SERIAL_ENABLED !== 'false';
 const BAUD_RATE = 115200;
 
 // Middleware
@@ -116,6 +117,8 @@ function scheduleReconnect() {
   }, 4000);
 }
 
+let hardwareBridgeSocket = null;
+
 function sendSerialCommand(cmd) {
   if (serialPort && serialPort.isOpen) {
     const fullCmd = cmd + '\n';
@@ -140,8 +143,12 @@ function sendSerialCommand(cmd) {
       });
     }
     return true;
+  } else if (hardwareBridgeSocket && hardwareBridgeSocket.connected) {
+    console.log(`📡 [Bridge Send] -> ${cmd.length > 50 ? cmd.substring(0, 35) + '... (' + cmd.length + ' chars)' : cmd}`);
+    hardwareBridgeSocket.emit('bridge_command', cmd);
+    return true;
   } else {
-    console.warn(`⚠️ [Serial] พอร์ตไม่พร้อมใช้งาน ไม่สามารถส่งคำสั่ง: ${cmd}`);
+    console.warn(`⚠️ [Hardware] ไม่มีอุปกรณ์เชื่อมต่อ (Serial Offline & Bridge Offline) ไม่สามารถส่งคำสั่ง: ${cmd}`);
     return false;
   }
 }
@@ -595,6 +602,28 @@ io.on('connection', (socket) => {
     }
   });
 
+  // เมื่อ Hardware Bridge เชื่อมต่อเข้ามาจากคอมพิวเตอร์ของคุณ
+  socket.on('register_bridge', () => {
+    hardwareBridgeSocket = socket;
+    serialConnected = true;
+    console.log('🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ!');
+    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
+
+    socket.on('disconnect', () => {
+      if (hardwareBridgeSocket === socket) {
+        hardwareBridgeSocket = null;
+        serialConnected = false;
+        console.warn('🔌 [Hardware Bridge] หลุดการเชื่อมต่อจาก Cloud Bridge');
+        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)' });
+      }
+    });
+  });
+
+  // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge
+  socket.on('bridge_serial_data', async (rawLine) => {
+    await handleSerialData(rawLine);
+  });
+
   socket.on('disconnect', () => {
     console.log('Web Client Disconnected:', socket.id);
   });
@@ -603,14 +632,23 @@ io.on('connection', (socket) => {
 // Start Server
 async function start() {
   await initDatabase();
-  initSerial();
+  
+  if (SERIAL_ENABLED) {
+    initSerial();
+  } else {
+    console.log('☁️ [Cloud Mode] ปิดการต่อ SerialPort ตรงบนเซิร์ฟเวอร์ (พร้อมรับการเชื่อมต่อจาก bridge.js)');
+  }
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`====================================================`);
     console.log(`🚀 Fingerprint Admin Server running on: http://localhost:${PORT}`);
     console.log(`📊 Dashboard UI ready at: http://localhost:${PORT}/index.html`);
     console.log(`🔑 Login Page ready at: http://localhost:${PORT}/login.html`);
-    console.log(`🔌 Serial Target Port: ${TARGET_PORT} (Baud: ${BAUD_RATE})`);
+    if (SERIAL_ENABLED) {
+      console.log(`🔌 Serial Target Port: ${TARGET_PORT} (Baud: ${BAUD_RATE})`);
+    } else {
+      console.log(`☁️ Cloud Deployment Mode: Active (Waiting for bridge.js)`);
+    }
     console.log(`====================================================`);
   });
 }
