@@ -134,7 +134,7 @@ app.post('/api/users', authRequired, async (req, res) => {
     }
 
     await dbAsync.run(
-      'INSERT INTO users (id, name, department, role) VALUES (?, ?, ?, ?)',
+      "INSERT INTO users (id, name, department, role, created_at) VALUES (?, ?, ?, ?, datetime('now', '+7 hours'))",
       [id, name, department || '', role || 'User']
     );
 
@@ -193,11 +193,11 @@ app.get('/api/stats', authRequired, async (req, res) => {
     const totalLogs = (await dbAsync.get('SELECT COUNT(*) as count FROM access_logs')).count;
     const grantedToday = (await dbAsync.get(`
       SELECT COUNT(*) as count FROM access_logs 
-      WHERE status = 'GRANTED' AND date(timestamp, 'localtime') = date('now', 'localtime')
+      WHERE status = 'GRANTED' AND date(timestamp) = date('now', '+7 hours')
     `)).count;
     const deniedToday = (await dbAsync.get(`
       SELECT COUNT(*) as count FROM access_logs 
-      WHERE status != 'GRANTED' AND date(timestamp, 'localtime') = date('now', 'localtime')
+      WHERE status != 'GRANTED' AND date(timestamp) = date('now', '+7 hours')
     `)).count;
 
     res.json({
@@ -233,10 +233,10 @@ app.post('/api/device/scan-event', async (req, res) => {
       }
     }
 
-    // บันทึกลงฐานข้อมูล access_logs
+    // บันทึกลงฐานข้อมูล access_logs (เวลาไทย +7)
     const insertResult = await dbAsync.run(`
-      INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score, timestamp)
+      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'))
     `, [userId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
 
     const newLogEntry = {

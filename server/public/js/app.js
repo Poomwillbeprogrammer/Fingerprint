@@ -133,17 +133,28 @@ if (openPasswordModalBtn && passwordModal) {
 }
 
 
-// Format Date & Time
-function formatDateTime(isoString) {
-  if (!isoString) return '-';
-  const d = new Date(isoString);
+// Format Date & Time (เวลาไทย Asia/Bangkok UTC+7)
+function formatDateTime(str) {
+  if (!str) return '-';
+  let d;
+  if (typeof str === 'string' && str.includes(' ') && !str.includes('T') && !str.includes('Z')) {
+    // กรณีเป็นสตริงจาก SQLite เช่น "2026-09-02 09:15:30" (ซึ่งเป็นเวลาไทยแล้ว)
+    d = new Date(str.replace(' ', 'T') + '+07:00');
+  } else {
+    d = new Date(str);
+  }
+
+  if (isNaN(d.getTime())) return str;
+
   return d.toLocaleString('th-TH', {
+    timeZone: 'Asia/Bangkok',
     day: '2-digit',
     month: 'short',
-    year: '2-digit',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    second: '2-digit'
+    second: '2-digit',
+    hour12: false
   });
 }
 

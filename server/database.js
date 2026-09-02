@@ -63,7 +63,7 @@ async function initDatabase() {
       name TEXT NOT NULL,
       department TEXT,
       role TEXT DEFAULT 'User',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
     );
 
     CREATE TABLE IF NOT EXISTS access_logs (
@@ -73,29 +73,29 @@ async function initDatabase() {
       fingerprint_id INTEGER,
       status TEXT NOT NULL,
       score INTEGER,
-      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+      timestamp DATETIME DEFAULT (datetime('now', '+7 hours'))
     );
 
     CREATE TABLE IF NOT EXISTS admins (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password_hash TEXT NOT NULL,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT (datetime('now', '+7 hours'))
     );
 
     INSERT OR REPLACE INTO admins (id, username, password_hash) 
     VALUES (1, 'admin', '${hash}');
 
-    INSERT OR IGNORE INTO users (id, name, department, role) VALUES 
-    (1, 'Poom Wang', 'Engineering', 'Admin'),
-    (2, 'Somchai Jaidee', 'Operations', 'User'),
-    (3, 'Wichai Rakngan', 'Security', 'User');
+    INSERT OR IGNORE INTO users (id, name, department, role, created_at) VALUES 
+    (1, 'Poom Wang', 'Engineering', 'Admin', datetime('now', '+7 hours')),
+    (2, 'Somchai Jaidee', 'Operations', 'User', datetime('now', '+7 hours')),
+    (3, 'Wichai Rakngan', 'Security', 'User', datetime('now', '+7 hours'));
 
     INSERT OR IGNORE INTO access_logs (id, user_id, user_name, fingerprint_id, status, score, timestamp) VALUES 
-    (1, 1, 'Poom Wang', 1, 'GRANTED', 145, datetime('now', '-15 minutes', 'localtime')),
-    (2, 2, 'Somchai Jaidee', 2, 'GRANTED', 128, datetime('now', '-45 minutes', 'localtime')),
-    (3, NULL, 'Unknown User', 99, 'DENIED', 32, datetime('now', '-1 hour', 'localtime')),
-    (4, 3, 'Wichai Rakngan', 3, 'GRANTED', 135, datetime('now', '-2 hours', 'localtime'));
+    (1, 1, 'Poom Wang', 1, 'GRANTED', 145, datetime('now', '+7 hours', '-15 minutes')),
+    (2, 2, 'Somchai Jaidee', 2, 'GRANTED', 128, datetime('now', '+7 hours', '-45 minutes')),
+    (3, NULL, 'Unknown User', 99, 'DENIED', 32, datetime('now', '+7 hours', '-1 hour')),
+    (4, 3, 'Wichai Rakngan', 3, 'GRANTED', 135, datetime('now', '+7 hours', '-2 hours'));
   `;
 
   await dbAsync.exec(initSql);
