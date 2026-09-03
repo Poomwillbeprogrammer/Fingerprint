@@ -654,7 +654,34 @@ void handleCompareChunk(int chunkNum, const String& hexChunk) {
   }
 }
 
-// 2. บันทึกลายนิ้วมือใหม่ (Enroll)
+// ตรวจสอบคำสั่งยกเลิก (CANCEL) หรือ Timeout ระหว่างขั้นตอนลงทะเบียนนิ้ว
+bool checkEnrollCancelOrTimeout(int id, uint32_t startTime, uint32_t timeoutMs = 20000) {
+  if (Serial.available()) {
+    String inCmd = Serial.readStringUntil('\n');
+    inCmd.trim();
+    if (inCmd.startsWith("CANCEL")) {
+      showUI("ENROLL CANCELLED", "Cancelled by user", "Returning to idle");
+      Serial.print("RESP:ENROLL_CANCELLED ID=");
+      Serial.println(id);
+      delay(1500);
+      showIdleScreen();
+      return true; // ยกเลิกสำเร็จ
+    }
+  }
+
+  if (millis() - startTime > timeoutMs) {
+    showUI("ENROLL TIMEOUT", "No finger placed", "Try again later");
+    Serial.print("RESP:ENROLL_FAIL_TIMEOUT ID=");
+    Serial.println(id);
+    delay(2000);
+    showIdleScreen();
+    return true; // หมดเวลา
+  }
+
+  return false;
+}
+
+// 2. บันทึกลายนิ้วมือใหม่ (Enroll พร้อมระบบ Cancel & Timeout)
 void handleEnroll(int id) {
   if (id < 1 || id > 1000) {
     showUI("ENROLL ERROR", "Invalid ID (1-1000)");
@@ -667,12 +694,15 @@ void handleEnroll(int id) {
   char idHeader[25];
   snprintf(idHeader, sizeof(idHeader), "ENROLL ID #%d", id);
 
-  // ขั้นตอนที่ 1: สแกนครั้งแรก
+  // ขั้นตอนที่ 1: สแกนครั้งแรก (พร้อม Timeout 20 วิ และรับคำสั่ง CANCEL_ENROLL)
   showUI(idHeader, "Step 1: Put finger", "on sensor now...");
   Serial.println("STATUS:ENROLL_STEP1_WAIT");
 
+  uint32_t step1Start = millis();
   int p = -1;
   while (p != FINGERPRINT_OK) {
+    if (checkEnrollCancelOrTimeout(id, step1Start, 20000)) return;
+
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) {
       delay(50);
@@ -692,18 +722,24 @@ void handleEnroll(int id) {
   // ให้ยกนิ้วออก
   showUI(idHeader, "Step 1 OK!", "Please REMOVE finger");
   Serial.println("STATUS:ENROLL_REMOVE_FINGER");
-  delay(1000);
+  delay(500);
+  uint32_t removeStart = millis();
   p = 0;
   while (p != FINGERPRINT_NOFINGER) {
+    if (checkEnrollCancelOrTimeout(id, removeStart, 10000)) return;
     p = finger.getImage();
+    delay(50);
   }
 
-  // ขั้นตอนที่ 2: วางนิ้วเดิมซ้ำอีกครั้ง
+  // ขั้นตอนที่ 2: วางนิ้วเดิมซ้ำอีกครั้ง (พร้อม Timeout 20 วิ และรับคำสั่ง CANCEL_ENROLL)
   showUI(idHeader, "Step 2: Place SAME", "finger again...");
   Serial.println("STATUS:ENROLL_STEP2_WAIT");
 
+  uint32_t step2Start = millis();
   p = -1;
   while (p != FINGERPRINT_OK) {
+    if (checkEnrollCancelOrTimeout(id, step2Start, 20000)) return;
+
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) {
       delay(50);

@@ -358,9 +358,31 @@ async function handleSerialData(rawLine) {
     console.log(`🎉 [Enroll Success] บันทึกลายนิ้วมือ ID #${id} สำเร็จ!`);
     io.emit('enroll_step_update', { status: 'SUCCESS', id });
     io.emit('user_updated');
+  } else if (line.startsWith('RESP:ENROLL_CANCELLED')) {
+    console.log(`🛑 [Arduino] ยกเลิกการสแกนนิ้วสำเร็จ (${line})`);
+    io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
+    io.emit('user_updated');
   } else if (line.startsWith('RESP:ENROLL_FAIL')) {
     let message = 'การบันทึกล้มเหลว กรุณาลองใหม่';
-    if (line.includes('IMAGE1')) message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
+    if (line.includes('TIMEOUT')) {
+      message = 'หมดเวลารอวางนิ้วบนเซนเซอร์ กรุณากดลองใหม่';
+      const match = line.match(/ID=(\d+)/);
+      const id = match ? parseInt(match[1]) : currentEnrollId;
+      if (id) {
+        (async () => {
+          try {
+            const u = await dbAsync.get('SELECT fingerprint_template FROM users WHERE id = ?', [id]);
+            if (u && !u.fingerprint_template) {
+              await dbAsync.run('DELETE FROM users WHERE id = ?', [id]);
+              console.log(`🗑️ [Cleanup] ลบผู้ใช้ ID #${id} เนื่องจากหมดเวลาสแกน`);
+              io.emit('user_updated');
+            }
+          } catch (e) {}
+        })();
+      }
+      currentEnrollId = null;
+    }
+    else if (line.includes('IMAGE1')) message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
     else if (line.includes('IMAGE2')) message = 'ภาพลายนิ้วมือรอบสองไม่ชัด กรุณาวางนิ้วใหม่';
     else if (line.includes('MISMATCH')) message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก กรุณาลองใหม่';
     else if (line.includes('STORE')) message = 'หน่วยความจำ R307 ขัดข้อง บันทึกไม่สำเร็จ';
@@ -792,6 +814,32 @@ io.on('connection', (socket) => {
         message: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้ (กรุณาตรวจสอบการเชื่อมต่อ COM12 หรือปิด Serial Monitor ใน Arduino IDE)'
       });
     }
+  });
+
+  // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ
+  socket.on('cancel_enroll', async (data) => {
+    const id = data?.id || currentEnrollId;
+    console.log(`🛑 [Cancel Enroll] ได้รับคำสั่งยกเลิกการลงทะเบียน ID #${id}`);
+
+    // 1. ส่งคำสั่งให้ Arduino หลุดออกจากลูปทันที
+    sendSerialCommand('CANCEL_ENROLL');
+
+    // 2. ถ้าผู้ใช้คนนี้เพิ่งถูกสร้างและยังไม่มี fingerprint_template ให้ลบออกจาก Database ทันที (Rollback)
+    if (id) {
+      try {
+        const u = await dbAsync.get('SELECT fingerprint_template FROM users WHERE id = ?', [id]);
+        if (u && !u.fingerprint_template) {
+          await dbAsync.run('DELETE FROM users WHERE id = ?', [id]);
+          console.log(`🗑️ [Cleanup] ยกเลิกและลบผู้ใช้ Slot ID #${id} ที่ไม่มีลายนิ้วมือออกจากระบบแล้ว`);
+          io.emit('user_updated');
+        }
+      } catch (err) {
+        console.error('Error in cancel_enroll rollback:', err);
+      }
+    }
+
+    currentEnrollId = null;
+    io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
   });
 
   // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา (รองรับ Uno Q Linux Bridge หรือ PC Bridge)
