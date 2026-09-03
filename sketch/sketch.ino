@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <Adafruit_Fingerprint.h>
+#include "thai_font.h"
 
 // ==========================================
 // 1. กำหนดขาเชื่อมต่อ Hardware
@@ -15,106 +16,411 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
 
 
-#include <U8g2lib.h>
+// ==========================================
+// 2. ไดรเวอร์ Software I2C (Bit-Banging สำหรับ Zephyr)
+// ==========================================
+class SoftwareI2C {
+private:
+  uint8_t _sda, _scl;
+
+  inline void i2c_delay() {
+    delayMicroseconds(4);
+  }
+
+  inline void sda_high() { pinMode(_sda, INPUT_PULLUP); }
+  inline void sda_low()  { pinMode(_sda, OUTPUT); digitalWrite(_sda, LOW); }
+  inline void scl_high() { pinMode(_scl, INPUT_PULLUP); }
+  inline void scl_low()  { pinMode(_scl, OUTPUT); digitalWrite(_scl, LOW); }
+  inline uint8_t sda_read() { pinMode(_sda, INPUT_PULLUP); return digitalRead(_sda); }
+
+public:
+  SoftwareI2C(uint8_t sda, uint8_t scl) : _sda(sda), _scl(scl) {}
+
+  void begin() {
+    sda_high();
+    scl_high();
+    i2c_delay();
+  }
+
+  void start() {
+    sda_high(); scl_high(); i2c_delay();
+    sda_low();  i2c_delay();
+    scl_low();  i2c_delay();
+  }
+
+  void stop() {
+    sda_low();  i2c_delay();
+    scl_high(); i2c_delay();
+    sda_high(); i2c_delay();
+  }
+
+  bool writeByte(uint8_t byte) {
+    for (uint8_t i = 0; i < 8; i++) {
+      if (byte & 0x80) sda_high();
+      else sda_low();
+      i2c_delay();
+      scl_high();
+      i2c_delay();
+      scl_low();
+      byte <<= 1;
+    }
+    sda_high();
+    i2c_delay();
+    scl_high();
+    i2c_delay();
+    bool ack = (sda_read() == LOW);
+    scl_low();
+    i2c_delay();
+    return ack;
+  }
+};
 
 // ==========================================
-// 2. ไดรเวอร์จอ OLED SH1106 (Software I2C + รองรับภาษาไทย UTF-8 สมบูรณ์)
+// 3. ตารางฟอนต์มาตรฐาน 5x7 ASCII
 // ==========================================
-U8G2_SH1106_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ OLED_SCL_PIN, /* data=*/ OLED_SDA_PIN, /* reset=*/ U8X8_PIN_NONE);
+const uint8_t FONT5x7[][5] = {
+  {0x00, 0x00, 0x00, 0x00, 0x00}, // Space
+  {0x00, 0x00, 0x5F, 0x00, 0x00}, // !
+  {0x00, 0x07, 0x00, 0x07, 0x00}, // "
+  {0x14, 0x7F, 0x14, 0x7F, 0x14}, // #
+  {0x24, 0x2A, 0x7F, 0x2A, 0x12}, // $
+  {0x23, 0x13, 0x08, 0x64, 0x62}, // %
+  {0x36, 0x49, 0x55, 0x22, 0x50}, // &
+  {0x00, 0x05, 0x03, 0x00, 0x00}, // '
+  {0x00, 0x1C, 0x22, 0x41, 0x00}, // (
+  {0x00, 0x41, 0x22, 0x1C, 0x00}, // )
+  {0x14, 0x08, 0x3E, 0x08, 0x14}, // *
+  {0x08, 0x08, 0x3E, 0x08, 0x08}, // +
+  {0x00, 0x50, 0x30, 0x00, 0x00}, // ,
+  {0x08, 0x08, 0x08, 0x08, 0x08}, // -
+  {0x00, 0x60, 0x60, 0x00, 0x00}, // .
+  {0x20, 0x10, 0x08, 0x04, 0x02}, // /
+  {0x3E, 0x51, 0x49, 0x45, 0x3E}, // 0
+  {0x00, 0x42, 0x7F, 0x40, 0x00}, // 1
+  {0x42, 0x61, 0x51, 0x49, 0x46}, // 2
+  {0x21, 0x41, 0x45, 0x4B, 0x31}, // 3
+  {0x18, 0x14, 0x12, 0x7F, 0x10}, // 4
+  {0x27, 0x45, 0x45, 0x45, 0x39}, // 5
+  {0x3C, 0x4A, 0x49, 0x49, 0x30}, // 6
+  {0x01, 0x71, 0x09, 0x05, 0x03}, // 7
+  {0x36, 0x49, 0x49, 0x49, 0x36}, // 8
+  {0x06, 0x49, 0x49, 0x29, 0x1E}, // 9
+  {0x00, 0x36, 0x36, 0x00, 0x00}, // :
+  {0x00, 0x56, 0x36, 0x00, 0x00}, // ;
+  {0x08, 0x14, 0x22, 0x41, 0x00}, // <
+  {0x14, 0x14, 0x14, 0x14, 0x14}, // =
+  {0x00, 0x41, 0x22, 0x14, 0x08}, // >
+  {0x02, 0x01, 0x51, 0x09, 0x06}, // ?
+  {0x32, 0x49, 0x79, 0x41, 0x3E}, // @
+  {0x7E, 0x11, 0x11, 0x11, 0x7E}, // A
+  {0x7F, 0x49, 0x49, 0x49, 0x36}, // B
+  {0x3E, 0x41, 0x41, 0x41, 0x22}, // C
+  {0x7F, 0x41, 0x41, 0x22, 0x1C}, // D
+  {0x7F, 0x49, 0x49, 0x49, 0x41}, // E
+  {0x7F, 0x09, 0x09, 0x09, 0x01}, // F
+  {0x3E, 0x41, 0x49, 0x49, 0x7A}, // G
+  {0x7F, 0x08, 0x08, 0x08, 0x7F}, // H
+  {0x00, 0x41, 0x7F, 0x41, 0x00}, // I
+  {0x20, 0x40, 0x41, 0x3F, 0x01}, // J
+  {0x7F, 0x08, 0x14, 0x22, 0x41}, // K
+  {0x7F, 0x40, 0x40, 0x40, 0x40}, // L
+  {0x7F, 0x02, 0x0C, 0x02, 0x7F}, // M
+  {0x7F, 0x04, 0x08, 0x10, 0x7F}, // N
+  {0x3E, 0x41, 0x41, 0x41, 0x3E}, // O
+  {0x7F, 0x09, 0x09, 0x09, 0x06}, // P
+  {0x3E, 0x41, 0x51, 0x21, 0x5E}, // Q
+  {0x7F, 0x09, 0x19, 0x29, 0x46}, // R
+  {0x46, 0x49, 0x49, 0x49, 0x31}, // S
+  {0x01, 0x01, 0x7F, 0x01, 0x01}, // T
+  {0x3F, 0x40, 0x40, 0x40, 0x3F}, // U
+  {0x1F, 0x20, 0x40, 0x20, 0x1F}, // V
+  {0x3F, 0x40, 0x38, 0x40, 0x3F}, // W
+  {0x63, 0x14, 0x08, 0x14, 0x63}, // X
+  {0x07, 0x08, 0x70, 0x08, 0x07}, // Y
+  {0x61, 0x51, 0x49, 0x45, 0x43}, // Z
+  {0x00, 0x7F, 0x41, 0x41, 0x00}, // [
+  {0x02, 0x04, 0x08, 0x10, 0x20}, // '\'
+  {0x00, 0x41, 0x41, 0x7F, 0x00}, // ]
+  {0x04, 0x02, 0x01, 0x02, 0x04}, // ^
+  {0x40, 0x40, 0x40, 0x40, 0x40}, // _
+  {0x00, 0x01, 0x02, 0x04, 0x00}, // `
+  {0x20, 0x54, 0x54, 0x54, 0x78}, // a
+  {0x7F, 0x48, 0x44, 0x44, 0x38}, // b
+  {0x38, 0x44, 0x44, 0x44, 0x20}, // c
+  {0x38, 0x44, 0x44, 0x48, 0x7F}, // d
+  {0x38, 0x54, 0x54, 0x54, 0x18}, // e
+  {0x08, 0x7E, 0x09, 0x01, 0x02}, // f
+  {0x0C, 0x52, 0x52, 0x52, 0x3E}, // g
+  {0x7F, 0x08, 0x04, 0x04, 0x78}, // h
+  {0x00, 0x44, 0x7D, 0x40, 0x00}, // i
+  {0x20, 0x40, 0x44, 0x3D, 0x00}, // j
+  {0x7F, 0x10, 0x28, 0x44, 0x00}, // k
+  {0x00, 0x41, 0x7F, 0x40, 0x00}, // l
+  {0x7C, 0x04, 0x18, 0x04, 0x78}, // m
+  {0x7C, 0x08, 0x04, 0x04, 0x78}, // n
+  {0x38, 0x44, 0x44, 0x44, 0x38}, // o
+  {0x7C, 0x14, 0x14, 0x14, 0x08}, // p
+  {0x08, 0x14, 0x14, 0x18, 0x7C}, // q
+  {0x7C, 0x08, 0x04, 0x04, 0x08}, // r
+  {0x48, 0x54, 0x54, 0x54, 0x20}, // s
+  {0x04, 0x3F, 0x44, 0x40, 0x20}, // t
+  {0x3C, 0x40, 0x40, 0x20, 0x7C}, // u
+  {0x1C, 0x20, 0x40, 0x20, 0x1C}, // v
+  {0x3C, 0x40, 0x30, 0x40, 0x3C}, // w
+  {0x44, 0x28, 0x10, 0x28, 0x44}, // x
+  {0x0C, 0x50, 0x50, 0x50, 0x3C}, // y
+  {0x44, 0x64, 0x54, 0x4C, 0x44}, // z
+  {0x00, 0x08, 0x36, 0x41, 0x00}, // {
+  {0x00, 0x00, 0x7F, 0x00, 0x00}, // |
+  {0x00, 0x41, 0x36, 0x08, 0x00}, // }
+  {0x08, 0x08, 0x2A, 0x1C, 0x08}  // ~
+};
 
-// แปลงรหัสอักขระ UTF-8 ภาษาไทยเป็นรหัส TIS-620 เพื่อแสดงผลผ่านฟอนต์ etl14thai_t ของ U8g2
-String utf8ToTis620(const char* utf8) {
-  if (!utf8) return "";
-  String res = "";
-  int len = strlen(utf8);
-  for (int i = 0; i < len; i++) {
-    uint8_t c = (uint8_t)utf8[i];
-    if (c == 0xE0 && i + 2 < len) {
-      uint8_t b2 = (uint8_t)utf8[i + 1];
-      uint8_t b3 = (uint8_t)utf8[i + 2];
-      if (b2 == 0xB8) {
-        res += (char)(b3 + 0x20);
-        i += 2;
-      } else if (b2 == 0xB9) {
-        res += (char)(b3 + 0x60);
-        i += 2;
-      } else {
-        res += (char)c;
+// ==========================================
+// 4. ไดรเวอร์ SH1106 OLED (128x64, Offset 2)
+// ==========================================
+class SH1106_Display {
+private:
+  SoftwareI2C _i2c;
+  uint8_t _addr;
+  uint8_t buffer[1024]; // 128 * 64 / 8 = 1024 Bytes
+
+  void sendCommand(uint8_t cmd) {
+    _i2c.start();
+    _i2c.writeByte(_addr << 1);
+    _i2c.writeByte(0x80);
+    _i2c.writeByte(cmd);
+    _i2c.stop();
+  }
+
+public:
+  SH1106_Display(uint8_t sda, uint8_t scl, uint8_t addr = 0x3C)
+    : _i2c(sda, scl), _addr(addr) {}
+
+  void begin() {
+    _i2c.begin();
+    delay(50);
+
+    // ลำดับ Init Command สำหรับ SH1106
+    sendCommand(0xAE); // Display OFF
+    sendCommand(0x02); // Column Offset = 2
+    sendCommand(0x10);
+    sendCommand(0x40); // Start line 0
+    sendCommand(0xB0); // Page 0
+    sendCommand(0x81); // Contrast
+    sendCommand(0x80);
+    sendCommand(0xA1); // Segment Re-map
+    sendCommand(0xC8); // COM Scan Direction
+    sendCommand(0xA6); // Normal Display
+    sendCommand(0xA8); // Multiplex
+    sendCommand(0x3F); // 1/64 duty
+    sendCommand(0xAD); // DC-DC Mode
+    sendCommand(0x8B); // DC-DC ON
+    sendCommand(0xD3); sendCommand(0x00);
+    sendCommand(0xD5); sendCommand(0x80);
+    sendCommand(0xD9); sendCommand(0x22);
+    sendCommand(0xDA); sendCommand(0x12);
+    sendCommand(0xDB); sendCommand(0x35);
+    sendCommand(0xAF); // Display ON
+
+    clear();
+    display();
+  }
+
+  void keepAlive() {
+    sendCommand(0xAD); sendCommand(0x8B); // Force DC-DC Charge Pump ON
+    sendCommand(0xAF); // Force Display ON (Wake up if browned out)
+  }
+
+  void clear() {
+    memset(buffer, 0x00, sizeof(buffer));
+  }
+
+  void drawPixel(int16_t x, int16_t y, uint8_t color = 1) {
+    if (x < 0 || x >= 128 || y < 0 || y >= 64) return;
+    if (color) buffer[x + (y / 8) * 128] |= (1 << (y % 8));
+    else buffer[x + (y / 8) * 128] &= ~(1 << (y % 8));
+  }
+
+  void drawChar(int16_t x, int16_t y, char c, uint8_t color = 1) {
+    if (c < 32 || c > 126) c = '?';
+    uint8_t index = c - 32;
+    for (uint8_t col = 0; col < 5; col++) {
+      uint8_t line = FONT5x7[index][col];
+      for (uint8_t row = 0; row < 8; row++) {
+        drawPixel(x + col, y + row, (line & (1 << row)) ? color : !color);
       }
-    } else {
-      res += (char)c;
+    }
+    for (uint8_t row = 0; row < 8; row++) {
+      drawPixel(x + 5, y + row, !color);
     }
   }
-  return res;
-}
+
+  void drawString(int16_t x, int16_t y, const char *str, uint8_t color = 1) {
+    while (*str) {
+      if (x + 6 > 128) { x = 0; y += 9; }
+      if (y + 8 > 64) break;
+      drawChar(x, y, *str++, color);
+      x += 6;
+    }
+  }
+
+  void drawHLine(int16_t x, int16_t y, int16_t w, uint8_t color = 1) {
+    for (int16_t i = 0; i < w; i++) drawPixel(x + i, y, color);
+  }
+
+  void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
+    drawHLine(x, y, w, color);
+    drawHLine(x, y + h - 1, w, color);
+    for (int16_t i = 0; i < h; i++) {
+      drawPixel(x, y + i, color);
+      drawPixel(x + w - 1, y + i, color);
+    }
+  }
+
+  void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
+    for (int16_t i = 0; i < h; i++) drawHLine(x, y + i, w, color);
+  }
+
+  // ตรวจสอบประเภทอักขระไทย (สระบน/ล่าง/วรรณยุกต์)
+  bool isUpperDiacritic(uint16_t u) {
+    return (u >= 0x0E31 && u <= 0x0E37) || (u >= 0x0E47 && u <= 0x0E4C);
+  }
+  bool isLowerDiacritic(uint16_t u) {
+    return (u == 0x0E38 || u == 0x0E39 || u == 0x0E3A);
+  }
+
+  void drawThaiGlyph(int16_t x, int16_t y, uint16_t u, uint8_t color = 1) {
+    if (u < 0x0E01 || u > 0x0E4C) return;
+    int idx = u - 0x0E01;
+    for (int r = 0; r < 12; r++) {
+      uint8_t rowByte = THAI_FONT[idx][r];
+      for (int c = 0; c < 8; c++) {
+        if (rowByte & (1 << (7 - c))) {
+          drawPixel(x + c, y + r, color);
+        }
+      }
+    }
+  }
+
+  void drawStringUTF8(int16_t x, int16_t y, const char* str, uint8_t color = 1) {
+    int curX = x;
+    int curY = y;
+    int len = strlen(str);
+    int prevCharWidth = 8;
+
+    for (int i = 0; i < len; i++) {
+      uint8_t b1 = (uint8_t)str[i];
+      if (b1 < 128) {
+        // Standard ASCII (0-9, A-Z, space, dash)
+        if (b1 == ' ') {
+          curX += 4;
+          continue;
+        }
+        drawChar(curX, curY + 2, (char)b1, color);
+        curX += 6;
+        prevCharWidth = 6;
+      } else if (b1 == 0xE0 && i + 2 < len) {
+        // Thai UTF-8 (3 bytes)
+        uint8_t b2 = (uint8_t)str[i + 1];
+        uint8_t b3 = (uint8_t)str[i + 2];
+        i += 2;
+        uint16_t u = ((uint16_t)(b2 & 0x0F) << 6) | (b3 & 0x3F);
+        u |= 0x0E00;
+
+        if (isUpperDiacritic(u)) {
+          // สระบน หรือ วรรณยุกต์: วาดทับบนพยัญชนะตัวก่อนหน้าโดยไม่เลื่อนแกน X
+          int drawX = curX - prevCharWidth;
+          int drawY = curY;
+          if (u >= 0x0E48 && u <= 0x0E4C) drawY -= 2; // ยกวรรณยุกต์ขึ้นเล็กน้อย
+          drawThaiGlyph(drawX, drawY, u, color);
+        } else if (isLowerDiacritic(u)) {
+          // สระล่าง (ุ ู): วาดใต้พยัญชนะตัวก่อนหน้า
+          drawThaiGlyph(curX - prevCharWidth, curY + 2, u, color);
+        } else {
+          // พยัญชนะ หรือ สระปกติ: วาดและเลื่อนแกน X ไปข้างหน้า
+          drawThaiGlyph(curX, curY, u, color);
+          curX += 8;
+          prevCharWidth = 8;
+        }
+      }
+    }
+  }
+
+  // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
+  void display() {
+    for (uint8_t page = 0; page < 8; page++) {
+      sendCommand(0xB0 + page);
+      sendCommand(0x02); // Column Offset = 2
+      sendCommand(0x10);
+
+      _i2c.start();
+      _i2c.writeByte(_addr << 1);
+      _i2c.writeByte(0x40);
+      for (uint8_t col = 0; col < 128; col++) {
+        _i2c.writeByte(buffer[col + (page * 128)]);
+      }
+      _i2c.stop();
+    }
+  }
+};
+
+SH1106_Display oled(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR);
 
 // ==========================================
-// 3. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (รองรับภาษาไทยผ่าน TIS-620)
+// 5. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (รองรับภาษาไทย)
 // ==========================================
 void showUI(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_etl14thai_t);
+  oled.clear();
+  oled.drawRect(0, 0, 128, 64);
+  
+  // แถบหัวข้อ Title
+  oled.fillRect(0, 0, 128, 14, 1);
+  oled.drawStringUTF8(6, 1, title, 0);
 
-  // กรอบภายนอก
-  u8g2.drawFrame(0, 0, 128, 64);
+  if (line1 && strlen(line1) > 0) oled.drawStringUTF8(6, 18, line1);
+  if (line2 && strlen(line2) > 0) oled.drawStringUTF8(6, 33, line2);
+  if (line3 && strlen(line3) > 0) oled.drawStringUTF8(6, 48, line3);
 
-  // แถบหัวข้อ Title ด้านบน (Inverted Box)
-  u8g2.drawBox(0, 0, 128, 15);
-  u8g2.setDrawColor(0); // ตัวหนังสือสีดำบนแถบสีขาว
-  u8g2.drawStr(4, 12, utf8ToTis620(title).c_str());
-
-  u8g2.setDrawColor(1); // คืนค่าสีขาวสำหรับเนื้อหา
-  if (line1 && strlen(line1) > 0) u8g2.drawStr(6, 29, utf8ToTis620(line1).c_str());
-  if (line2 && strlen(line2) > 0) u8g2.drawStr(6, 44, utf8ToTis620(line2).c_str());
-  if (line3 && strlen(line3) > 0) u8g2.drawStr(6, 59, utf8ToTis620(line3).c_str());
-
-  u8g2.sendBuffer();
+  oled.display();
 }
 
 // การ์ดแสดงผลเมื่อสแกนผ่าน: แสดงรหัสนักศึกษา และชื่อ-นามสกุลภาษาไทย
 void showUserCard(const char* stuId, const char* name) {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_etl14thai_t);
+  oled.clear();
+  oled.drawRect(0, 0, 128, 64);
 
-  // กรอบภายนอก
-  u8g2.drawFrame(0, 0, 128, 64);
+  // แถบหัวข้อ Title ด้านบน
+  oled.fillRect(0, 0, 128, 14, 1);
+  oled.drawStringUTF8(6, 1, "ยินดีต้อนรับ (GRANTED)", 0); // ตัวหนังสือสีดำบนพื้นขาว
 
-  // แถบหัวข้อด้านบน: ยินดีต้อนรับ (GRANTED)
-  u8g2.drawBox(0, 0, 128, 15);
-  u8g2.setDrawColor(0);
-  u8g2.drawStr(6, 12, utf8ToTis620("ยินดีต้อนรับ (GRANTED)").c_str());
-
-  u8g2.setDrawColor(1);
-
-  // บรรทัดที่ 1: รหัสนักศึกษา (เด่น ชัดเจน)
-  u8g2.drawStr(6, 30, stuId ? stuId : "-");
+  // บรรทัดที่ 1: รหัสนักศึกษา
+  oled.drawString(6, 18, "ID: ");
+  oled.drawString(30, 18, stuId ? stuId : "-");
 
   // บรรทัดที่ 2: ชื่อ-นามสกุล ภาษาไทย
-  u8g2.drawStr(6, 45, utf8ToTis620(name).c_str());
+  oled.drawStringUTF8(6, 33, name ? name : "Unknown");
 
   // บรรทัดที่ 3: เส้นคั่นและสถานะบันทึกสำเร็จ
-  u8g2.drawHLine(4, 49, 120);
-  u8g2.drawStr(6, 61, utf8ToTis620("บันทึกเวลาสำเร็จ OK").c_str());
+  oled.drawHLine(4, 48, 120);
+  oled.drawStringUTF8(6, 51, "บันทึกเวลาสำเร็จ OK");
 
-  u8g2.sendBuffer();
+  oled.display();
 }
 
 void showIdleScreen() {
-  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_etl14thai_t);
-  u8g2.drawFrame(0, 0, 128, 64);
+  oled.clear();
+  oled.drawRect(0, 0, 128, 64);
 
-  // แถบหัวข้อ
-  u8g2.drawBox(0, 0, 128, 15);
-  u8g2.setDrawColor(0);
-  u8g2.drawStr(10, 12, utf8ToTis620("ระบบลงเวลาสแกนนิ้ว").c_str());
+  // แถบหัวข้อ Title
+  oled.fillRect(0, 0, 128, 14, 1);
+  oled.drawStringUTF8(6, 1, "ระบบลงเวลาสแกนนิ้ว", 0);
 
-  u8g2.setDrawColor(1);
-  u8g2.drawStr(12, 32, utf8ToTis620("กรุณาวางนิ้วเพื่อสแกน").c_str());
-  u8g2.drawHLine(4, 46, 120);
-  u8g2.drawStr(18, 59, utf8ToTis620("สถานะ: พร้อมใช้งาน").c_str());
+  oled.drawStringUTF8(10, 24, "กรุณาวางนิ้วสแกน");
+  oled.drawHLine(4, 44, 120);
+  oled.drawStringUTF8(10, 48, "สถานะ: พร้อมใช้งาน");
 
-  u8g2.sendBuffer();
+  oled.display();
 }
 
 // ==========================================
@@ -650,20 +956,19 @@ void handleCount() {
 // ==========================================
 void setup() {
   Serial.begin(115200);
-  delay(1200);
+  delay(1000);
   Serial.println("\n[SYSTEM] Starting UNO Q Zephyr Fingerprint & OLED System...");
 
-  // เริ่มต้นหน้าจอ OLED SH1106 ผ่าน U8g2
-  u8g2.begin();
-  u8g2.enableUTF8Print();
-  showUI("BOOTING...", "Initializing OLED", "Thai Font Ready");
+  // เริ่มต้นหน้าจอ OLED SH1106 ผ่าน Software I2C
+  oled.begin();
+  showUI("BOOTING...", "Initializing OLED", "SH1106 128x64 OK");
   delay(1000);
 
   // เริ่มต้นเซนเซอร์ลายนิ้วมือ R307 (57600 baud)
   finger.begin(57600);
   if (finger.verifyPassword()) {
     Serial.println("STATUS:R307_READY");
-    showUI("HARDWARE OK", "R307 Sensor Ready", "OLED Thai Ready");
+    showUI("HARDWARE OK", "R307 Sensor Ready", "OLED SH1106 Ready");
     // เปิดโหมดไฟหายใจ (Breathing LED) นุ่มนวลสวยงาม ไม่กระพริบกวนตา
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
   } else {
@@ -694,12 +999,31 @@ void loop() {
       int id = cmd.substring(13).toInt();
       handleRestoreInit(id);
     } else if (cmd.startsWith("RESTORE_CHUNK ")) {
-      int firstSpace = cmd.indexOf(' ', 14);
-      if (firstSpace != -1) {
-        int chunkNum = cmd.substring(14, firstSpace).toInt();
-        String hexChunk = cmd.substring(firstSpace + 1);
-        handleRestoreChunk(chunkNum, hexChunk);
+      int spaceIdx = cmd.indexOf(' ', 14);
+      if (spaceIdx > 0) {
+        int part = cmd.substring(14, spaceIdx).toInt();
+        String hexChunk = cmd.substring(spaceIdx + 1);
+        hexChunk.trim();
+        handleRestoreChunk(part, hexChunk);
       }
+    } else if (cmd.startsWith("COMPARE_INIT ")) {
+      int id = cmd.substring(13).toInt();
+      handleCompareInit(id);
+    } else if (cmd.startsWith("COMPARE_CHUNK ")) {
+      int spaceIdx = cmd.indexOf(' ', 14);
+      if (spaceIdx > 0) {
+        int part = cmd.substring(14, spaceIdx).toInt();
+        String hexChunk = cmd.substring(spaceIdx + 1);
+        hexChunk.trim();
+        handleCompareChunk(part, hexChunk);
+      }
+    } else if (cmd.startsWith("CANCEL_TIER2")) {
+      tier2Searching = false;
+      finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+      showUI("ACCESS DENIED", "No match in DB", "Unauthorized finger");
+      Serial.println("EVENT:NO_MATCH");
+      delay(1500);
+      showIdleScreen();
     } else if (cmd.startsWith("DELETE ")) {
       int id = cmd.substring(7).toInt();
       handleDelete(id);
@@ -710,8 +1034,6 @@ void loop() {
     } else if (cmd == "CLEAR_ALL") {
       handleClearAll();
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-    } else if (cmd == "PING") {
-      Serial.println("RESP:PONG");
     } else if (cmd.startsWith("MATCH_USER ")) {
       int stuIdx = cmd.indexOf("STU=");
       int nameIdx = cmd.indexOf("NAME=");
@@ -721,14 +1043,11 @@ void loop() {
         String name = cmd.substring(nameIdx + 5);
         name.trim();
         showUserCard(stuId.c_str(), name.c_str());
+        delay(2800);
+        showIdleScreen();
       }
-    } else if (cmd.startsWith("CANCEL_TIER2")) {
-      tier2Searching = false;
-      finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
-      showUI("ACCESS DENIED", "ไม่พบในระบบ", "ไม่มีสิทธิ์เข้าถึง");
-      Serial.println("EVENT:NO_MATCH");
-      delay(1500);
-      showIdleScreen();
+    } else if (cmd == "PING") {
+      Serial.println("RESP:PONG");
     }
   }
 
@@ -748,7 +1067,7 @@ void loop() {
     if (millis() - tier2StartTime > 5500) {
       tier2Searching = false;
       finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
-      showUI("ACCESS DENIED", "ไม่พบในระบบ", "ไม่มีสิทธิ์เข้าถึง");
+      showUI("ACCESS DENIED", "ไม่พบลายนิ้วมือ", "ไม่มีสิทธิ์เข้าถึง");
       Serial.println("EVENT:NO_MATCH");
       delay(1500);
       showIdleScreen();
@@ -769,10 +1088,8 @@ void loop() {
     Serial.print(" SCORE=");
     Serial.println(finger.confidence);
 
-    // แสดงสถานะชั่วคราวระหว่างรอชื่อและรหัสนักศึกษา
-    showUI("SCAN SUCCESS!", "กำลังตรวจสอบข้อมูล...", "กรุณารอสักครู่");
+    showUI("SCAN SUCCESS!", "กำลังค้นหาข้อมูล...", "กรุณารอสักครู่");
 
-    // รอรับคำสั่ง MATCH_USER STU=... NAME=... จาก Server หรือ Linux Bridge ภายใน 2500ms
     uint32_t waitStart = millis();
     bool gotUser = false;
     while (millis() - waitStart < 2500) {
@@ -799,11 +1116,11 @@ void loop() {
 
     if (!gotUser) {
       char idStr[25];
-      snprintf(idStr, sizeof(idStr), "Student Slot: #%d", finger.fingerID);
+      snprintf(idStr, sizeof(idStr), "ID Slot: #%d", finger.fingerID);
       showUI("ACCESS GRANTED", idStr, "ผ่านการยืนยันตัวตน");
     }
 
-    delay(2800); // แสดงผลค้างไว้ 2.8 วินาที เพื่อให้อ่านชื่อและรหัสชัดเจน
+    delay(2800);
     // รอยกนิ้วออกก่อนเพื่อไม่ให้สแกนซ้ำ
     while (finger.getImage() != FINGERPRINT_NOFINGER) {
       delay(50);
@@ -824,9 +1141,13 @@ void loop() {
   static unsigned long lastKeepAlive = 0;
   if (millis() - lastKeepAlive > 3000) {
     lastKeepAlive = millis();
-    u8g2.setPowerSave(0);
+    oled.keepAlive();
   }
 
   delay(120); // หน่วงเวลาให้นุ่มนวล ไม่แยงตา
 }
+
+
+
+
 
