@@ -77,6 +77,14 @@ const dbAsync = {
       return { count: count || 0 };
     }
 
+    // 1.1 SELECT id, name FROM users WHERE student_id = ?
+    if (s.includes('FROM USERS') && s.includes('STUDENT_ID = ?')) {
+      const studentId = params[0];
+      const { data, error } = await supabase.from('users').select('id, name').eq('student_id', studentId).maybeSingle();
+      if (error) return null;
+      return data;
+    }
+
     // 3. SELECT COUNT(*) as count FROM users
     if (s.includes('SELECT COUNT(*)') && s.includes('FROM USERS')) {
       const { count, error } = await supabase.from('users').select('*', { count: 'exact', head: true });
@@ -184,12 +192,25 @@ const dbAsync = {
       return { changes: 1 };
     }
 
-    // 6. INSERT INTO users (id, name, department, role, created_at)
+    // 6. INSERT INTO users (id, student_id, name, created_at)
     if (s.includes('INSERT INTO USERS')) {
-      const [id, name, department, role] = params;
-      const { error } = await supabase.from('users').insert({ id, name, department, role, in_sensor: 1 });
+      let userObj = { in_sensor: 1 };
+      if (params.length === 3) {
+        userObj.id = params[0];
+        userObj.student_id = params[1];
+        userObj.name = params[2];
+      } else if (params.length === 4) {
+        userObj.id = params[0];
+        userObj.name = params[1];
+        userObj.department = params[2];
+        userObj.role = params[3];
+      } else if (params.length === 2) {
+        userObj.id = params[0];
+        userObj.name = params[1];
+      }
+      const { error } = await supabase.from('users').insert(userObj);
       if (error) throw error;
-      return { lastID: id, changes: 1 };
+      return { lastID: userObj.id, changes: 1 };
     }
 
     // 7. DELETE FROM users WHERE id = ?
@@ -200,18 +221,32 @@ const dbAsync = {
       return { changes: 1 };
     }
 
-    // 8. INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score, timestamp)
+    // 8. INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
     if (s.includes('INSERT INTO ACCESS_LOGS')) {
-      const [userId, userName, fingerprintId, status, score] = params;
-      const { data, error } = await supabase
-        .from('access_logs')
-        .insert({
+      let logObj = {};
+      if (params.length >= 6) {
+        const [userId, studentId, userName, fingerprintId, status, score] = params;
+        logObj = {
+          user_id: userId,
+          student_id: studentId,
+          user_name: userName,
+          fingerprint_id: fingerprintId,
+          status: status,
+          score: score
+        };
+      } else {
+        const [userId, userName, fingerprintId, status, score] = params;
+        logObj = {
           user_id: userId,
           user_name: userName,
           fingerprint_id: fingerprintId,
           status: status,
           score: score
-        })
+        };
+      }
+      const { data, error } = await supabase
+        .from('access_logs')
+        .insert(logObj)
         .select('id')
         .single();
       if (error) throw error;

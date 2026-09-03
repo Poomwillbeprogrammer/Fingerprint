@@ -300,6 +300,7 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
     lastScanStatus = status;
 
     let userName = 'Unknown User';
+    let studentId = '-';
     let userId = null;
     const isGranted = (status === 'GRANTED');
 
@@ -307,6 +308,7 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [fingerprint_id]);
       if (user) {
         userName = user.name;
+        studentId = user.student_id || '-';
         userId = user.id;
         // บันทึกเวลาที่สแกนล่าสุด
         await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
@@ -314,13 +316,14 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
     }
 
     const insertResult = await dbAsync.run(`
-      INSERT INTO access_logs (user_id, user_name, fingerprint_id, status, score, timestamp)
-      VALUES (?, ?, ?, ?, ?, datetime('now', '+7 hours'))
-    `, [userId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
+      INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
+    `, [userId, studentId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
 
     const newLogEntry = {
       id: insertResult.lastID,
       user_id: userId,
+      student_id: studentId,
       user_name: userName,
       fingerprint_id: fingerprint_id || 0,
       status: isGranted ? 'GRANTED' : 'DENIED',
@@ -330,7 +333,7 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
     };
 
     io.emit('new_log', newLogEntry);
-    console.log(`🔔 [Access Log] ${userName} (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score})`);
+    console.log(`🔔 [Access Log] ${userName} [${studentId}] (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score})`);
   } catch (err) {
     console.error('Error in processScanEvent:', err);
   }
@@ -547,28 +550,52 @@ app.get('/api/users', authRequired, async (req, res) => {
 });
 
 app.post('/api/users', authRequired, async (req, res) => {
-  const { id, name, department, role } = req.body;
-  if (!id || !name) {
-    return res.status(400).json({ error: 'กรุณาระบุหมายเลข ID และชื่อผู้ใช้' });
+  const { name, student_id } = req.body;
+  if (!name || !student_id) {
+    return res.status(400).json({ error: 'กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุล' });
   }
 
+  const cleanStudentId = student_id.toString().trim();
+  const cleanName = name.trim();
+
   try {
-    const existing = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
-    if (existing) {
-      await dbAsync.run(
-        'UPDATE users SET name = ?, department = ?, role = ? WHERE id = ?',
-        [name, department || '', role || 'User', id]
-      );
-    } else {
-      await dbAsync.run(
-        "INSERT INTO users (id, name, department, role, created_at) VALUES (?, ?, ?, ?, datetime('now', '+7 hours'))",
-        [id, name, department || '', role || 'User']
-      );
+    // 1. ตรวจสอบว่ารหัสนักศึกษานี้มีอยู่ในระบบแล้วหรือไม่ (ป้องกันการซ้ำ)
+    const existingStudent = await dbAsync.get('SELECT id, name FROM users WHERE student_id = ?', [cleanStudentId]);
+    if (existingStudent) {
+      return res.status(400).json({ 
+        error: `รหัสนักศึกษา "${cleanStudentId}" มีในระบบแล้ว (Slot ID #${existingStudent.id} - ${existingStudent.name})` 
+      });
     }
 
+    // 2. คำนวณ Slot ID อัตโนมัติ: เติมเต็มช่องว่างที่ว่างอยู่ (Re-use lowest available ID)
+    const allExisting = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+    const usedIds = new Set(allExisting.map(u => u.id));
+    
+    let targetId = req.body.id ? parseInt(req.body.id) : 0;
+    if (!targetId || usedIds.has(targetId)) {
+      targetId = 1;
+      while (usedIds.has(targetId) && targetId <= 300) targetId++;
+    }
+
+    if (targetId > 300) {
+      return res.status(400).json({ error: 'หน่วยความจำเต็ม ไม่สามารถเพิ่มผู้ใช้ได้เกิน 300 คน' });
+    }
+
+    // 3. บันทึกข้อมูลลงฐานข้อมูล
+    await dbAsync.run(
+      "INSERT INTO users (id, student_id, name, created_at) VALUES (?, ?, ?, datetime('now', '+7 hours'))",
+      [targetId, cleanStudentId, cleanName]
+    );
+
     io.emit('user_updated');
-    res.json({ success: true, message: `เตรียมข้อมูลผู้ใช้งาน ID #${id} เรียบร้อย` });
+    res.json({ 
+      success: true, 
+      id: targetId,
+      message: `เตรียมข้อมูลผู้ใช้งาน ID #${targetId} (${cleanStudentId}) เรียบร้อย`,
+      user: { id: targetId, student_id: cleanStudentId, name: cleanName }
+    });
   } catch (err) {
+    console.error('Error adding user:', err);
     res.status(500).json({ error: err.message });
   }
 });

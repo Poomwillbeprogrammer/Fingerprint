@@ -224,6 +224,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
 
     tr.innerHTML = `
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(log.timestamp)}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold">${log.student_id || '-'}</td>
       <td class="px-5 py-3.5 font-medium text-white flex items-center gap-2">
         <div class="w-7 h-7 rounded-full ${isGranted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} flex items-center justify-center text-xs">
           <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
@@ -238,6 +239,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         </span>
       </td>
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${log.score || 0}</td>
+      <td class="px-5 py-3.5 text-xs font-medium text-slate-300">${log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-')}</td>
     `;
 
     if (isLive) {
@@ -332,13 +334,8 @@ if (window.location.pathname.endsWith('users.html')) {
       tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
       tr.innerHTML = `
         <td class="px-5 py-3.5 font-mono text-sm font-bold text-cyan-400">#${user.id}</td>
+        <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold tracking-wider">${user.student_id || '-'}</td>
         <td class="px-5 py-3.5 font-medium text-white">${user.name}</td>
-        <td class="px-5 py-3.5 text-xs text-slate-400">${user.department || '-'}</td>
-        <td class="px-5 py-3.5">
-          <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'Admin' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}">
-            ${user.role}
-          </span>
-        </td>
         <td class="px-5 py-3.5">${tierBadge}</td>
         <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
         <td class="px-5 py-3.5 text-right">
@@ -360,7 +357,7 @@ if (window.location.pathname.endsWith('users.html')) {
       const q = e.target.value.toLowerCase();
       const filtered = allUsers.filter(u => 
         u.name.toLowerCase().includes(q) || 
-        (u.department && u.department.toLowerCase().includes(q)) || 
+        (u.student_id && u.student_id.toLowerCase().includes(q)) || 
         u.id.toString().includes(q)
       );
       renderUserTable(filtered);
@@ -463,15 +460,22 @@ if (window.location.pathname.endsWith('users.html')) {
   const enrollForm = document.getElementById('enrollForm');
 
   openModalBtn.addEventListener('click', () => {
-    // Auto-suggest next Slot ID
-    const usedIds = allUsers.map(u => u.id);
+    // คำนวณหา Slot ID ที่ว่างอันดับแรกสุด (Auto-Fill Gaps เช่น หากลบ #3 จะนำ #3 มาใช้ใหม่ทันที)
+    const usedIds = new Set(allUsers.map(u => u.id));
     let nextId = 1;
-    while (usedIds.includes(nextId) && nextId <= 300) nextId++;
+    while (usedIds.has(nextId) && nextId <= 300) nextId++;
+
     document.getElementById('enrollSlotId').value = nextId;
+    const badge = document.getElementById('enrollSlotIdBadge');
+    if (badge) badge.innerText = `#${nextId}`;
+
+    document.getElementById('enrollStudentId').value = '';
     document.getElementById('enrollName').value = '';
-    document.getElementById('enrollDept').value = '';
-    updateGuidance('ready', 'พร้อมลงทะเบียน', 'กรอกข้อมูลแล้วกดปุ่ม "บันทึกข้อมูล" ด้านล่าง');
+    updateGuidance('ready', 'พร้อมลงทะเบียน', 'กรอกรหัสนักศึกษาและชื่อ แล้วกดปุ่ม "บันทึกข้อมูล" ด้านล่าง');
     modal.classList.remove('hidden');
+    setTimeout(() => {
+      document.getElementById('enrollStudentId').focus();
+    }, 100);
   });
 
   function closeModal() {
@@ -511,19 +515,23 @@ if (window.location.pathname.endsWith('users.html')) {
   enrollForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = parseInt(document.getElementById('enrollSlotId').value);
+    const student_id = document.getElementById('enrollStudentId').value.trim();
     const name = document.getElementById('enrollName').value.trim();
-    const department = document.getElementById('enrollDept').value.trim();
-    const role = document.getElementById('enrollRole').value;
+
+    if (!student_id || !name) {
+      alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
+      return;
+    }
 
     const submitBtn = document.getElementById('submitEnrollBtn');
     submitBtn.disabled = true;
 
-    // 1. บันทึกลง SQLite
+    // 1. บันทึกลง Cloud Database
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, department, role })
+        body: JSON.stringify({ id, student_id, name })
       });
       const data = await res.json();
 
@@ -533,9 +541,10 @@ if (window.location.pathname.endsWith('users.html')) {
         return;
       }
 
+      const assignedId = data.id || id;
       // 2. ส่งคำสั่งให้ Arduino เริ่มขั้นตอนสแกนนิ้วสด
-      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก ID #${id}`);
-      socket.emit('start_enroll', { id, name });
+      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก Slot #${assignedId}`);
+      socket.emit('start_enroll', { id: assignedId, name });
 
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
