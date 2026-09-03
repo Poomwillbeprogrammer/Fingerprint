@@ -845,7 +845,7 @@ io.on('connection', (socket) => {
   });
 
   // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา (รองรับ Uno Q Linux Bridge หรือ PC Bridge)
-  socket.on('register_bridge', () => {
+  socket.on('register_bridge', async () => {
     if (hardwareBridgeSocket && hardwareBridgeSocket.id !== socket.id) {
       console.warn(`⚠️ [Hardware Bridge] สลับไปยัง Bridge ตัวใหม่ (${socket.id}) ปลดตัวเก่าออก (${hardwareBridgeSocket.id})`);
       try { hardwareBridgeSocket.disconnect(true); } catch (e) {}
@@ -855,6 +855,15 @@ io.on('connection', (socket) => {
     console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id})`);
     io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
 
+    // ส่งแคชรายชื่อนักศึกษาให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
+    try {
+      const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+      socket.emit('sync_users_cache', users || []);
+      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ไปยังบอร์ดแล้ว`);
+    } catch (err) {
+      console.error('Error sending users cache to bridge:', err);
+    }
+
     socket.on('disconnect', () => {
       if (hardwareBridgeSocket && hardwareBridgeSocket.id === socket.id) {
         hardwareBridgeSocket = null;
@@ -863,6 +872,16 @@ io.on('connection', (socket) => {
         io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)' });
       }
     });
+  });
+
+  // บอร์ดร้องขอแคชรายชื่อนักศึกษา
+  socket.on('get_users_cache', async () => {
+    try {
+      const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+      socket.emit('sync_users_cache', users || []);
+    } catch (err) {
+      console.error('Error in get_users_cache:', err);
+    }
   });
 
   // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge
