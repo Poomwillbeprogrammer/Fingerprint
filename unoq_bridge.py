@@ -140,7 +140,9 @@ def send_bitmap_to_mcu(buf):
             cmd = f'FRAME_DATA {offset} {hex_str}\n'
             mcu_sock.sendall(cmd.encode('utf-8'))
             offset += len(chunk)
-            time.sleep(0.012)  # 12ms pacing = ~750ms for complete 1024-byte screen
+            time.sleep(0.004)
+        time.sleep(0.01)
+        mcu_sock.sendall(b'FRAME_END\n')
         return True
     except Exception as e:
         print(f'❌ [Bitmap] ส่งภาพล้มเหลว: {e}')

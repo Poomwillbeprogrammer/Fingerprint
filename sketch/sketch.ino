@@ -991,6 +991,7 @@ void handleCount() {
 // ==========================================
 void setup() {
   Serial.begin(115200);
+  Serial.setTimeout(50);
   delay(1000);
   Serial.println("\n[SYSTEM] Starting UNO Q Zephyr Fingerprint & OLED System...");
 
@@ -1015,13 +1016,45 @@ void setup() {
   showIdleScreen();
 }
 
+bool handleFrameReceive() {
+  oled.clearBuffer();
+  Serial.println("FRAME_ACK 0");
+  uint32_t lastActivity = millis();
+  while (millis() - lastActivity < 2000) {
+    if (Serial.available()) {
+      lastActivity = millis();
+      String line = Serial.readStringUntil('\n');
+      line.trim();
+      if (line.startsWith("FRAME_DATA ")) {
+        int space1 = 11;
+        int space2 = line.indexOf(' ', space1);
+        if (space2 > 0) {
+          int offset = line.substring(space1, space2).toInt();
+          String hex = line.substring(space2 + 1);
+          hex.trim();
+          oled.loadFrameChunk(offset, hex.c_str());
+        }
+      } else if (line == "FRAME_END") {
+        oled.display();
+        Serial.println("FRAME_DONE");
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void loop() {
   // 1. รับคำสั่ง Command ผ่าน Serial (จาก Server / Web Admin / Serial Monitor)
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    Serial.print("ECHO:");
-    Serial.println(cmd.substring(0, 20));
+    if (cmd.length() == 0) return;
+
+    if (!cmd.startsWith("FRAME_DATA")) {
+      Serial.print("ECHO:");
+      Serial.println(cmd.substring(0, 20));
+    }
 
     if (cmd.startsWith("ENROLL ")) {
       int id = cmd.substring(7).toInt();
@@ -1070,23 +1103,7 @@ void loop() {
       handleClearAll();
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     } else if (cmd.startsWith("FRAME_START")) {
-      oled.clearBuffer();
-      Serial.println("FRAME_ACK 0");
-    } else if (cmd.startsWith("FRAME_DATA ")) {
-      int space1 = 11;
-      int space2 = cmd.indexOf(' ', space1);
-      if (space2 > 0) {
-        int offset = cmd.substring(space1, space2).toInt();
-        String hex = cmd.substring(space2 + 1);
-        hex.trim();
-        int nextOffset = oled.loadFrameChunk(offset, hex.c_str());
-        if (nextOffset >= 1024) {
-          Serial.println("FRAME_DONE");
-        } else {
-          Serial.print("FRAME_ACK ");
-          Serial.println(nextOffset);
-        }
-      }
+      handleFrameReceive();
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
     }
@@ -1132,33 +1149,15 @@ void loop() {
     uint32_t waitStart = millis();
     bool gotCard = false;
     while (millis() - waitStart < 2500) {
-      while (Serial.available()) {
+      if (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.startsWith("FRAME_START")) {
-          oled.clearBuffer();
-          Serial.println("FRAME_ACK 0");
-        } else if (line.startsWith("FRAME_DATA ")) {
-          int space1 = 11;
-          int space2 = line.indexOf(' ', space1);
-          if (space2 > 0) {
-            int offset = line.substring(space1, space2).toInt();
-            String hex = line.substring(space2 + 1);
-            hex.trim();
-            int nextOffset = oled.loadFrameChunk(offset, hex.c_str());
-            if (nextOffset >= 1024) {
-              Serial.println("FRAME_DONE");
-              gotCard = true;
-              break;
-            } else {
-              Serial.print("FRAME_ACK ");
-              Serial.println(nextOffset);
-            }
-          }
+          gotCard = handleFrameReceive();
+          if (gotCard) break;
         }
       }
-      if (gotCard) break;
-      delay(10);
+      delay(5);
     }
 
     if (!gotCard) {
