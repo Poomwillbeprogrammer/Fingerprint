@@ -307,7 +307,8 @@ public:
     int curX = x;
     int curY = y;
     int len = strlen(str);
-    int prevCharWidth = 8;
+    int lastCharX = x;
+    bool prevHasUpper = false;
 
     for (int i = 0; i < len; i++) {
       uint8_t b1 = (uint8_t)str[i];
@@ -318,8 +319,9 @@ public:
           continue;
         }
         drawChar(curX, curY + 2, (char)b1, color);
+        lastCharX = curX;
         curX += 6;
-        prevCharWidth = 6;
+        prevHasUpper = false;
       } else if (b1 == 0xE0 && i + 2 < len) {
         // Thai UTF-8 (3 bytes)
         uint8_t b2 = (uint8_t)str[i + 1];
@@ -328,20 +330,23 @@ public:
         uint16_t u = ((uint16_t)(b2 & 0x0F) << 6) | (b3 & 0x3F);
         u |= 0x0E00;
 
-        if (isUpperDiacritic(u)) {
-          // สระบน หรือ วรรณยุกต์: วาดทับบนพยัญชนะตัวก่อนหน้าโดยไม่เลื่อนแกน X
-          int drawX = curX - prevCharWidth;
-          int drawY = curY;
-          if (u >= 0x0E48 && u <= 0x0E4C) drawY -= 2; // ยกวรรณยุกต์ขึ้นเล็กน้อย
-          drawThaiGlyph(drawX, drawY, u, color);
-        } else if (isLowerDiacritic(u)) {
-          // สระล่าง (ุ ู): วาดใต้พยัญชนะตัวก่อนหน้า
-          drawThaiGlyph(curX - prevCharWidth, curY + 2, u, color);
+        bool isUpperVowel = (u >= 0x0E31 && u <= 0x0E37) || (u == 0x0E47);
+        bool isTone = (u >= 0x0E48 && u <= 0x0E4C);
+        bool isLower = (u == 0x0E38 || u == 0x0E39);
+
+        if (isUpperVowel) {
+          drawThaiGlyph(lastCharX, curY - 2, u, color);
+          prevHasUpper = true;
+        } else if (isTone) {
+          int yOff = prevHasUpper ? (curY - 4) : (curY - 2);
+          drawThaiGlyph(lastCharX, yOff, u, color);
+        } else if (isLower) {
+          drawThaiGlyph(lastCharX, curY + 2, u, color);
         } else {
-          // พยัญชนะ หรือ สระปกติ: วาดและเลื่อนแกน X ไปข้างหน้า
           drawThaiGlyph(curX, curY, u, color);
-          curX += 8;
-          prevCharWidth = 8;
+          lastCharX = curX;
+          curX += 7;
+          prevHasUpper = false;
         }
       }
     }
@@ -371,6 +376,9 @@ public:
       uint8_t b2 = (c2 >= '0' && c2 <= '9') ? (c2 - '0') : ((c2 >= 'A' && c2 <= 'F') ? (c2 - 'A' + 10) : ((c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : 0));
       buffer[offset + (i / 2)] = (b1 << 4) | b2;
     }
+    if (page == 7) {
+      display();
+    }
   }
 
   // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
@@ -394,7 +402,7 @@ public:
 SH1106_Display oled(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR);
 
 // ==========================================
-// 5. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (รองรับภาษาไทย)
+// 5. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (Clean Standard UI)
 // ==========================================
 void showUI(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
   oled.clear();
@@ -402,34 +410,30 @@ void showUI(const char* title, const char* line1, const char* line2 = "", const 
   
   // แถบหัวข้อ Title
   oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawStringUTF8(6, 1, title, 0);
+  oled.drawString(8, 3, title, 0);
 
-  if (line1 && strlen(line1) > 0) oled.drawStringUTF8(6, 18, line1);
-  if (line2 && strlen(line2) > 0) oled.drawStringUTF8(6, 33, line2);
-  if (line3 && strlen(line3) > 0) oled.drawStringUTF8(6, 48, line3);
+  if (line1 && strlen(line1) > 0) oled.drawString(8, 20, line1);
+  if (line2 && strlen(line2) > 0) oled.drawString(8, 34, line2);
+  if (line3 && strlen(line3) > 0) oled.drawString(8, 48, line3);
 
   oled.display();
 }
 
-// การ์ดแสดงผลเมื่อสแกนผ่าน: แสดงรหัสนักศึกษา และชื่อ-นามสกุลภาษาไทย
+// การ์ดแสดงผลเมื่อสแกนผ่าน (Fallback เมื่อไม่มีบิตแมป)
 void showUserCard(const char* stuId, const char* name) {
   oled.clear();
   oled.drawRect(0, 0, 128, 64);
 
-  // แถบหัวข้อ Title ด้านบน
   oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawStringUTF8(6, 1, "ยินดีต้อนรับ (GRANTED)", 0); // ตัวหนังสือสีดำบนพื้นขาว
+  oled.drawString(10, 3, "ACCESS GRANTED", 0);
 
-  // บรรทัดที่ 1: รหัสนักศึกษา
-  oled.drawString(6, 18, "ID: ");
-  oled.drawString(30, 18, stuId ? stuId : "-");
+  oled.drawString(6, 20, "ID: ");
+  oled.drawString(30, 20, stuId ? stuId : "-");
 
-  // บรรทัดที่ 2: ชื่อ-นามสกุล ภาษาไทย
-  oled.drawStringUTF8(6, 33, name ? name : "Unknown");
+  oled.drawString(6, 34, name ? name : "Student");
 
-  // บรรทัดที่ 3: เส้นคั่นและสถานะบันทึกสำเร็จ
   oled.drawHLine(4, 48, 120);
-  oled.drawStringUTF8(6, 51, "บันทึกเวลาสำเร็จ OK");
+  oled.drawString(14, 51, "CHECK-IN SUCCESS");
 
   oled.display();
 }
@@ -438,13 +442,12 @@ void showIdleScreen() {
   oled.clear();
   oled.drawRect(0, 0, 128, 64);
 
-  // แถบหัวข้อ Title
   oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawStringUTF8(6, 1, "ระบบลงเวลาสแกนนิ้ว", 0);
+  oled.drawString(16, 3, "FINGERPRINT IOT", 0);
 
-  oled.drawStringUTF8(10, 24, "กรุณาวางนิ้วสแกน");
+  oled.drawString(16, 24, "READY FOR SCAN");
   oled.drawHLine(4, 44, 120);
-  oled.drawStringUTF8(10, 48, "สถานะ: พร้อมใช้งาน");
+  oled.drawString(12, 49, "Place your finger");
 
   oled.display();
 }
@@ -1136,11 +1139,9 @@ void loop() {
     Serial.print(" SCORE=");
     Serial.println(finger.confidence);
 
-    showUI("SCAN SUCCESS!", "กำลังค้นหาข้อมูล...", "กรุณารอสักครู่");
-
     uint32_t waitStart = millis();
     bool gotCard = false;
-    while (millis() - waitStart < 2500) {
+    while (millis() - waitStart < 2000) {
       while (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
@@ -1152,46 +1153,20 @@ void loop() {
             hex.trim();
             oled.loadPageHex(page, hex.c_str());
             if (page == 7) {
-              oled.display();
               gotCard = true;
               break;
             }
-          }
-        } else if (line.startsWith("SHOW_CARD_CHUNK ")) {
-          int spaceIdx = line.indexOf(' ', 16);
-          if (spaceIdx > 0) {
-            int part = line.substring(16, spaceIdx).toInt();
-            String hex = line.substring(spaceIdx + 1);
-            hex.trim();
-            oled.loadBitmapChunk(part, hex.c_str());
-            if (part == 3) {
-              oled.display();
-              gotCard = true;
-              break;
-            }
-          }
-        } else if (line.startsWith("MATCH_USER ")) {
-          int stuIdx = line.indexOf("STU=");
-          int nameIdx = line.indexOf("NAME=");
-          if (stuIdx != -1 && nameIdx != -1) {
-            String stuId = line.substring(stuIdx + 4, nameIdx);
-            stuId.trim();
-            String name = line.substring(nameIdx + 5);
-            name.trim();
-            showUserCard(stuId.c_str(), name.c_str());
-            gotCard = true;
-            break;
           }
         }
       }
       if (gotCard) break;
-      delay(15);
+      delay(10);
     }
 
     if (!gotCard) {
       char idStr[25];
       snprintf(idStr, sizeof(idStr), "ID Slot: #%d", finger.fingerID);
-      showUI("ACCESS GRANTED", idStr, "ผ่านการยืนยันตัวตน");
+      showUI("ACCESS GRANTED", idStr, "Check-in OK");
     }
 
     delay(2800);
@@ -1201,6 +1176,7 @@ void loop() {
     }
     // กลับสู่โหมดไฟหายใจ Breathing นุ่มนวล
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     showIdleScreen();
   } else if (result == FINGERPRINT_NOTFOUND) {
     // Tier 1 Flash ไม่พบ: เริ่มต้นเข้าสู่โหมดค้นหา Tier 2 ใน Database
