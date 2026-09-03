@@ -46,6 +46,17 @@ function authRequired(req, res, next) {
   }
 }
 
+// บรอดแคสต์แคชรายชื่อนักศึกษาให้ทุก Bridge และ Client
+async function broadcastUsersCache() {
+  try {
+    const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+    io.emit('sync_users_cache', users || []);
+    console.log(`📦 [Sync Cache] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ให้ทุก Client แล้ว`);
+  } catch (err) {
+    console.error('Error broadcasting users cache:', err);
+  }
+}
+
 // ==========================================
 // 1. SerialPort Hardware Bridge (Arduino UNO Q & R307)
 // ==========================================
@@ -875,17 +886,6 @@ io.on('connection', (socket) => {
       }
     });
   });
-
-// บรอดแคสต์แคชรายชื่อนักศึกษาให้ทุก Bridge และ Client
-async function broadcastUsersCache() {
-  try {
-    const users = await dbAsync.all('SELECT id, name, student_id FROM users');
-    io.emit('sync_users_cache', users || []);
-    console.log(`📦 [Sync Cache] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ให้ทุก Client แล้ว`);
-  } catch (err) {
-    console.error('Error broadcasting users cache:', err);
-  }
-}
 
   // บอร์ดร้องขอแคชรายชื่อนักศึกษา
   socket.on('get_users_cache', async () => {
