@@ -184,10 +184,10 @@ const dbAsync = {
       return { changes: 1 };
     }
 
-    // 5. UPDATE users SET name = ?, department = ?, role = ? WHERE id = ?
+    // 5. UPDATE users SET name = ?, student_id = ? WHERE id = ?
     if (s.includes('UPDATE USERS SET NAME = ?')) {
-      const [name, department, role, id] = params;
-      const { error } = await supabase.from('users').update({ name, department, role }).eq('id', id);
+      const [name, studentId, id] = params;
+      const { error } = await supabase.from('users').update({ name, student_id: studentId }).eq('id', id);
       if (error) throw error;
       return { changes: 1 };
     }
@@ -199,11 +199,6 @@ const dbAsync = {
         userObj.id = params[0];
         userObj.student_id = params[1];
         userObj.name = params[2];
-      } else if (params.length === 4) {
-        userObj.id = params[0];
-        userObj.name = params[1];
-        userObj.department = params[2];
-        userObj.role = params[3];
       } else if (params.length === 2) {
         userObj.id = params[0];
         userObj.name = params[1];

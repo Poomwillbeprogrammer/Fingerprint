@@ -226,6 +226,11 @@ public:
     display();
   }
 
+  void keepAlive() {
+    sendCommand(0xAD); sendCommand(0x8B); // Force DC-DC Charge Pump ON
+    sendCommand(0xAF); // Force Display ON (Wake up if browned out)
+  }
+
   void clear() {
     memset(buffer, 0x00, sizeof(buffer));
   }
@@ -953,6 +958,13 @@ void loop() {
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 80, FINGERPRINT_LED_RED);
     showUI("SEARCHING DB...", "Checking Tier 2...", "Please wait...");
     Serial.println("EVENT:TIER1_NO_MATCH");
+  }
+
+  // ป้องกันจอ OLED เข้าสู่ Sleep Mode หรือไฟตก (OLED Keep-Alive Watchdog)
+  static unsigned long lastKeepAlive = 0;
+  if (millis() - lastKeepAlive > 3000) {
+    lastKeepAlive = millis();
+    oled.keepAlive();
   }
 
   delay(120); // หน่วงเวลาให้นุ่มนวล ไม่แยงตา

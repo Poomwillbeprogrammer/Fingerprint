@@ -626,15 +626,13 @@ app.get('/api/logs', authRequired, async (req, res) => {
       SELECT 
         access_logs.id,
         access_logs.user_id,
+        access_logs.student_id,
         COALESCE(users.name, access_logs.user_name, 'Unknown User') AS user_name,
-        users.department,
-        users.role,
         access_logs.fingerprint_id,
         access_logs.status,
         access_logs.score,
         access_logs.timestamp
       FROM access_logs 
-      LEFT JOIN users ON access_logs.fingerprint_id = users.id OR access_logs.user_id = users.id
       ORDER BY access_logs.timestamp DESC 
       LIMIT ?
     `, [limit]);
