@@ -46,24 +46,25 @@ def render_idle_screen():
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
-    d.rectangle([0, 0, 127, 13], fill=1)
     
     title = 'ระบบลงเวลาสแกนนิ้ว'
     bb = d.textbbox((0, 0), title, font=font_title)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 1), title, font=font_title, fill=0)
+    tw = bb[2] - bb[0]
+    d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
+
+    d.line([(2, 15), (125, 15)], fill=1)
 
     body = 'กรุณาวางนิ้วเพื่อสแกน'
     bb = d.textbbox((0, 0), body, font=font_body)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 25), body, font=font_body, fill=1)
+    bw = bb[2] - bb[0]
+    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
 
-    d.line([(4, 46), (124, 46)], fill=1)
+    d.line([(2, 47), (125, 47)], fill=1)
 
     footer = 'สถานะ: พร้อมใช้งาน'
     bb = d.textbbox((0, 0), footer, font=font_small)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 49), footer, font=font_small, fill=1)
+    fw = bb[2] - bb[0]
+    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -72,24 +73,25 @@ def render_denied_screen():
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
-    d.rectangle([0, 0, 127, 13], fill=1)
     
     title = 'ACCESS DENIED'
     bb = d.textbbox((0, 0), title, font=font_title)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 1), title, font=font_title, fill=0)
+    tw = bb[2] - bb[0]
+    d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
+
+    d.line([(2, 15), (125, 15)], fill=1)
 
     body = 'ไม่พบลายนิ้วมือในระบบ'
     bb = d.textbbox((0, 0), body, font=font_body)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 25), body, font=font_body, fill=1)
+    bw = bb[2] - bb[0]
+    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
 
-    d.line([(4, 46), (124, 46)], fill=1)
+    d.line([(2, 47), (125, 47)], fill=1)
 
     footer = 'ไม่มีสิทธิ์เข้าถึง (DENIED)'
     bb = d.textbbox((0, 0), footer, font=font_small)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 49), footer, font=font_small, fill=1)
+    fw = bb[2] - bb[0]
+    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -98,25 +100,30 @@ def render_user_card(student_id, name):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
-    d.rectangle([0, 0, 127, 13], fill=1)
     
     title = 'ยินดีต้อนรับ (GRANTED)'
     bb = d.textbbox((0, 0), title, font=font_title)
-    w = bb[2] - bb[0]
-    d.text(((128 - w) // 2, 1), title, font=font_title, fill=0)
+    tw = bb[2] - bb[0]
+    d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
+
+    d.line([(2, 15), (125, 15)], fill=1)
 
     stu_str = student_id if student_id else '-'
-    d.text((6, 16), f'ID: {stu_str}', font=font_id, fill=1)
+    d.text((8, 17), f'ID: {stu_str}', font=font_id, fill=1)
 
     display_name = name or 'Unknown Student'
     name_f = font_name
     bb = d.textbbox((0, 0), display_name, font=name_f)
-    if (bb[2] - bb[0]) > 116:
+    if (bb[2] - bb[0]) > 112:
         name_f = font_name_sm
-    d.text((6, 30), display_name, font=name_f, fill=1)
+    d.text((8, 31), display_name, font=name_f, fill=1)
 
-    d.line([(4, 47), (124, 47)], fill=1)
-    d.text((6, 50), 'บันทึกเวลาสำเร็จ OK', font=font_small, fill=1)
+    d.line([(2, 47), (125, 47)], fill=1)
+
+    status = 'บันทึกเวลาสำเร็จ OK'
+    bb = d.textbbox((0, 0), status, font=font_small)
+    sw = bb[2] - bb[0]
+    d.text(((128 - sw) // 2, 49), status, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
