@@ -282,9 +282,23 @@ async function autoPromoteToSensor(userId) {
   }
 }
 
-// ประมวลผลเหตุการณ์เมื่อมีการสแกนนิ้ว
+// ประมวลผลเหตุการณ์เมื่อมีการสแกนนิ้ว (พร้อมระบบ Debounce ป้องกันการบันทึกซ้ำ)
+let lastScanTime = 0;
+let lastScanFingerId = null;
+let lastScanStatus = null;
+
 async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') {
   try {
+    const now = Date.now();
+    // ป้องกันการบันทึกซ้ำ (Debounce 1.5 วินาที สำหรับเหตุการณ์เดียวกัน)
+    if (now - lastScanTime < 1500 && lastScanFingerId === fingerprint_id && lastScanStatus === status) {
+      console.log(`⏳ [Debounce] ละเว้นเหตุการณ์สแกนซ้ำภายใน 1.5 วินาที (ID: ${fingerprint_id}, Status: ${status})`);
+      return;
+    }
+    lastScanTime = now;
+    lastScanFingerId = fingerprint_id;
+    lastScanStatus = status;
+
     let userName = 'Unknown User';
     let userId = null;
     const isGranted = (status === 'GRANTED');
@@ -755,15 +769,19 @@ io.on('connection', (socket) => {
     }
   });
 
-  // เมื่อ Hardware Bridge เชื่อมต่อเข้ามาจากคอมพิวเตอร์ของคุณ
+  // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา (รองรับ Uno Q Linux Bridge หรือ PC Bridge)
   socket.on('register_bridge', () => {
+    if (hardwareBridgeSocket && hardwareBridgeSocket.id !== socket.id) {
+      console.warn(`⚠️ [Hardware Bridge] สลับไปยัง Bridge ตัวใหม่ (${socket.id}) ปลดตัวเก่าออก (${hardwareBridgeSocket.id})`);
+      try { hardwareBridgeSocket.disconnect(true); } catch (e) {}
+    }
     hardwareBridgeSocket = socket;
     serialConnected = true;
-    console.log('🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ!');
+    console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id})`);
     io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
 
     socket.on('disconnect', () => {
-      if (hardwareBridgeSocket === socket) {
+      if (hardwareBridgeSocket && hardwareBridgeSocket.id === socket.id) {
         hardwareBridgeSocket = null;
         serialConnected = false;
         console.warn('🔌 [Hardware Bridge] หลุดการเชื่อมต่อจาก Cloud Bridge');
@@ -774,6 +792,10 @@ io.on('connection', (socket) => {
 
   // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge
   socket.on('bridge_serial_data', async (rawLine) => {
+    // ป้องกันการรับข้อมูลซ้ำซ้อนจาก Bridge ที่ไม่ได้ active
+    if (hardwareBridgeSocket && socket.id !== hardwareBridgeSocket.id) {
+      return;
+    }
     await handleSerialData(rawLine);
   });
 
