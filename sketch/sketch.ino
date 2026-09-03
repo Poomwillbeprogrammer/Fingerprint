@@ -1018,7 +1018,6 @@ void setup() {
 
 bool handleFrameReceive() {
   oled.clearBuffer();
-  Serial.println("FRAME_ACK 0");
   uint32_t lastActivity = millis();
   while (millis() - lastActivity < 2000) {
     if (Serial.available()) {
@@ -1051,7 +1050,7 @@ void loop() {
     cmd.trim();
     if (cmd.length() == 0) return;
 
-    if (!cmd.startsWith("FRAME_DATA")) {
+    if (!cmd.startsWith("FRAME_DATA") && !cmd.startsWith("FRAME_START")) {
       Serial.print("ECHO:");
       Serial.println(cmd.substring(0, 20));
     }

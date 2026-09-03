@@ -101,15 +101,16 @@ def render_user_card(student_id, name):
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
     
-    title = 'ยินดีต้อนรับ (GRANTED)'
+    # หัวข้อ: ยินดีต้อนรับ สวยงามกึ่งกลาง
+    title = 'ยินดีต้อนรับ'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 15), (125, 15)], fill=1)
+    d.line([(2, 16), (125, 16)], fill=1)
 
     stu_str = student_id if student_id else '-'
-    d.text((8, 17), f'ID: {stu_str}', font=font_id, fill=1)
+    d.text((8, 18), f'ID: {stu_str}', font=font_id, fill=1)
 
     display_name = name or 'Unknown Student'
     name_f = font_name
@@ -120,7 +121,7 @@ def render_user_card(student_id, name):
 
     d.line([(2, 47), (125, 47)], fill=1)
 
-    status = 'บันทึกเวลาสำเร็จ OK'
+    status = 'บันทึกเวลาสำเร็จ (OK)'
     bb = d.textbbox((0, 0), status, font=font_small)
     sw = bb[2] - bb[0]
     d.text(((128 - sw) // 2, 49), status, font=font_small, fill=1)
@@ -138,7 +139,7 @@ def send_bitmap_to_mcu(buf):
         return False
     try:
         mcu_sock.sendall(b'FRAME_START\n')
-        time.sleep(0.02)
+        time.sleep(0.03)  # 30ms ให้ MCU เคลียร์บัฟเฟอร์ให้พร้อม
         offset = 0
         chunk_size = 16
         while offset < 1024:
@@ -147,8 +148,8 @@ def send_bitmap_to_mcu(buf):
             cmd = f'FRAME_DATA {offset} {hex_str}\n'
             mcu_sock.sendall(cmd.encode('utf-8'))
             offset += len(chunk)
-            time.sleep(0.004)
-        time.sleep(0.01)
+            time.sleep(0.006)  # 6ms pacing ป้องกัน UART FIFO เต็ม 100%
+        time.sleep(0.015)
         mcu_sock.sendall(b'FRAME_END\n')
         return True
     except Exception as e:
