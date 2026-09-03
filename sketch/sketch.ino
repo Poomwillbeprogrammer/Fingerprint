@@ -22,8 +22,34 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 // ==========================================
 U8G2_SH1106_128X64_NONAME_F_SW_I2C u8g2(U8G2_R0, /* clock=*/ OLED_SCL_PIN, /* data=*/ OLED_SDA_PIN, /* reset=*/ U8X8_PIN_NONE);
 
+// แปลงรหัสอักขระ UTF-8 ภาษาไทยเป็นรหัส TIS-620 เพื่อแสดงผลผ่านฟอนต์ etl14thai_t ของ U8g2
+String utf8ToTis620(const char* utf8) {
+  if (!utf8) return "";
+  String res = "";
+  int len = strlen(utf8);
+  for (int i = 0; i < len; i++) {
+    uint8_t c = (uint8_t)utf8[i];
+    if (c == 0xE0 && i + 2 < len) {
+      uint8_t b2 = (uint8_t)utf8[i + 1];
+      uint8_t b3 = (uint8_t)utf8[i + 2];
+      if (b2 == 0xB8) {
+        res += (char)(b3 + 0x20);
+        i += 2;
+      } else if (b2 == 0xB9) {
+        res += (char)(b3 + 0x60);
+        i += 2;
+      } else {
+        res += (char)c;
+      }
+    } else {
+      res += (char)c;
+    }
+  }
+  return res;
+}
+
 // ==========================================
-// 3. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (รองรับภาษาไทย)
+// 3. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (รองรับภาษาไทยผ่าน TIS-620)
 // ==========================================
 void showUI(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
   u8g2.clearBuffer();
@@ -35,12 +61,12 @@ void showUI(const char* title, const char* line1, const char* line2 = "", const 
   // แถบหัวข้อ Title ด้านบน (Inverted Box)
   u8g2.drawBox(0, 0, 128, 15);
   u8g2.setDrawColor(0); // ตัวหนังสือสีดำบนแถบสีขาว
-  u8g2.drawUTF8(4, 12, title);
+  u8g2.drawStr(4, 12, utf8ToTis620(title).c_str());
 
   u8g2.setDrawColor(1); // คืนค่าสีขาวสำหรับเนื้อหา
-  if (line1 && strlen(line1) > 0) u8g2.drawUTF8(6, 29, line1);
-  if (line2 && strlen(line2) > 0) u8g2.drawUTF8(6, 44, line2);
-  if (line3 && strlen(line3) > 0) u8g2.drawUTF8(6, 59, line3);
+  if (line1 && strlen(line1) > 0) u8g2.drawStr(6, 29, utf8ToTis620(line1).c_str());
+  if (line2 && strlen(line2) > 0) u8g2.drawStr(6, 44, utf8ToTis620(line2).c_str());
+  if (line3 && strlen(line3) > 0) u8g2.drawStr(6, 59, utf8ToTis620(line3).c_str());
 
   u8g2.sendBuffer();
 }
@@ -56,19 +82,19 @@ void showUserCard(const char* stuId, const char* name) {
   // แถบหัวข้อด้านบน: ยินดีต้อนรับ (GRANTED)
   u8g2.drawBox(0, 0, 128, 15);
   u8g2.setDrawColor(0);
-  u8g2.drawUTF8(6, 12, "ยินดีต้อนรับ (GRANTED)");
+  u8g2.drawStr(6, 12, utf8ToTis620("ยินดีต้อนรับ (GRANTED)").c_str());
 
   u8g2.setDrawColor(1);
 
   // บรรทัดที่ 1: รหัสนักศึกษา (เด่น ชัดเจน)
-  u8g2.drawUTF8(6, 30, stuId);
+  u8g2.drawStr(6, 30, stuId ? stuId : "-");
 
   // บรรทัดที่ 2: ชื่อ-นามสกุล ภาษาไทย
-  u8g2.drawUTF8(6, 45, name);
+  u8g2.drawStr(6, 45, utf8ToTis620(name).c_str());
 
   // บรรทัดที่ 3: เส้นคั่นและสถานะบันทึกสำเร็จ
   u8g2.drawHLine(4, 49, 120);
-  u8g2.drawUTF8(6, 61, "บันทึกเวลาสำเร็จ OK");
+  u8g2.drawStr(6, 61, utf8ToTis620("บันทึกเวลาสำเร็จ OK").c_str());
 
   u8g2.sendBuffer();
 }
@@ -81,12 +107,12 @@ void showIdleScreen() {
   // แถบหัวข้อ
   u8g2.drawBox(0, 0, 128, 15);
   u8g2.setDrawColor(0);
-  u8g2.drawUTF8(10, 12, "ระบบลงเวลาสแกนนิ้ว");
+  u8g2.drawStr(10, 12, utf8ToTis620("ระบบลงเวลาสแกนนิ้ว").c_str());
 
   u8g2.setDrawColor(1);
-  u8g2.drawUTF8(12, 32, "กรุณาวางนิ้วเพื่อสแกน");
+  u8g2.drawStr(12, 32, utf8ToTis620("กรุณาวางนิ้วเพื่อสแกน").c_str());
   u8g2.drawHLine(4, 46, 120);
-  u8g2.drawUTF8(18, 59, "สถานะ: พร้อมใช้งาน");
+  u8g2.drawStr(18, 59, utf8ToTis620("สถานะ: พร้อมใช้งาน").c_str());
 
   u8g2.sendBuffer();
 }
@@ -746,11 +772,11 @@ void loop() {
     // แสดงสถานะชั่วคราวระหว่างรอชื่อและรหัสนักศึกษา
     showUI("SCAN SUCCESS!", "กำลังตรวจสอบข้อมูล...", "กรุณารอสักครู่");
 
-    // รอรับคำสั่ง MATCH_USER STU=... NAME=... จาก Server หรือ Linux Bridge ภายใน 1200ms
+    // รอรับคำสั่ง MATCH_USER STU=... NAME=... จาก Server หรือ Linux Bridge ภายใน 2500ms
     uint32_t waitStart = millis();
     bool gotUser = false;
-    while (millis() - waitStart < 1200) {
-      if (Serial.available()) {
+    while (millis() - waitStart < 2500) {
+      while (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.startsWith("MATCH_USER ")) {
@@ -767,6 +793,7 @@ void loop() {
           }
         }
       }
+      if (gotUser) break;
       delay(15);
     }
 
