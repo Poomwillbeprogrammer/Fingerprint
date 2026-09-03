@@ -233,7 +233,11 @@ def mcu_reader_thread():
                         print(f'⚡ [Local Engine] พบผู้ใช้ ID #{user_id}: {name} ({stu_id}) -> เรนเดอร์การ์ดทันที')
                         card_buf = render_user_card(stu_id, name)
                     else:
-                        print(f'⚡ [Local Engine] ผู้ใช้ ID #{user_id} ไม่อยู่ในแคช -> แสดง Slot #{user_id}')
+                        print(f'⚡ [Local Engine] ผู้ใช้ ID #{user_id} ไม่อยู่ในแคช -> ร้องขอแคชใหม่ทันที')
+                        try:
+                            sio.emit('get_users_cache')
+                        except:
+                            pass
                         card_buf = render_user_card(f'Slot #{user_id}', 'Registered User')
                     
                     send_bitmap_to_mcu(card_buf)
@@ -243,19 +247,24 @@ def mcu_reader_thread():
                     print('⚡ [Local Engine] ไม่พบลายนิ้วมือ -> แสดงหน้า Denied')
                     send_bitmap_to_mcu(DENIED_BITMAP)
 
-                # ค) เมื่อเข้าสู่สถานะ Idle: แสดงหน้าจอระบบลงเวลาสแกนนิ้ว ภาษาไทย
+                elif line.startswith('RESP:ENROLL_OK') or line.startswith('TEMPLATE:'):
+                    try:
+                        sio.emit('get_users_cache')
+                    except:
+                        pass
+
+                # ค) เมื่อเซนเซอร์พร้อมใช้งาน / กลับสู่หน้าหลัก
                 elif line == 'EVENT:IDLE' or line == 'STATUS:R307_READY':
                     print('⚡ [Local Engine] กลับสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
                     send_bitmap_to_mcu(IDLE_BITMAP)
 
-                # ส่ง Event ขึ้น Cloud ในพื้นหลังเสมอ (เพื่อให้ Web Dashboard บันทึก Log และแสดงผล)
+                # ง) ส่งต่อ Event ทั้งหมดขึ้นไปยัง Cloud Server (Render)
                 if sio.connected:
                     sio.emit('bridge_serial_data', line)
 
         except Exception as e:
-            print(f'❌ [Uno Q MCU Error] {e}')
-            mcu_sock = None
-            time.sleep(2)
+            print(f'❌ [MCU Reader Error] {e}')
+            time.sleep(1)
 
 # 9. Socket.IO Handlers เชื่อมต่อ Render Cloud
 @sio.event
@@ -274,6 +283,14 @@ def on_sync_users_cache(data):
     if isinstance(data, list):
         print(f'📥 [Cloud] ได้รับอัปเดตแคชรายชื่อนักศึกษา {len(data)} คน')
         save_cache(data)
+
+@sio.on('user_updated')
+def on_user_updated(data=None):
+    print('🔄 [Cloud] ได้รับแจ้งเตือนข้อมูลผู้ใช้เปลี่ยนแปลง -> ขอแคชใหม่ทันที')
+    try:
+        sio.emit('get_users_cache')
+    except:
+        pass
 
 @sio.on('bridge_command')
 def on_bridge_command(cmd):

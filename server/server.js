@@ -612,6 +612,7 @@ app.post('/api/users', authRequired, async (req, res) => {
     );
 
     io.emit('user_updated');
+    broadcastUsersCache();
     res.json({ 
       success: true, 
       id: targetId,
@@ -634,6 +635,7 @@ app.delete('/api/users/:id', authRequired, async (req, res) => {
 
     io.emit('cmd_delete_fingerprint', { id });
     io.emit('user_updated');
+    broadcastUsersCache();
     res.json({ success: true, message: `ลบผู้ใช้งาน ID #${id} เรียบร้อยแล้ว` });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -873,6 +875,17 @@ io.on('connection', (socket) => {
       }
     });
   });
+
+// บรอดแคสต์แคชรายชื่อนักศึกษาให้ทุก Bridge และ Client
+async function broadcastUsersCache() {
+  try {
+    const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+    io.emit('sync_users_cache', users || []);
+    console.log(`📦 [Sync Cache] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ให้ทุก Client แล้ว`);
+  } catch (err) {
+    console.error('Error broadcasting users cache:', err);
+  }
+}
 
   // บอร์ดร้องขอแคชรายชื่อนักศึกษา
   socket.on('get_users_cache', async () => {
