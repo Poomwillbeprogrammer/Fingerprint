@@ -312,6 +312,8 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
         userId = user.id;
         // บันทึกเวลาที่สแกนล่าสุด
         await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
+        // ส่งข้อมูลผู้ใช้กลับไปให้หน้าจอ OLED บน Arduino แสดงชื่อและรหัสนักศึกษา
+        sendSerialCommand(`MATCH_USER STU=${studentId} NAME=${userName}`);
       }
     }
 
