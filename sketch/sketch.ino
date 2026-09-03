@@ -365,20 +365,26 @@ public:
     }
   }
 
-  void loadPageHex(uint8_t page, const char* hexData) {
-    if (page > 7) return;
-    int offset = page * 128;
+  void clearBuffer() {
+    memset(buffer, 0, sizeof(buffer));
+  }
+
+  int loadFrameChunk(int offset, const char* hexData) {
+    if (offset < 0 || offset >= 1024) return offset;
     int hexLen = strlen(hexData);
-    for (int i = 0; i < hexLen && i < 256; i += 2) {
-      char c1 = hexData[i];
-      char c2 = hexData[i + 1];
+    int byteLen = hexLen / 2;
+    for (int i = 0; i < byteLen && (offset + i) < 1024; i++) {
+      char c1 = hexData[i * 2];
+      char c2 = hexData[i * 2 + 1];
       uint8_t b1 = (c1 >= '0' && c1 <= '9') ? (c1 - '0') : ((c1 >= 'A' && c1 <= 'F') ? (c1 - 'A' + 10) : ((c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : 0));
       uint8_t b2 = (c2 >= '0' && c2 <= '9') ? (c2 - '0') : ((c2 >= 'A' && c2 <= 'F') ? (c2 - 'A' + 10) : ((c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : 0));
-      buffer[offset + (i / 2)] = (b1 << 4) | b2;
+      buffer[offset + i] = (b1 << 4) | b2;
     }
-    if (page == 7) {
+    int nextOffset = offset + byteLen;
+    if (nextOffset >= 1024) {
       display();
     }
+    return nextOffset;
   }
 
   // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
@@ -1063,39 +1069,23 @@ void loop() {
     } else if (cmd == "CLEAR_ALL") {
       handleClearAll();
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-    } else if (cmd.startsWith("SHOW_PAGE ")) {
-      int spaceIdx = cmd.indexOf(' ', 10);
-      if (spaceIdx > 0) {
-        int page = cmd.substring(10, spaceIdx).toInt();
-        String hex = cmd.substring(spaceIdx + 1);
+    } else if (cmd.startsWith("FRAME_START")) {
+      oled.clearBuffer();
+      Serial.println("FRAME_ACK 0");
+    } else if (cmd.startsWith("FRAME_DATA ")) {
+      int space1 = 11;
+      int space2 = cmd.indexOf(' ', space1);
+      if (space2 > 0) {
+        int offset = cmd.substring(space1, space2).toInt();
+        String hex = cmd.substring(space2 + 1);
         hex.trim();
-        oled.loadPageHex(page, hex.c_str());
-        if (page == 7) {
-          oled.display();
+        int nextOffset = oled.loadFrameChunk(offset, hex.c_str());
+        if (nextOffset >= 1024) {
+          Serial.println("FRAME_DONE");
+        } else {
+          Serial.print("FRAME_ACK ");
+          Serial.println(nextOffset);
         }
-      }
-    } else if (cmd.startsWith("SHOW_CARD_CHUNK ")) {
-      int spaceIdx = cmd.indexOf(' ', 16);
-      if (spaceIdx > 0) {
-        int part = cmd.substring(16, spaceIdx).toInt();
-        String hex = cmd.substring(spaceIdx + 1);
-        hex.trim();
-        oled.loadBitmapChunk(part, hex.c_str());
-        if (part == 3) {
-          oled.display();
-        }
-      }
-    } else if (cmd.startsWith("MATCH_USER ")) {
-      int stuIdx = cmd.indexOf("STU=");
-      int nameIdx = cmd.indexOf("NAME=");
-      if (stuIdx != -1 && nameIdx != -1) {
-        String stuId = cmd.substring(stuIdx + 4, nameIdx);
-        stuId.trim();
-        String name = cmd.substring(nameIdx + 5);
-        name.trim();
-        showUserCard(stuId.c_str(), name.c_str());
-        delay(2800);
-        showIdleScreen();
       }
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
@@ -1141,20 +1131,28 @@ void loop() {
 
     uint32_t waitStart = millis();
     bool gotCard = false;
-    while (millis() - waitStart < 2000) {
+    while (millis() - waitStart < 2500) {
       while (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
-        if (line.startsWith("SHOW_PAGE ")) {
-          int spaceIdx = line.indexOf(' ', 10);
-          if (spaceIdx > 0) {
-            int page = line.substring(10, spaceIdx).toInt();
-            String hex = line.substring(spaceIdx + 1);
+        if (line.startsWith("FRAME_START")) {
+          oled.clearBuffer();
+          Serial.println("FRAME_ACK 0");
+        } else if (line.startsWith("FRAME_DATA ")) {
+          int space1 = 11;
+          int space2 = line.indexOf(' ', space1);
+          if (space2 > 0) {
+            int offset = line.substring(space1, space2).toInt();
+            String hex = line.substring(space2 + 1);
             hex.trim();
-            oled.loadPageHex(page, hex.c_str());
-            if (page == 7) {
+            int nextOffset = oled.loadFrameChunk(offset, hex.c_str());
+            if (nextOffset >= 1024) {
+              Serial.println("FRAME_DONE");
               gotCard = true;
               break;
+            } else {
+              Serial.print("FRAME_ACK ");
+              Serial.println(nextOffset);
             }
           }
         }

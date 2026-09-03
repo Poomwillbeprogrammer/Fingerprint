@@ -124,18 +124,23 @@ def render_user_card(student_id, name):
 IDLE_BITMAP = render_idle_screen()
 DENIED_BITMAP = render_denied_screen()
 
-# 6. ส่งภาพ 1024 bytes ไปยัง MCU ทางพอร์ต 7500 (8 Pages)
+# 6. ส่งภาพ 1024 bytes ไปยัง MCU ทางพอร์ต 7500 (16-byte chunks = 32 hex chars, 46 chars/line safe for 64-byte UART buffer)
 def send_bitmap_to_mcu(buf):
     global mcu_sock
     if not mcu_sock:
         return False
     try:
-        for page in range(8):
-            page_data = buf[page * 128 : (page + 1) * 128]
-            hex_str = page_data.hex().upper()
-            cmd = f'SHOW_PAGE {page} {hex_str}\n'
+        mcu_sock.sendall(b'FRAME_START\n')
+        time.sleep(0.02)
+        offset = 0
+        chunk_size = 16
+        while offset < 1024:
+            chunk = buf[offset : offset + chunk_size]
+            hex_str = chunk.hex().upper()
+            cmd = f'FRAME_DATA {offset} {hex_str}\n'
             mcu_sock.sendall(cmd.encode('utf-8'))
-            time.sleep(0.015)  # 15ms spacing
+            offset += len(chunk)
+            time.sleep(0.012)  # 12ms pacing = ~750ms for complete 1024-byte screen
         return True
     except Exception as e:
         print(f'❌ [Bitmap] ส่งภาพล้มเหลว: {e}')
@@ -196,7 +201,7 @@ def mcu_reader_thread():
             while '\n' in buf:
                 line, buf = buf.split('\n', 1)
                 line = line.strip()
-                if not line:
+                if not line or line.startswith('FRAME_ACK ') or line == 'FRAME_DONE':
                     continue
 
                 print(f'📥 [MCU -> Local] {line}')
