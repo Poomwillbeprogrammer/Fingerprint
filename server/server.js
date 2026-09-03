@@ -9,6 +9,7 @@ const path = require('path');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { dbAsync, initDatabase } = require('./database');
+const { renderUserCard, renderIdleScreen, renderDeniedScreen, bufferToChunks } = require('./card_renderer');
 
 const app = express();
 const server = http.createServer(app);
@@ -312,8 +313,19 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
         userId = user.id;
         // บันทึกเวลาที่สแกนล่าสุด
         await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
-        // ส่งข้อมูลผู้ใช้กลับไปให้หน้าจอ OLED บน Arduino แสดงชื่อและรหัสนักศึกษา
-        sendSerialCommand(`MATCH_USER STU=${studentId} NAME=${userName}`);
+        // ส่งการ์ดภาพบิตแมป 1-bit คมชัดสูงไปยังจอ OLED (8 pages x 128 bytes)
+        try {
+          const cardBuf = renderUserCard(studentId, userName);
+          const pages = bufferToPages(cardBuf);
+          for (let page = 0; page < pages.length; page++) {
+            setTimeout(() => {
+              sendSerialCommand(`SHOW_PAGE ${page} ${pages[page]}`);
+            }, page * 45);
+          }
+        } catch (e) {
+          console.error('Error rendering card bitmap:', e);
+          sendSerialCommand(`MATCH_USER STU=${studentId} NAME=${userName}`);
+        }
       }
     }
 

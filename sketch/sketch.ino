@@ -347,6 +347,32 @@ public:
     }
   }
 
+  void loadBitmapChunk(uint8_t part, const char* hexData) {
+    if (part > 3) return;
+    int offset = part * 256;
+    int hexLen = strlen(hexData);
+    for (int i = 0; i < hexLen && i < 512; i += 2) {
+      char c1 = hexData[i];
+      char c2 = hexData[i + 1];
+      uint8_t b1 = (c1 >= '0' && c1 <= '9') ? (c1 - '0') : ((c1 >= 'A' && c1 <= 'F') ? (c1 - 'A' + 10) : ((c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : 0));
+      uint8_t b2 = (c2 >= '0' && c2 <= '9') ? (c2 - '0') : ((c2 >= 'A' && c2 <= 'F') ? (c2 - 'A' + 10) : ((c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : 0));
+      buffer[offset + (i / 2)] = (b1 << 4) | b2;
+    }
+  }
+
+  void loadPageHex(uint8_t page, const char* hexData) {
+    if (page > 7) return;
+    int offset = page * 128;
+    int hexLen = strlen(hexData);
+    for (int i = 0; i < hexLen && i < 256; i += 2) {
+      char c1 = hexData[i];
+      char c2 = hexData[i + 1];
+      uint8_t b1 = (c1 >= '0' && c1 <= '9') ? (c1 - '0') : ((c1 >= 'A' && c1 <= 'F') ? (c1 - 'A' + 10) : ((c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : 0));
+      uint8_t b2 = (c2 >= '0' && c2 <= '9') ? (c2 - '0') : ((c2 >= 'A' && c2 <= 'F') ? (c2 - 'A' + 10) : ((c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : 0));
+      buffer[offset + (i / 2)] = (b1 << 4) | b2;
+    }
+  }
+
   // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
   void display() {
     for (uint8_t page = 0; page < 8; page++) {
@@ -1034,6 +1060,28 @@ void loop() {
     } else if (cmd == "CLEAR_ALL") {
       handleClearAll();
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    } else if (cmd.startsWith("SHOW_PAGE ")) {
+      int spaceIdx = cmd.indexOf(' ', 10);
+      if (spaceIdx > 0) {
+        int page = cmd.substring(10, spaceIdx).toInt();
+        String hex = cmd.substring(spaceIdx + 1);
+        hex.trim();
+        oled.loadPageHex(page, hex.c_str());
+        if (page == 7) {
+          oled.display();
+        }
+      }
+    } else if (cmd.startsWith("SHOW_CARD_CHUNK ")) {
+      int spaceIdx = cmd.indexOf(' ', 16);
+      if (spaceIdx > 0) {
+        int part = cmd.substring(16, spaceIdx).toInt();
+        String hex = cmd.substring(spaceIdx + 1);
+        hex.trim();
+        oled.loadBitmapChunk(part, hex.c_str());
+        if (part == 3) {
+          oled.display();
+        }
+      }
     } else if (cmd.startsWith("MATCH_USER ")) {
       int stuIdx = cmd.indexOf("STU=");
       int nameIdx = cmd.indexOf("NAME=");
@@ -1091,12 +1139,38 @@ void loop() {
     showUI("SCAN SUCCESS!", "กำลังค้นหาข้อมูล...", "กรุณารอสักครู่");
 
     uint32_t waitStart = millis();
-    bool gotUser = false;
+    bool gotCard = false;
     while (millis() - waitStart < 2500) {
       while (Serial.available()) {
         String line = Serial.readStringUntil('\n');
         line.trim();
-        if (line.startsWith("MATCH_USER ")) {
+        if (line.startsWith("SHOW_PAGE ")) {
+          int spaceIdx = line.indexOf(' ', 10);
+          if (spaceIdx > 0) {
+            int page = line.substring(10, spaceIdx).toInt();
+            String hex = line.substring(spaceIdx + 1);
+            hex.trim();
+            oled.loadPageHex(page, hex.c_str());
+            if (page == 7) {
+              oled.display();
+              gotCard = true;
+              break;
+            }
+          }
+        } else if (line.startsWith("SHOW_CARD_CHUNK ")) {
+          int spaceIdx = line.indexOf(' ', 16);
+          if (spaceIdx > 0) {
+            int part = line.substring(16, spaceIdx).toInt();
+            String hex = line.substring(spaceIdx + 1);
+            hex.trim();
+            oled.loadBitmapChunk(part, hex.c_str());
+            if (part == 3) {
+              oled.display();
+              gotCard = true;
+              break;
+            }
+          }
+        } else if (line.startsWith("MATCH_USER ")) {
           int stuIdx = line.indexOf("STU=");
           int nameIdx = line.indexOf("NAME=");
           if (stuIdx != -1 && nameIdx != -1) {
@@ -1105,16 +1179,16 @@ void loop() {
             String name = line.substring(nameIdx + 5);
             name.trim();
             showUserCard(stuId.c_str(), name.c_str());
-            gotUser = true;
+            gotCard = true;
             break;
           }
         }
       }
-      if (gotUser) break;
+      if (gotCard) break;
       delay(15);
     }
 
-    if (!gotUser) {
+    if (!gotCard) {
       char idStr[25];
       snprintf(idStr, sizeof(idStr), "ID Slot: #%d", finger.fingerID);
       showUI("ACCESS GRANTED", idStr, "ผ่านการยืนยันตัวตน");
