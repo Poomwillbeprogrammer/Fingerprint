@@ -7,3 +7,23 @@ resume_chat.bat
 *.bat
 build/
 **/build/
+
+# Database files
+*.db
+data/*.db
+data/
+
+# Environment files
+.env
+.env.*
+
+# Office documents & reports
+*.docx
+*.pdf
+
+# IDE and Editor files
+.idea/
+**/.idea/
+.vscode/
+*.pyc
+__pycache__/
