@@ -31,8 +31,10 @@
    - [x] Compile และ Upload เฟิร์มแวร์ลง STM32 (COM12) สำเร็จ 100%
    - [x] Deploy `unoq_bridge.py` บน Uno Q Linux SoC และเชื่อมต่อ Socket 7500 สำเร็จ 100%
 2. **[TASK-2] ปรับปรุงระบบลงทะเบียน 3 นิ้วต่อ 1 ผู้ใช้ (3-Finger Enrollment):** ✅ COMPLETED
-   - [x] ออกแบบโครงสร้าง Slot Block Allocation (1 User = 3 Slots ใน R307, ไม่ต้อง Alter DB)
-   - [x] ปรับฟังก์ชันค้นหาผู้ใช้จาก Slot ใดใน 3 ช่องก็ได้ (`(slot_id - 1) // 3 + 1`) ทั้งใน `unoq_bridge.py` และ `server.js`
-   - [x] ปรับการลบผู้ใช้ (Delete User) ให้ลบทั้ง 3 Slots ในเซนเซอร์ R307 พร้อมกัน
-   - [x] ปรับลูปการลงทะเบียนทั้งฝั่งเว็บ (`app.js`) และฝั่งเซิร์ฟเวอร์ (`server.js`) ให้ทำต่อเนื่อง 3 นิ้ว พร้อม Auto-Rollback
-   - [x] ตรวจสอบ Syntax โค้ดทุกไฟล์ผ่าน 100% ปลอดภัย พร้อมใช้งานทันที
+3. **[TASK-3] แก้ไขการซิงค์ Template 3 นิ้วลง Database และป้ายสถานะผู้ใช้บนหน้าเว็บ:** ✅ COMPLETED
+   - [x] แก้ไข Slot ID vs User ID Mismatch ใน `TEMPLATE:` handler ของ `server.js`
+   - [x] ปรับปรุงการจัดเก็บและรวม Template 3 นิ้วลงคอลัมน์ `fingerprint_template` และตั้ง `in_sensor = 1`
+   - [x] ปรับปรุงฟังก์ชัน Backup และ Restore ให้รองรับ 3 Slot ต่อ 1 ผู้ใช้
+   - [x] กู้คืน Template ทั้ง 3 นิ้วของผู้ใช้ `poppp` (ID #2) จาก R307 Flash เข้า Supabase สำเร็จ
+   - [x] หน้าเว็บแสดงสถานะ "Tier 1 (ในเซนเซอร์)" ป้ายสีเขียวเรียบร้อย 100%
+

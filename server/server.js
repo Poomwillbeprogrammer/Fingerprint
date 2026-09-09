@@ -241,9 +241,12 @@ function checkNextTier2Candidate() {
   tier2ActiveCandidate = tier2SearchQueue.shift();
   console.log(`🔎 [Tier 2] กำลังทดสอบเทียบกับ ID #${tier2ActiveCandidate.id} (${tier2ActiveCandidate.name})...`);
   
+  const rawTemplate = tier2ActiveCandidate.fingerprint_template || '';
+  const firstTemplate = rawTemplate.split(',')[0].trim();
+
   pendingCompare = {
     id: tier2ActiveCandidate.id,
-    template: tier2ActiveCandidate.fingerprint_template,
+    template: firstTemplate,
     currentChunk: 0
   };
 
@@ -283,9 +286,12 @@ async function autoPromoteToSensor(userId) {
     io.emit('user_updated');
 
     // ส่งคำสั่ง Restore เพื่อเขียน Template ลง Slot ใน R307
+    const restoreRaw = user.fingerprint_template || '';
+    const restoreTemplate = restoreRaw.split(',')[0].trim();
+
     pendingRestore = {
       id: targetSlot,
-      template: user.fingerprint_template,
+      template: restoreTemplate,
       currentChunk: 0
     };
     sendSerialCommand(`RESTORE_INIT ${targetSlot}`);
@@ -535,13 +541,43 @@ async function handleSerialData(rawLine) {
     const idMatch = line.match(/ID=(\d+)/);
     const dataMatch = line.match(/DATA=([0-9A-Fa-f]+)/);
     if (idMatch && dataMatch) {
-      const templateId = parseInt(idMatch[1]);
+      const slotId = parseInt(idMatch[1]);
       const templateData = dataMatch[1];
+
       try {
-        await dbAsync.run('UPDATE users SET fingerprint_template = ?, in_sensor = 1 WHERE id = ?', [templateData, templateId]);
-        console.log(`💾 [DB Backup] บันทึก Template ลายนิ้วมือ ID #${templateId} (${templateData.length / 2} Bytes) ลง SQLite สำเร็จ!`);
-        io.emit('template_saved', { id: templateId, success: true });
+        let targetUserId = null;
+        if (currentEnrollSession && currentEnrollSession.slots && currentEnrollSession.slots.includes(slotId)) {
+          targetUserId = currentEnrollSession.userId;
+        } else {
+          const mappedUserId = Math.floor((slotId - 1) / 3) + 1;
+          const userExists = await dbAsync.get('SELECT id FROM users WHERE id = ?', [mappedUserId]);
+          if (userExists) {
+            targetUserId = mappedUserId;
+          } else {
+            // Fallback กรณีระบบ slot เดิม 1 นิ้วต่อคน
+            const fallbackUser = await dbAsync.get('SELECT id FROM users WHERE id = ?', [slotId]);
+            targetUserId = fallbackUser ? slotId : mappedUserId;
+          }
+        }
+
+        // ดึง Template เดิมมาตรวจสอบเพื่อรวม Template ลายนิ้วมือสูงสุด 3 นิ้ว
+        const existingUser = await dbAsync.get('SELECT id, fingerprint_template FROM users WHERE id = ?', [targetUserId]);
+        let combinedTemplate = templateData;
+        if (existingUser && existingUser.fingerprint_template && existingUser.fingerprint_template.length >= 512) {
+          const templates = existingUser.fingerprint_template.split(',').map(t => t.trim()).filter(t => t.length >= 512);
+          if (!templates.includes(templateData)) {
+            templates.push(templateData);
+            combinedTemplate = templates.slice(0, 3).join(',');
+          } else {
+            combinedTemplate = existingUser.fingerprint_template;
+          }
+        }
+
+        await dbAsync.run('UPDATE users SET fingerprint_template = ?, in_sensor = 1 WHERE id = ?', [combinedTemplate, targetUserId]);
+        console.log(`💾 [DB Backup] บันทึก Template ลายนิ้วมือ Slot #${slotId} -> User ID #${targetUserId} (${templateData.length / 2} Bytes) ลง Database สำเร็จ!`);
+        io.emit('template_saved', { id: targetUserId, slotId, success: true });
         io.emit('user_updated');
+        broadcastUsersCache();
       } catch (err) {
         console.error('Error saving template to DB:', err);
       }
@@ -792,43 +828,67 @@ app.get('/api/device/serial-status', (req, res) => {
   });
 });
 
-// ดึงข้อมูล Template จาก R307 มาเก็บสำรองใน SQLite ทีละคน
+// ดึงข้อมูล Template จาก R307 มาเก็บสำรองใน Database ทีละคน (รองรับ 3 นิ้วต่อคน)
 app.post('/api/device/backup/:id', authRequired, async (req, res) => {
   const id = parseInt(req.params.id);
-  const sent = sendSerialCommand(`BACKUP ${id}`);
-  if (sent) {
-    res.json({ success: true, message: `ส่งคำสั่งดึงข้อมูลลายนิ้วมือ ID #${id} จากเซนเซอร์แล้ว` });
-  } else {
-    res.status(500).json({ error: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้' });
+  const slot1 = (id - 1) * 3 + 1;
+  const slot2 = (id - 1) * 3 + 2;
+  const slot3 = (id - 1) * 3 + 3;
+
+  sendSerialCommand(`BACKUP ${slot1}`);
+  setTimeout(() => sendSerialCommand(`BACKUP ${slot2}`), 1200);
+  setTimeout(() => sendSerialCommand(`BACKUP ${slot3}`), 2400);
+
+  if (id !== slot1 && id !== slot2 && id !== slot3) {
+    setTimeout(() => sendSerialCommand(`BACKUP ${id}`), 3600);
   }
+
+  res.json({ 
+    success: true, 
+    message: `ส่งคำสั่งดึงข้อมูลลายนิ้วมือ User ID #${id} (Slots #${slot1}, #${slot2}, #${slot3}) จากเซนเซอร์แล้ว` 
+  });
 });
 
-// กู้คืนลายนิ้วมือจาก SQLite ลงเซนเซอร์ R307 ทีละคน
+// กู้คืนลายนิ้วมือจาก Database ลงเซนเซอร์ R307 ทีละคน (รองรับ 3 นิ้วต่อคน)
 app.post('/api/device/restore/:id', authRequired, async (req, res) => {
   const id = parseInt(req.params.id);
   const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
-  if (!user || !user.fingerprint_template || user.fingerprint_template.length < 1024) {
+  if (!user || !user.fingerprint_template || user.fingerprint_template.length < 512) {
     return res.status(404).json({ error: `ไม่พบข้อมูลลายนิ้วมือสำรองของ ID #${id} ในฐานข้อมูล` });
   }
 
-  pendingRestore = {
-    id: user.id,
-    template: user.fingerprint_template,
-    currentChunk: 0
-  };
+  const rawTemplate = user.fingerprint_template || '';
+  const templates = rawTemplate.split(',').map(t => t.trim()).filter(t => t.length >= 512);
+  const slot1 = (id - 1) * 3 + 1;
 
-  const sent = sendSerialCommand(`RESTORE_INIT ${id}`);
-  if (sent) {
-    res.json({ success: true, message: `เริ่มกู้คืนข้อมูลลายนิ้วมือ ID #${id} ลงเซนเซอร์ R307 แล้ว` });
-  } else {
-    pendingRestore = null;
-    res.status(500).json({ error: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้' });
-  }
+  (async () => {
+    for (let tIdx = 0; tIdx < templates.length; tIdx++) {
+      const targetSlot = slot1 + tIdx;
+      pendingRestore = {
+        id: targetSlot,
+        template: templates[tIdx],
+        currentChunk: 0
+      };
+      sendSerialCommand(`RESTORE_INIT ${targetSlot}`);
+      
+      let waitCount = 0;
+      while (pendingRestore !== null && waitCount < 100) {
+        await new Promise(r => setTimeout(r, 100));
+        waitCount++;
+      }
+      await new Promise(r => setTimeout(r, 800));
+    }
+  })();
+
+  res.json({ 
+    success: true, 
+    message: `เริ่มกู้คืนข้อมูลลายนิ้วมือ User ID #${id} (${templates.length} นิ้ว) ลงเซนเซอร์ R307 แล้ว` 
+  });
 });
 
-// กู้คืนลายนิ้วมือทั้งหมดจาก SQLite ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
+// กู้คืนลายนิ้วมือทั้งหมดจาก Database ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
 app.post('/api/device/restore-all', authRequired, async (req, res) => {
-  const usersWithTemplate = await dbAsync.all('SELECT id, fingerprint_template FROM users WHERE fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 1024');
+  const usersWithTemplate = await dbAsync.all('SELECT id, fingerprint_template FROM users WHERE fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 512');
   if (usersWithTemplate.length === 0) {
     return res.status(400).json({ error: 'ไม่มีข้อมูลลายนิ้วมือสำรองในฐานข้อมูล' });
   }
@@ -838,20 +898,26 @@ app.post('/api/device/restore-all', authRequired, async (req, res) => {
       const u = usersWithTemplate[i];
       io.emit('restore_progress', { id: u.id, current: i + 1, total: usersWithTemplate.length, status: 'IN_PROGRESS' });
       
-      pendingRestore = {
-        id: u.id,
-        template: u.fingerprint_template,
-        currentChunk: 0
-      };
-      sendSerialCommand(`RESTORE_INIT ${u.id}`);
-      
-      // รอกระบวนการกู้คืนของแต่ละคนให้เสร็จสิ้น (สูงสุด 10 วินาที)
-      let waitCount = 0;
-      while (pendingRestore !== null && waitCount < 100) {
-        await new Promise(r => setTimeout(r, 100));
-        waitCount++;
+      const rawTemplate = u.fingerprint_template || '';
+      const templates = rawTemplate.split(',').map(t => t.trim()).filter(t => t.length >= 512);
+      const slot1 = (u.id - 1) * 3 + 1;
+
+      for (let tIdx = 0; tIdx < templates.length; tIdx++) {
+        const targetSlot = slot1 + tIdx;
+        pendingRestore = {
+          id: targetSlot,
+          template: templates[tIdx],
+          currentChunk: 0
+        };
+        sendSerialCommand(`RESTORE_INIT ${targetSlot}`);
+        
+        let waitCount = 0;
+        while (pendingRestore !== null && waitCount < 100) {
+          await new Promise(r => setTimeout(r, 100));
+          waitCount++;
+        }
+        await new Promise(r => setTimeout(r, 800));
       }
-      await new Promise(r => setTimeout(r, 1200));
     }
     io.emit('restore_progress', { status: 'ALL_COMPLETED', total: usersWithTemplate.length });
   })();
@@ -863,7 +929,7 @@ app.post('/api/device/restore-all', authRequired, async (req, res) => {
   });
 });
 
-// ดึงข้อมูลสำรองจากเซนเซอร์ R307 เข้าสู่ SQLite ทั้งหมด
+// ดึงข้อมูลสำรองจากเซนเซอร์ R307 เข้าสู่ Database ทั้งหมด
 app.post('/api/device/backup-all', authRequired, async (req, res) => {
   const allUsers = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
   if (allUsers.length === 0) {
@@ -874,8 +940,22 @@ app.post('/api/device/backup-all', authRequired, async (req, res) => {
     for (let i = 0; i < allUsers.length; i++) {
       const u = allUsers[i];
       io.emit('backup_progress', { id: u.id, current: i + 1, total: allUsers.length, status: 'IN_PROGRESS' });
-      sendSerialCommand(`BACKUP ${u.id}`);
-      await new Promise(r => setTimeout(r, 2000));
+      
+      const slot1 = (u.id - 1) * 3 + 1;
+      const slot2 = (u.id - 1) * 3 + 2;
+      const slot3 = (u.id - 1) * 3 + 3;
+
+      sendSerialCommand(`BACKUP ${slot1}`);
+      await new Promise(r => setTimeout(r, 1200));
+      sendSerialCommand(`BACKUP ${slot2}`);
+      await new Promise(r => setTimeout(r, 1200));
+      sendSerialCommand(`BACKUP ${slot3}`);
+      await new Promise(r => setTimeout(r, 1200));
+
+      if (u.id !== slot1 && u.id !== slot2 && u.id !== slot3) {
+        sendSerialCommand(`BACKUP ${u.id}`);
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
     io.emit('backup_progress', { status: 'ALL_COMPLETED', total: allUsers.length });
   })();
@@ -883,7 +963,7 @@ app.post('/api/device/backup-all', authRequired, async (req, res) => {
   res.json({
     success: true,
     total: allUsers.length,
-    message: `กำลังดึงข้อมูลสำรองลายนิ้วมือจากเซนเซอร์ R307 ทั้งหมด ${allUsers.length} รายการ`
+    message: `กำลังดึงข้อมูลสำรองลายนิ้วมือจากเซนเซอร์ R307 ทั้งหมด ${allUsers.length} รายการ (ระบบ 3 นิ้วต่อคน)`
   });
 });
 
