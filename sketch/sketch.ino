@@ -13,6 +13,10 @@
 #define mySerial Serial1
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 
+// กำหนดขาปุ่มกด Physical Switch (Active LOW: ขาหนึ่งต่อ Pin อีกขาต่อ GND)
+#define BTN_CONFIRM_PIN 2 // ขา D2: ปุ่มกดยืนยันบันทึกเวลา
+#define BTN_RESCAN_PIN  3 // ขา D3: ปุ่มกดสแกนใหม่/ยกเลิก
+
 
 
 
@@ -995,6 +999,10 @@ void setup() {
   delay(1000);
   Serial.println("\n[SYSTEM] Starting UNO Q Zephyr Fingerprint & OLED System...");
 
+  // กำหนดขาปุ่มกด Physical Switch (Active LOW, Internal Pullup)
+  pinMode(BTN_CONFIRM_PIN, INPUT_PULLUP);
+  pinMode(BTN_RESCAN_PIN, INPUT_PULLUP);
+
   // เริ่มต้นหน้าจอ OLED SH1106 ผ่าน Software I2C
   oled.begin();
   showUI("BOOTING...", "Initializing OLED", "SH1106 128x64 OK");
@@ -1162,10 +1170,100 @@ void loop() {
     if (!gotCard) {
       char idStr[25];
       snprintf(idStr, sizeof(idStr), "ID Slot: #%d", finger.fingerID);
-      showUI("ACCESS GRANTED", idStr, "Check-in OK");
+      showUI("CHECK-IN MATCH", idStr, "[D2:OK | D3:Cancel]");
     }
 
-    delay(2800);
+    // ==========================================
+    // ตรวจจับปุ่มกด: D2 (Confirm) หรือ D3 (Rescan) หรือ Timeout 10 วินาที
+    // ==========================================
+    // รอปล่อยปุ่มก่อนเริ่มตรวจจับ ป้องกันการกดค้าง
+    uint32_t releaseWait = millis();
+    while ((digitalRead(BTN_CONFIRM_PIN) == LOW || digitalRead(BTN_RESCAN_PIN) == LOW) && (millis() - releaseWait < 600)) {
+      delay(10);
+    }
+
+    uint32_t btnWaitStart = millis();
+    int btnAction = 0; // 0 = Timeout (Auto-Cancel), 1 = Confirm (D2), 2 = Rescan (D3)
+
+    while (millis() - btnWaitStart < 10000) {
+      // ตรวจจับปุ่ม D2 (Confirm - Active LOW)
+      if (digitalRead(BTN_CONFIRM_PIN) == LOW) {
+        delay(30); // Debounce
+        if (digitalRead(BTN_CONFIRM_PIN) == LOW) {
+          btnAction = 1;
+          break;
+        }
+      }
+      // ตรวจจับปุ่ม D3 (Rescan - Active LOW)
+      if (digitalRead(BTN_RESCAN_PIN) == LOW) {
+        delay(30); // Debounce
+        if (digitalRead(BTN_RESCAN_PIN) == LOW) {
+          btnAction = 2;
+          break;
+        }
+      }
+      delay(10);
+    }
+
+    if (btnAction == 1) {
+      // กดยืนยัน D2: ส่ง EVENT:CONFIRMED ให้ Linux บันทึกลง Cloud
+      Serial.print("EVENT:CONFIRMED ID=");
+      Serial.print(finger.fingerID);
+      Serial.print(" SCORE=");
+      Serial.println(finger.confidence);
+
+      // รอรับ Frame ยืนยันสำเร็จจาก Linux
+      uint32_t ackWait = millis();
+      while (millis() - ackWait < 2000) {
+        if (Serial.available()) {
+          String line = Serial.readStringUntil('\n');
+          line.trim();
+          if (line.startsWith("FRAME_START")) {
+            handleFrameReceive();
+            break;
+          }
+        }
+        delay(5);
+      }
+      delay(3500); // ค้างหน้าจอยืนยันสำเร็จ 3.5 วินาที ให้อ่านชัดเจน
+    } else if (btnAction == 2) {
+      // กดสแกนใหม่ D3: ส่ง EVENT:CANCELLED
+      Serial.print("EVENT:CANCELLED ID=");
+      Serial.println(finger.fingerID);
+
+      // รอรับ Frame แจ้งยกเลิกจาก Linux
+      uint32_t ackWait = millis();
+      while (millis() - ackWait < 2000) {
+        if (Serial.available()) {
+          String line = Serial.readStringUntil('\n');
+          line.trim();
+          if (line.startsWith("FRAME_START")) {
+            handleFrameReceive();
+            break;
+          }
+        }
+        delay(5);
+      }
+      delay(3000); // ค้างหน้าจอยกเลิก 3.0 วินาที
+    } else {
+      // หมดเวลา 10 วินาที: ส่ง EVENT:TIMEOUT (Auto-Cancel)
+      Serial.println("EVENT:TIMEOUT");
+
+      uint32_t ackWait = millis();
+      while (millis() - ackWait < 2000) {
+        if (Serial.available()) {
+          String line = Serial.readStringUntil('\n');
+          line.trim();
+          if (line.startsWith("FRAME_START")) {
+            handleFrameReceive();
+            break;
+          }
+        }
+        delay(5);
+      }
+      delay(3000); // ค้างหน้าจอหมดเวลา 3.0 วินาที
+    }
+
     // รอยกนิ้วออกก่อนเพื่อไม่ให้สแกนซ้ำ
     while (finger.getImage() != FINGERPRINT_NOFINGER) {
       delay(50);

@@ -472,7 +472,12 @@ if (window.location.pathname.endsWith('users.html')) {
 
     document.getElementById('enrollSlotId').value = nextId;
     const badge = document.getElementById('enrollSlotIdBadge');
-    if (badge) badge.innerText = `#${nextId}`;
+    if (badge) {
+      const s1 = (nextId - 1) * 3 + 1;
+      const s2 = (nextId - 1) * 3 + 2;
+      const s3 = (nextId - 1) * 3 + 3;
+      badge.innerText = `User #${nextId} (Slots #${s1}, #${s2}, #${s3})`;
+    }
 
     document.getElementById('enrollStudentId').value = '';
     document.getElementById('enrollName').value = '';
@@ -565,17 +570,29 @@ if (window.location.pathname.endsWith('users.html')) {
     }
   });
 
-  // Socket.io: รับสถานะขั้นตอนสแกนสดจาก Arduino
+  // Socket.io: รับสถานะขั้นตอนสแกนสดจาก Arduino (รองรับ 3 นิ้วต่อคน)
+  let currentFingerNum = 1;
+
   socket.on('enroll_step_update', (data) => {
-    if (data.status === 'STEP1_WAIT') {
-      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', 'วางนิ้วที่ต้องการบันทึก');
+    if (data.fingerNum) {
+      currentFingerNum = data.fingerNum;
+    }
+    const fPrefix = `[นิ้วที่ ${currentFingerNum}/3] `;
+
+    if (data.status === 'FINGER_START') {
+      updateGuidance('step1', `${fPrefix}วางนิ้วบนเซนเซอร์`, `กรุณาวางนิ้วที่ ${currentFingerNum} (Slot #${data.slotId})`);
+    } else if (data.status === 'STEP1_WAIT') {
+      updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์`, `วางนิ้วที่ ${currentFingerNum} ที่ต้องการบันทึก`);
     } else if (data.status === 'REMOVE_FINGER') {
-      updateGuidance('remove', 'ขั้นตอนที่ 2: กรุณายกนิ้วออก', 'ยกนิ้วออกจากเซนเซอร์สักครู่');
+      updateGuidance('remove', `${fPrefix}ขั้นตอนที่ 2: กรุณายกนิ้วออก`, 'ยกนิ้วออกจากเซนเซอร์สักครู่');
     } else if (data.status === 'STEP2_WAIT') {
-      updateGuidance('step1', 'ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง', 'วางนิ้วเดิมอีกครั้งเพื่อยืนยัน');
+      updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง`, `วางนิ้วที่ ${currentFingerNum} อีกครั้งเพื่อยืนยัน`);
+    } else if (data.status === 'FINGER_DONE') {
+      updateGuidance('success', `บันทึกนิ้วที่ ${data.fingerNum}/3 สำเร็จ!`, 'กำลังเตรียมพร้อมสำหรับนิ้วถัดไป...');
+      playSound('granted');
     } else if (data.status === 'SUCCESS') {
       isEnrolling = false;
-      updateGuidance('success', 'บันทึกลายนิ้วมือสำเร็จ!', `บันทึก ID #${data.id} เรียบร้อยแล้ว`);
+      updateGuidance('success', '🎉 บันทึกลายนิ้วมือครบ 3 นิ้วสำเร็จ!', `บันทึก User ID #${data.id} (3 นิ้ว) เรียบร้อยแล้ว`);
       playSound('granted');
       setTimeout(() => {
         modal.classList.add('hidden');
