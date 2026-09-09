@@ -36,6 +36,16 @@
           <span>จัดการผู้ใช้งาน</span>
         </a>
       </nav>
+      <!-- Hardware Connection Status -->
+      <div class="mt-4 pt-3 border-t border-slate-800/80 px-2">
+        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <div class="flex items-center gap-2">
+            <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="serialStatusText" class="text-[11px] text-slate-400">R307 (COM12)...</span>
+          </div>
+          <i class="fa-solid fa-microchip text-slate-500 text-xs"></i>
+        </div>
+      </div>
     </div>
 
     <!-- User / Logout -->
@@ -74,9 +84,9 @@
         </h1>
         <p class="text-sm text-slate-400 mt-1">จัดการรายชื่อผู้ใช้งาน, สิทธิ์การเข้าถึง และการลงทะเบียนลายนิ้วมือใหม่</p>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2.5 flex-wrap">
         <button id="openEnrollModalBtn" class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition">
-          <i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งาน / บันทึกลายนิ้วมือ
+          <i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งาน / บันทึกนิ้ว
         </button>
       </div>
     </div>
@@ -89,7 +99,7 @@
         </span>
         <input type="text" id="searchInput"
           class="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs transition"
-          placeholder="ค้นหาชื่อ, แผนก หรือ Slot ID...">
+          placeholder="ค้นหาชื่อ, รหัสนักศึกษา หรือ Slot ID...">
       </div>
       <div class="text-xs text-slate-400 flex items-center gap-2">
         <span>จำนวนผู้ใช้: <span id="userCount" class="font-bold text-white font-mono">0</span> คน</span>
@@ -103,9 +113,9 @@
           <thead class="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
             <tr>
               <th class="px-5 py-3.5">Slot ID</th>
+              <th class="px-5 py-3.5">รหัสนักศึกษา</th>
               <th class="px-5 py-3.5">ชื่อผู้ใช้งาน</th>
-              <th class="px-5 py-3.5">แผนก / ตำแหน่ง</th>
-              <th class="px-5 py-3.5">บทบาท</th>
+              <th class="px-5 py-3.5">ระดับความเร็ว (Tier)</th>
               <th class="px-5 py-3.5">วันที่ลงทะเบียน</th>
               <th class="px-5 py-3.5 text-right">การจัดการ</th>
             </tr>
@@ -145,37 +155,30 @@
 
       <!-- Form Inputs -->
       <form id="enrollForm" class="space-y-4">
-        <div class="grid grid-cols-3 gap-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">Slot ID (1-300) *</label>
-            <input type="number" id="enrollSlotId" min="1" max="300" required
-              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 font-mono"
-              placeholder="1">
+        <!-- Auto Slot ID Banner -->
+        <div class="p-3.5 bg-slate-900/90 border border-cyan-500/30 rounded-xl flex items-center justify-between">
+          <div class="flex items-center gap-2.5">
+            <span class="text-xs text-slate-400 font-medium">ตำแหน่งเซนเซอร์ (Slot ID):</span>
+            <span id="enrollSlotIdBadge" class="px-3 py-1 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold font-mono text-sm border border-cyan-500/40">#1</span>
           </div>
-          <div class="col-span-2">
-            <label class="block text-xs font-medium text-slate-300 mb-1">ชื่อ-นามสกุล *</label>
-            <input type="text" id="enrollName" required
-              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
-              placeholder="เช่น Poom Wang">
-          </div>
+          <span class="text-[11px] text-emerald-400 flex items-center gap-1.5 font-medium">
+            <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> รันเลขอัตโนมัติ (แทนที่ช่องว่าง)
+          </span>
+          <input type="hidden" id="enrollSlotId" value="1">
         </div>
 
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">แผนก / ตำแหน่ง</label>
-            <input type="text" id="enrollDept"
-              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
-              placeholder="Engineering">
-          </div>
-          <div>
-            <label class="block text-xs font-medium text-slate-300 mb-1">บทบาท (Role)</label>
-            <select id="enrollRole"
-              class="w-full px-3 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500">
-              <option value="User">User (ทั่วไป)</option>
-              <option value="Admin">Admin (ผู้ดูแล)</option>
-              <option value="VIP">VIP</option>
-            </select>
-          </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">รหัสนักศึกษา (Student ID) *</label>
+          <input type="text" id="enrollStudentId" required
+            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 font-mono tracking-wider"
+            placeholder="เช่น 6604101311">
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-slate-300 mb-1.5">ชื่อ-นามสกุล (Full Name) *</label>
+          <input type="text" id="enrollName" required
+            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            placeholder="เช่น นายภูมิ สมบูรณ์">
         </div>
 
         <!-- Live Step-by-Step Guidance Box -->

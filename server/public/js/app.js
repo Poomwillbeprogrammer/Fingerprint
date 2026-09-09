@@ -35,6 +35,23 @@ function playSound(type = 'granted') {
   }
 }
 
+// Hardware Serial Connection Status Listener
+socket.on('serial_status', (data) => {
+  const dot = document.getElementById('serialStatusDot');
+  const text = document.getElementById('serialStatusText');
+  if (!dot || !text) return;
+
+  if (data.connected) {
+    dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
+    text.innerText = `R307 Online (${data.port})`;
+    text.className = 'text-[11px] text-emerald-400 font-medium';
+  } else {
+    dot.className = 'w-2 h-2 rounded-full bg-rose-400 animate-pulse';
+    text.innerText = `R307 Offline (${data.port})`;
+    text.className = 'text-[11px] text-rose-400 font-medium';
+  }
+});
+
 // Check Authentication
 async function checkAuth() {
   try {
@@ -207,6 +224,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
 
     tr.innerHTML = `
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(log.timestamp)}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold">${log.student_id || '-'}</td>
       <td class="px-5 py-3.5 font-medium text-white flex items-center gap-2">
         <div class="w-7 h-7 rounded-full ${isGranted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} flex items-center justify-center text-xs">
           <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
@@ -221,6 +239,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         </span>
       </td>
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${log.score || 0}</td>
+      <td class="px-5 py-3.5 text-xs font-medium text-slate-300">${log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-')}</td>
     `;
 
     if (isLive) {
@@ -285,27 +304,46 @@ if (window.location.pathname.endsWith('users.html')) {
     tbody.innerHTML = '';
 
     if (users.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
       return;
     }
 
     users.forEach(user => {
+      const hasTemplate = user.fingerprint_template && user.fingerprint_template.length >= 512;
+      const inSensor = user.in_sensor !== 0; // default true/1
+      
+      let tierBadge = '';
+      if (hasTemplate && inSensor) {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 shadow-sm" title="บันทึกใน Flash ของ R307 สแกนผ่านเร็ว < 0.2 วินาที">
+            <i class="fa-solid fa-bolt text-[10px] text-amber-300"></i> Tier 1 (ในเซนเซอร์)
+          </span>`;
+      } else if (hasTemplate && !inSensor) {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/25 shadow-sm" title="จัดเก็บใน Database สแกนตรวจอัตโนมัติ">
+            <i class="fa-solid fa-cloud text-[10px]"></i> Tier 2 (ในคลาวด์)
+          </span>`;
+      } else {
+        tierBadge = `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-500/10 text-amber-400 border border-amber-500/25">
+            <i class="fa-solid fa-fingerprint text-[10px]"></i> ยังไม่ลงทะเบียน
+          </span>`;
+      }
+
       const tr = document.createElement('tr');
       tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
       tr.innerHTML = `
         <td class="px-5 py-3.5 font-mono text-sm font-bold text-cyan-400">#${user.id}</td>
+        <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold tracking-wider">${user.student_id || '-'}</td>
         <td class="px-5 py-3.5 font-medium text-white">${user.name}</td>
-        <td class="px-5 py-3.5 text-xs text-slate-400">${user.department || '-'}</td>
-        <td class="px-5 py-3.5">
-          <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${user.role === 'Admin' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}">
-            ${user.role}
-          </span>
-        </td>
+        <td class="px-5 py-3.5">${tierBadge}</td>
         <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
         <td class="px-5 py-3.5 text-right">
-          <button onclick="deleteUser(${user.id}, '${user.name}')" class="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ml-auto">
-            <i class="fa-regular fa-trash-can"></i> ลบ
-          </button>
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="deleteUser(${user.id}, '${user.name}')" title="ลบผู้ใช้และลายนิ้วมือ" class="px-2.5 py-1.5 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
+              <i class="fa-regular fa-trash-can"></i> ลบ
+            </button>
+          </div>
         </td>
       `;
       tbody.appendChild(tr);
@@ -319,7 +357,7 @@ if (window.location.pathname.endsWith('users.html')) {
       const q = e.target.value.toLowerCase();
       const filtered = allUsers.filter(u => 
         u.name.toLowerCase().includes(q) || 
-        (u.department && u.department.toLowerCase().includes(q)) || 
+        (u.student_id && u.student_id.toLowerCase().includes(q)) || 
         u.id.toString().includes(q)
       );
       renderUserTable(filtered);
@@ -344,6 +382,76 @@ if (window.location.pathname.endsWith('users.html')) {
     }
   };
 
+  // ดึงลายนิ้วมือจากเซนเซอร์ R307 มาเก็บสำรองใน Database ทีละคน
+  window.backupUser = async function(id) {
+    try {
+      const res = await fetch(`/api/device/backup/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        // แจ้งเตือนผู้ใช้
+        alert(`กำลังดึงข้อมูลลายนิ้วมือ ID #${id} จากเซนเซอร์ R307 กรุณารอสักครู่...`);
+      } else {
+        alert(data.error || 'ไม่สามารถส่งคำสั่งดึงข้อมูลได้');
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  // กู้คืนลายนิ้วมือจาก Database ลงเซนเซอร์ R307 ทีละคน
+  window.restoreUser = async function(id) {
+    if (!confirm(`ต้องการกู้คืนลายนิ้วมือของ ID #${id} ลงในเซนเซอร์ R307 ใช่หรือไม่?`)) return;
+    try {
+      const res = await fetch(`/api/device/restore/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`กำลังเขียนลายนิ้วมือ ID #${id} ลงเซนเซอร์ R307...`);
+      } else {
+        alert(data.error || 'กู้คืนไม่สำเร็จ');
+      }
+    } catch (e) {
+      alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+    }
+  };
+
+  // ปุ่มสำรองข้อมูลทั้งหมดจาก R307 เข้า Database
+  const backupAllBtn = document.getElementById('backupAllBtn');
+  if (backupAllBtn) {
+    backupAllBtn.addEventListener('click', async () => {
+      if (!confirm('คุณต้องการดึงข้อมูลลายนิ้วมือทั้งหมดที่มีในเซนเซอร์ R307 มาบันทึกสำรองใน Database ใช่หรือไม่?')) return;
+      try {
+        const res = await fetch('/api/device/backup-all', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'กำลังเริ่มสำรองข้อมูลลายนิ้วมือทั้งหมด...');
+        } else {
+          alert(data.error || 'ดำเนินการไม่สำเร็จ');
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      }
+    });
+  }
+
+  // ปุ่มกู้คืนลายนิ้วมือทั้งหมดจาก Database ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
+  const restoreAllBtn = document.getElementById('restoreAllBtn');
+  if (restoreAllBtn) {
+    restoreAllBtn.addEventListener('click', async () => {
+      if (!confirm('คุณต้องการกู้คืนลายนิ้วมือทั้งหมดจาก Database ลงในเซนเซอร์ R307 ใช่หรือไม่?\n(แนะนำเมื่อเพิ่งเปลี่ยนเซนเซอร์ R307 ตัวใหม่ หรือข้อมูลในเซนเซอร์หาย)')) return;
+      try {
+        const res = await fetch('/api/device/restore-all', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'กำลังเริ่มกู้คืนข้อมูลลายนิ้วมือลงเซนเซอร์...');
+        } else {
+          alert(data.error || 'ดำเนินการไม่สำเร็จ');
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      }
+    });
+  }
+
   // Modal Handlers
   const modal = document.getElementById('enrollModal');
   const openModalBtn = document.getElementById('openEnrollModalBtn');
@@ -351,24 +459,51 @@ if (window.location.pathname.endsWith('users.html')) {
   const cancelEnrollBtn = document.getElementById('cancelEnrollBtn');
   const enrollForm = document.getElementById('enrollForm');
 
+  let isEnrolling = false;
+  let createdUserId = null;
+
   openModalBtn.addEventListener('click', () => {
-    // Auto-suggest next Slot ID
-    const usedIds = allUsers.map(u => u.id);
+    isEnrolling = false;
+    createdUserId = null;
+    document.getElementById('submitEnrollBtn').disabled = false;
+
+    // คำนวณหา Slot ID ที่ว่างอันดับแรกสุด (Auto-Fill Gaps เช่น หากลบ #3 จะนำ #3 มาใช้ใหม่ทันที)
+    const usedIds = new Set(allUsers.map(u => u.id));
     let nextId = 1;
-    while (usedIds.includes(nextId) && nextId <= 300) nextId++;
+    while (usedIds.has(nextId) && nextId <= 300) nextId++;
+
     document.getElementById('enrollSlotId').value = nextId;
+    const badge = document.getElementById('enrollSlotIdBadge');
+    if (badge) {
+      const s1 = (nextId - 1) * 3 + 1;
+      const s2 = (nextId - 1) * 3 + 2;
+      const s3 = (nextId - 1) * 3 + 3;
+      badge.innerText = `User #${nextId} (Slots #${s1}, #${s2}, #${s3})`;
+    }
+
+    document.getElementById('enrollStudentId').value = '';
     document.getElementById('enrollName').value = '';
-    document.getElementById('enrollDept').value = '';
-    updateGuidance('ready', 'พร้อมลงทะเบียน', 'กรอกข้อมูลแล้วกดปุ่ม "บันทึกข้อมูล" ด้านล่าง');
+    updateGuidance('ready', 'พร้อมลงทะเบียน', 'กรอกรหัสนักศึกษาและชื่อ แล้วกดปุ่ม "บันทึกข้อมูล" ด้านล่าง');
     modal.classList.remove('hidden');
+    setTimeout(() => {
+      document.getElementById('enrollStudentId').focus();
+    }, 100);
   });
 
-  function closeModal() {
+  function handleCancelOrClose() {
+    const id = createdUserId || parseInt(document.getElementById('enrollSlotId').value);
+    if (isEnrolling || createdUserId) {
+      socket.emit('cancel_enroll', { id });
+      isEnrolling = false;
+      createdUserId = null;
+    }
     modal.classList.add('hidden');
+    document.getElementById('submitEnrollBtn').disabled = false;
+    loadUsers();
   }
 
-  closeModalBtn.addEventListener('click', closeModal);
-  cancelEnrollBtn.addEventListener('click', closeModal);
+  closeModalBtn.addEventListener('click', handleCancelOrClose);
+  cancelEnrollBtn.addEventListener('click', handleCancelOrClose);
 
   function updateGuidance(state, title, desc) {
     const icon = document.getElementById('stepIcon');
@@ -400,19 +535,23 @@ if (window.location.pathname.endsWith('users.html')) {
   enrollForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = parseInt(document.getElementById('enrollSlotId').value);
+    const student_id = document.getElementById('enrollStudentId').value.trim();
     const name = document.getElementById('enrollName').value.trim();
-    const department = document.getElementById('enrollDept').value.trim();
-    const role = document.getElementById('enrollRole').value;
+
+    if (!student_id || !name) {
+      alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
+      return;
+    }
 
     const submitBtn = document.getElementById('submitEnrollBtn');
     submitBtn.disabled = true;
 
-    // 1. บันทึกลง SQLite
+    // 1. บันทึกลง Cloud Database
     try {
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name, department, role })
+        body: JSON.stringify({ id, student_id, name })
       });
       const data = await res.json();
 
@@ -422,9 +561,12 @@ if (window.location.pathname.endsWith('users.html')) {
         return;
       }
 
+      isEnrolling = true;
+      const assignedId = data.id || id;
+      createdUserId = assignedId;
       // 2. ส่งคำสั่งให้ Arduino เริ่มขั้นตอนสแกนนิ้วสด
-      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก ID #${id}`);
-      socket.emit('start_enroll', { id, name });
+      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก Slot #${assignedId}`);
+      socket.emit('start_enroll', { id: assignedId, name });
 
     } catch (err) {
       alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
@@ -432,26 +574,85 @@ if (window.location.pathname.endsWith('users.html')) {
     }
   });
 
-  // Socket.io: รับสถานะขั้นตอนสแกนสดจาก Arduino
+  // Socket.io: รับสถานะขั้นตอนสแกนสดจาก Arduino (รองรับ 3 นิ้วต่อคน)
+  let currentFingerNum = 1;
+
   socket.on('enroll_step_update', (data) => {
-    if (data.status === 'STEP1_WAIT') {
-      updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', 'วางนิ้วที่ต้องการบันทึก');
+    if (data.fingerNum) {
+      currentFingerNum = data.fingerNum;
+    }
+    const fPrefix = `[นิ้วที่ ${currentFingerNum}/3] `;
+
+    if (data.status === 'FINGER_START') {
+      updateGuidance('step1', `${fPrefix}วางนิ้วบนเซนเซอร์`, `กรุณาวางนิ้วที่ ${currentFingerNum} (Slot #${data.slotId})`);
+    } else if (data.status === 'STEP1_WAIT') {
+      updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์`, `วางนิ้วที่ ${currentFingerNum} ที่ต้องการบันทึก`);
     } else if (data.status === 'REMOVE_FINGER') {
-      updateGuidance('remove', 'ขั้นตอนที่ 2: กรุณายกนิ้วออก', 'ยกนิ้วออกจากเซนเซอร์สักครู่');
+      updateGuidance('remove', `${fPrefix}ขั้นตอนที่ 2: กรุณายกนิ้วออก`, 'ยกนิ้วออกจากเซนเซอร์สักครู่');
     } else if (data.status === 'STEP2_WAIT') {
-      updateGuidance('step1', 'ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง', 'วางนิ้วเดิมอีกครั้งเพื่อยืนยัน');
+      updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง`, `วางนิ้วที่ ${currentFingerNum} อีกครั้งเพื่อยืนยัน`);
+    } else if (data.status === 'FINGER_DONE') {
+      updateGuidance('success', `บันทึกนิ้วที่ ${data.fingerNum}/3 สำเร็จ!`, 'กำลังเตรียมพร้อมสำหรับนิ้วถัดไป...');
+      playSound('granted');
     } else if (data.status === 'SUCCESS') {
-      updateGuidance('success', 'บันทึกลายนิ้วมือสำเร็จ!', `บันทึก ID #${data.id} เรียบร้อยแล้ว`);
+      isEnrolling = false;
+      createdUserId = null;
+      updateGuidance('success', '🎉 บันทึกลายนิ้วมือครบ 3 นิ้วสำเร็จ!', `บันทึก User ID #${data.id} (3 นิ้ว) เรียบร้อยแล้ว`);
       playSound('granted');
       setTimeout(() => {
-        closeModal();
+        modal.classList.add('hidden');
         loadUsers();
         document.getElementById('submitEnrollBtn').disabled = false;
       }, 2000);
+    } else if (data.status === 'CANCELLED') {
+      isEnrolling = false;
+      createdUserId = null;
+      updateGuidance('failed', 'ยกเลิกแล้ว', data.message || 'ยกเลิกการลงทะเบียนเรียบร้อย');
+      document.getElementById('submitEnrollBtn').disabled = false;
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        loadUsers();
+      }, 1200);
     } else if (data.status === 'FAILED') {
-      updateGuidance('failed', 'การบันทึกล้มเหลว', data.message || 'ลายนิ้วมือไม่ตรงกัน กรุณาลองใหม่');
+      isEnrolling = false;
+      createdUserId = null;
+      const isDuplicate = (data.code === 'DUPLICATE');
+      updateGuidance('failed', isDuplicate ? '⚠️ ลายนิ้วมือซ้ำในระบบ' : 'การลงทะเบียนไม่สำเร็จ', data.message || 'กรุณาลองใหม่อีกครั้ง');
       playSound('denied');
       document.getElementById('submitEnrollBtn').disabled = false;
+      loadUsers();
+    }
+  });
+
+  // Socket.io: รับสถานะการสำรองและกู้คืนลายนิ้วมือ
+  socket.on('template_saved', (data) => {
+    playSound('granted');
+    loadUsers();
+  });
+
+  socket.on('restore_progress', (data) => {
+    if (data.status === 'SUCCESS') {
+      playSound('granted');
+      alert(`✅ กู้คืนลายนิ้วมือ ID #${data.id} ลงในเซนเซอร์ R307 เรียบร้อยแล้ว!`);
+      loadUsers();
+    } else if (data.status === 'ALL_COMPLETED') {
+      playSound('granted');
+      alert(`🎉 กู้คืนข้อมูลลายนิ้วมือทั้งหมด (${data.total} คน) ลงเซนเซอร์ R307 เรียบร้อยแล้ว!`);
+      loadUsers();
+    } else if (data.status === 'FAILED') {
+      playSound('denied');
+      alert(`❌ ${data.message || 'กู้คืนไม่สำเร็จ'}`);
+    }
+  });
+
+  socket.on('backup_progress', (data) => {
+    if (data.status === 'ALL_COMPLETED') {
+      playSound('granted');
+      alert('🎉 ดึงข้อมูลสำรองลายนิ้วมือจากเซนเซอร์ R307 ครบถ้วนแล้ว!');
+      loadUsers();
+    } else if (data.status === 'FAILED') {
+      playSound('denied');
+      alert(`⚠️ ${data.message || 'สำรองข้อมูลไม่สำเร็จ'}`);
     }
   });
 

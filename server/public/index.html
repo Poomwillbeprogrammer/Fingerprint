@@ -36,6 +36,16 @@
           <span>จัดการผู้ใช้งาน</span>
         </a>
       </nav>
+      <!-- Hardware Connection Status -->
+      <div class="mt-4 pt-3 border-t border-slate-800/80 px-2">
+        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+          <div class="flex items-center gap-2">
+            <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400"></span>
+            <span id="serialStatusText" class="text-[11px] text-slate-400">R307 (COM12)...</span>
+          </div>
+          <i class="fa-solid fa-microchip text-slate-500 text-xs"></i>
+        </div>
+      </div>
     </div>
 
     <!-- User / Logout -->
@@ -149,16 +159,18 @@
           <thead class="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
             <tr>
               <th class="px-5 py-3.5">เวลาที่สแกน</th>
+              <th class="px-5 py-3.5">รหัสนักศึกษา</th>
               <th class="px-5 py-3.5">ชื่อผู้ใช้งาน</th>
               <th class="px-5 py-3.5">Slot ID</th>
               <th class="px-5 py-3.5">สถานะ</th>
               <th class="px-5 py-3.5">Score (ความแม่นยำ)</th>
+              <th class="px-5 py-3.5">ระดับ (Tier)</th>
             </tr>
           </thead>
           <tbody id="logsTableBody" class="divide-y divide-slate-800/60">
             <!-- Dynamic Rows -->
             <tr>
-              <td colspan="5" class="px-5 py-8 text-center text-slate-500">
+              <td colspan="7" class="px-5 py-8 text-center text-slate-500">
                 <i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังโหลดประวัติการสแกน...
               </td>
             </tr>
