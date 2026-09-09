@@ -41,5 +41,7 @@
 * **ADR-003:** ใช้สถาปัตยกรรม Hybrid Database (Supabase Cloud PostgreSQL เป็น Master + `users_cache.json` บนบอร์ดเป็น Offline Cache) สแกนได้ทันทีในเวลา < 1ms แม้ไม่มีเน็ต
 * **ADR-004:** การจัดวางหน้าจอ Card Layout v2 หัวข้อใช้เฉพาะ `ยินดีต้อนรับ` กึ่งกลางสมมาตร ตัดข้อความภาษาอังกฤษที่ยาวเบียดออก เพื่อความสบายตา
 * **ADR-005:** ตัด `node_modules` และ `build/` ออกจาก Git เพื่อไม่ให้ไฟล์ Binary ข้ามระบบปฏิบัติการไปทำให้ Cloud Build ล้มเหลว
-* **ADR-006 (Current):** การยืนยันตัวตนใช้ปุ่มกด Physical Switch (Active LOW, Internal Pullup) ขา D2 (Confirm) และ D3 (Rescan) โดยมี Timeout 5 วินาที หากไม่กดปุ่มใดๆ ให้ **Auto-Cancel (ยกเลิกอัตโนมัติ)** เพื่อความปลอดภัยสูงสุดจากการสวมสิทธิ์
-* **ADR-007 (Current):** การลงทะเบียนผู้ใช้ 1 คน ผูก 3 ลายนิ้วมือ (3 Slots ใน R307) เพื่อรองรับนิ้วมือเปียกหรือถลอก (Biometric Redundancy) รองรับผู้ใช้ได้สูงสุด 100 คน
+* **ADR-006:** การยืนยันตัวตนใช้ปุ่มกด Physical Switch (Active LOW, Internal Pullup) ขา D2 (Confirm) และ D3 (Rescan) โดยมี Timeout 10 วินาที หากไม่กดปุ่มใดๆ ให้ **Auto-Cancel (ยกเลิกอัตโนมัติ)** เพื่อความปลอดภัยสูงสุดจากการสวมสิทธิ์
+* **ADR-007:** การลงทะเบียนผู้ใช้ 1 คน ผูก 3 ลายนิ้วมือ (3 Slots ใน R307) เพื่อรองรับนิ้วมือเปียกหรือถลอก (Biometric Redundancy) รองรับผู้ใช้ได้สูงสุด 100 คน (300 Slots)
+* **ADR-008:** ระบบ Auto-Rollback เมื่อการลงทะเบียนไม่สำเร็จหรือถูกยกเลิก (Clean State Assurance) โดยฟังก์ชัน `cleanupFailedEnroll()` จะสั่งเซนเซอร์ลบทุก Slot ที่ผูกไว้ และลบแถวใน Supabase Cloud ทันที ป้องกันปัญหา Orphan User Records 100%
+* **ADR-009:** ระบบตรวจสอบลายนิ้วมือซ้ำระดับฮาร์ดแวร์ก่อนบันทึก (Pre-Enrollment Duplicate Fingerprint Check) ด้วย `finger.fingerSearch(1)` ร่วมกับการปรับลูปรอกดปุ่ม D2/D3 ให้ตรวจจับ `Serial.available()` เพื่อขัดจังหวะทันทีเมื่อมีคำสั่งใหม่ ป้องกันปัญหาเครื่องค้าง (Web & Hardware Hang Prevention)
