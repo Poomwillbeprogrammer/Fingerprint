@@ -460,9 +460,11 @@ if (window.location.pathname.endsWith('users.html')) {
   const enrollForm = document.getElementById('enrollForm');
 
   let isEnrolling = false;
+  let createdUserId = null;
 
   openModalBtn.addEventListener('click', () => {
     isEnrolling = false;
+    createdUserId = null;
     document.getElementById('submitEnrollBtn').disabled = false;
 
     // คำนวณหา Slot ID ที่ว่างอันดับแรกสุด (Auto-Fill Gaps เช่น หากลบ #3 จะนำ #3 มาใช้ใหม่ทันที)
@@ -489,10 +491,11 @@ if (window.location.pathname.endsWith('users.html')) {
   });
 
   function handleCancelOrClose() {
-    if (isEnrolling) {
-      const id = parseInt(document.getElementById('enrollSlotId').value);
+    const id = createdUserId || parseInt(document.getElementById('enrollSlotId').value);
+    if (isEnrolling || createdUserId) {
       socket.emit('cancel_enroll', { id });
       isEnrolling = false;
+      createdUserId = null;
     }
     modal.classList.add('hidden');
     document.getElementById('submitEnrollBtn').disabled = false;
@@ -560,6 +563,7 @@ if (window.location.pathname.endsWith('users.html')) {
 
       isEnrolling = true;
       const assignedId = data.id || id;
+      createdUserId = assignedId;
       // 2. ส่งคำสั่งให้ Arduino เริ่มขั้นตอนสแกนนิ้วสด
       updateGuidance('step1', 'ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์', `กรุณาวางนิ้วบนเซนเซอร์ R307 เพื่อบันทึก Slot #${assignedId}`);
       socket.emit('start_enroll', { id: assignedId, name });
@@ -592,6 +596,7 @@ if (window.location.pathname.endsWith('users.html')) {
       playSound('granted');
     } else if (data.status === 'SUCCESS') {
       isEnrolling = false;
+      createdUserId = null;
       updateGuidance('success', '🎉 บันทึกลายนิ้วมือครบ 3 นิ้วสำเร็จ!', `บันทึก User ID #${data.id} (3 นิ้ว) เรียบร้อยแล้ว`);
       playSound('granted');
       setTimeout(() => {
@@ -601,6 +606,7 @@ if (window.location.pathname.endsWith('users.html')) {
       }, 2000);
     } else if (data.status === 'CANCELLED') {
       isEnrolling = false;
+      createdUserId = null;
       updateGuidance('failed', 'ยกเลิกแล้ว', data.message || 'ยกเลิกการลงทะเบียนเรียบร้อย');
       document.getElementById('submitEnrollBtn').disabled = false;
       setTimeout(() => {
@@ -609,7 +615,9 @@ if (window.location.pathname.endsWith('users.html')) {
       }, 1200);
     } else if (data.status === 'FAILED') {
       isEnrolling = false;
-      updateGuidance('failed', 'การลงทะเบียนไม่สำเร็จ', data.message || 'กรุณาลองใหม่อีกครั้ง');
+      createdUserId = null;
+      const isDuplicate = (data.code === 'DUPLICATE');
+      updateGuidance('failed', isDuplicate ? '⚠️ ลายนิ้วมือซ้ำในระบบ' : 'การลงทะเบียนไม่สำเร็จ', data.message || 'กรุณาลองใหม่อีกครั้ง');
       playSound('denied');
       document.getElementById('submitEnrollBtn').disabled = false;
       loadUsers();

@@ -362,6 +362,33 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
   }
 }
 
+// ฟังก์ชัน Auto-Rollback ลบข้อมูลผู้ใช้ใน DB และลบ Slot ในเซนเซอร์เมื่อการลงทะเบียนไม่สำเร็จ
+async function cleanupFailedEnroll(userId, enrolledSlots = [], reason = '') {
+  console.log(`🧹 [Auto-Rollback] เริ่มทำความสะอาดผู้ใช้ ID #${userId} (เหตุผล: ${reason})`);
+  
+  if (userId) {
+    // 1. สั่ง R307 ลบทุก Slot ที่เกี่ยวข้อง
+    const slot1 = (userId - 1) * 3 + 1;
+    const slot2 = (userId - 1) * 3 + 2;
+    const slot3 = (userId - 1) * 3 + 3;
+    const allSlotsToDelete = new Set([...enrolledSlots, slot1, slot2, slot3]);
+    for (const slot of allSlotsToDelete) {
+      sendSerialCommand(`DELETE ${slot}`);
+    }
+
+    // 2. ลบแถวผู้ใช้คนนี้ออกจากตาราง users ใน Database ทันที
+    try {
+      await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
+      console.log(`🗑️ [Auto-Rollback] ลบผู้ใช้ ID #${userId} ออกจากฐานข้อมูลเรียบร้อยแล้ว`);
+    } catch (err) {
+      console.error(`Error deleting user #${userId} in cleanup:`, err);
+    }
+  }
+
+  io.emit('user_updated');
+  broadcastUsersCache();
+}
+
 // ประมวลผลข้อมูลที่ส่งมาจาก Arduino ผ่าน Serial
 async function handleSerialData(rawLine) {
   const line = rawLine.trim();
@@ -434,40 +461,59 @@ async function handleSerialData(rawLine) {
   } else if (line.startsWith('RESP:ENROLL_CANCELLED')) {
     console.log(`🛑 [Arduino] ยกเลิกการสแกนนิ้วสำเร็จ (${line})`);
     if (currentEnrollSession) {
-      for (const slot of currentEnrollSession.enrolledSlots) {
-        sendSerialCommand(`DELETE ${slot}`);
-      }
+      const uId = currentEnrollSession.userId;
+      const slots = [...currentEnrollSession.enrolledSlots];
       currentEnrollSession = null;
+      currentEnrollId = null;
+      await cleanupFailedEnroll(uId, slots, 'Arduino Cancelled');
+    } else if (currentEnrollId) {
+      const mappedId = Math.floor((currentEnrollId - 1) / 3) + 1;
+      currentEnrollId = null;
+      await cleanupFailedEnroll(mappedId, [], 'Arduino Cancelled');
     }
     io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
-    io.emit('user_updated');
   } else if (line.startsWith('RESP:ENROLL_FAIL')) {
     let message = 'การบันทึกล้มเหลว กรุณาลองใหม่';
-    if (line.includes('TIMEOUT')) message = 'หมดเวลารอวางนิ้วบนเซนเซอร์ กรุณากดลองใหม่';
-    else if (line.includes('IMAGE1')) message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
-    else if (line.includes('IMAGE2')) message = 'ภาพลายนิ้วมือรอบสองไม่ชัด กรุณาวางนิ้วใหม่';
-    else if (line.includes('MISMATCH')) message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก กรุณาลองใหม่';
-    else if (line.includes('STORE')) message = 'หน่วยความจำ R307 ขัดข้อง บันทึกไม่สำเร็จ';
+    let code = 'FAILED';
+
+    if (line.includes('DUPLICATE')) {
+      const match = line.match(/ID=(\d+)/);
+      const dupSlot = match ? parseInt(match[1]) : 0;
+      const mappedOwnerId = dupSlot > 0 ? (Math.floor((dupSlot - 1) / 3) + 1) : 0;
+      let ownerName = 'ผู้ใช้อื่นในระบบ';
+      if (mappedOwnerId > 0) {
+        try {
+          const owner = await dbAsync.get('SELECT name FROM users WHERE id = ?', [mappedOwnerId]);
+          if (owner) ownerName = owner.name;
+        } catch (e) {}
+      }
+      message = `ลายนิ้วมือนี้มีในระบบแล้ว (ตรงกับผู้ใช้ ID #${mappedOwnerId}: ${ownerName})`;
+      code = 'DUPLICATE';
+    } else if (line.includes('TIMEOUT')) {
+      message = 'หมดเวลารอวางนิ้วบนเซนเซอร์ กรุณากดลองใหม่';
+    } else if (line.includes('IMAGE1')) {
+      message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
+    } else if (line.includes('IMAGE2')) {
+      message = 'ภาพลายนิ้วมือรอบสองไม่ชัด กรุณาวางนิ้วใหม่';
+    } else if (line.includes('MISMATCH')) {
+      message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก กรุณาลองใหม่';
+    } else if (line.includes('STORE')) {
+      message = 'หน่วยความจำ R307 ขัดข้อง บันทึกไม่สำเร็จ';
+    }
     console.warn(`⚠️ [Enroll Failed] ${message} (${line})`);
 
     if (currentEnrollSession) {
-      for (const slot of currentEnrollSession.enrolledSlots) {
-        sendSerialCommand(`DELETE ${slot}`);
-      }
       const uId = currentEnrollSession.userId;
-      (async () => {
-        try {
-          const u = await dbAsync.get('SELECT fingerprint_template FROM users WHERE id = ?', [uId]);
-          if (u && !u.fingerprint_template) {
-            await dbAsync.run('DELETE FROM users WHERE id = ?', [uId]);
-            io.emit('user_updated');
-          }
-        } catch (e) {}
-      })();
+      const slots = [...currentEnrollSession.enrolledSlots];
       currentEnrollSession = null;
+      currentEnrollId = null;
+      await cleanupFailedEnroll(uId, slots, message);
+    } else if (currentEnrollId) {
+      const mappedId = Math.floor((currentEnrollId - 1) / 3) + 1;
+      currentEnrollId = null;
+      await cleanupFailedEnroll(mappedId, [], message);
     }
-    currentEnrollId = null;
-    io.emit('enroll_step_update', { status: 'FAILED', message });
+    io.emit('enroll_step_update', { status: 'FAILED', code, message });
   }
 
   // 2. การลบลายนิ้วมือ
@@ -977,7 +1023,7 @@ io.on('connection', (socket) => {
   socket.emit('serial_status', { connected: serialConnected, port: TARGET_PORT });
 
   // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ (ระบบ 3 นิ้วต่อคน)
-  socket.on('start_enroll', (data) => {
+  socket.on('start_enroll', async (data) => {
     const userId = parseInt(data.id);
     const slot1 = (userId - 1) * 3 + 1;
     const slot2 = (userId - 1) * 3 + 2;
@@ -1009,38 +1055,35 @@ io.on('connection', (socket) => {
         status: 'FAILED',
         message: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้ (กรุณาตรวจสอบการเชื่อมต่อ COM12 หรือปิด Serial Monitor ใน Arduino IDE)'
       });
+      await cleanupFailedEnroll(userId, [], 'Cannot send command to Arduino');
       currentEnrollSession = null;
       currentEnrollId = null;
     }
   });
 
-  // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ (พร้อม Auto-Rollback ลบ Slot ที่ค้าง)
+  // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ (พร้อม Auto-Rollback ลบ Slot และลบ DB ทันที)
   socket.on('cancel_enroll', async (data) => {
     console.log(`🛑 [Cancel Enroll] ได้รับคำสั่งยกเลิกการลงทะเบียน`);
 
     // 1. ส่งคำสั่งให้ Arduino หลุดออกจากลูปทันที
     sendSerialCommand('CANCEL_ENROLL');
 
-    // 2. Auto-Rollback: ลบทุก Slot ในเซนเซอร์ R307 ที่บันทึกไปแล้วในเซสชันนี้
+    let uId = data && data.id ? parseInt(data.id) : null;
+    let enrolledSlots = [];
+
     if (currentEnrollSession) {
-      for (const slot of currentEnrollSession.enrolledSlots) {
-        console.log(`🧹 [Auto-Rollback] สั่งเซนเซอร์ลบ Slot #${slot} ที่เพิ่งบันทึกค้างไว้`);
-        sendSerialCommand(`DELETE ${slot}`);
-      }
-      const uId = currentEnrollSession.userId;
-      try {
-        const u = await dbAsync.get('SELECT fingerprint_template FROM users WHERE id = ?', [uId]);
-        if (u && !u.fingerprint_template) {
-          await dbAsync.run('DELETE FROM users WHERE id = ?', [uId]);
-          console.log(`🗑️ [Cleanup] ยกเลิกและลบผู้ใช้ User ID #${uId} ที่ไม่มีลายนิ้วมือออกจากระบบแล้ว`);
-          io.emit('user_updated');
-        }
-      } catch (err) {
-        console.error('Error in cancel_enroll rollback:', err);
-      }
+      uId = currentEnrollSession.userId;
+      enrolledSlots = [...currentEnrollSession.enrolledSlots];
       currentEnrollSession = null;
+      currentEnrollId = null;
+    }
+
+    if (uId) {
+      await cleanupFailedEnroll(uId, enrolledSlots, 'Web Client Cancelled');
     } else if (currentEnrollId) {
-      sendSerialCommand(`DELETE ${currentEnrollId}`);
+      const mappedId = Math.floor((currentEnrollId - 1) / 3) + 1;
+      currentEnrollId = null;
+      await cleanupFailedEnroll(mappedId, [], 'Web Client Cancelled');
     }
 
     currentEnrollId = null;

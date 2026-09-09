@@ -862,6 +862,19 @@ void handleEnroll(int id) {
     return;
   }
 
+  // ตรวจสอบลายนิ้วมือซ้ำในระบบ (Duplicate Fingerprint Check)
+  uint8_t dupCheck = finger.fingerSearch(1);
+  if (dupCheck == FINGERPRINT_OK) {
+    char dupMsg[25];
+    snprintf(dupMsg, sizeof(dupMsg), "Already Slot #%d", finger.fingerID);
+    showUI("DUPLICATE FINGER", dupMsg, "Cannot enroll again");
+    Serial.print("RESP:ENROLL_FAIL_DUPLICATE ID=");
+    Serial.println(finger.fingerID);
+    delay(3000);
+    showIdleScreen();
+    return;
+  }
+
   // ให้ยกนิ้วออก
   showUI(idHeader, "Step 1 OK!", "Please REMOVE finger");
   Serial.println("STATUS:ENROLL_REMOVE_FINGER");
@@ -1186,6 +1199,12 @@ void loop() {
     int btnAction = 0; // 0 = Timeout (Auto-Cancel), 1 = Confirm (D2), 2 = Rescan (D3)
 
     while (millis() - btnWaitStart < 10000) {
+      // หากมีคำสั่งใหม่เข้ามาจาก Server เช่น ENROLL หรือ CANCEL ให้หลุดลูปทันทีเพื่อไม่ให้ระบบค้าง
+      if (Serial.available()) {
+        btnAction = 3;
+        break;
+      }
+
       // ตรวจจับปุ่ม D2 (Confirm - Active LOW)
       if (digitalRead(BTN_CONFIRM_PIN) == LOW) {
         delay(30); // Debounce
@@ -1203,6 +1222,11 @@ void loop() {
         }
       }
       delay(10);
+    }
+
+    if (btnAction == 3) {
+      // มีคำสั่งใหม่เข้ามา ให้ข้ามขั้นตอนปุ่มกดแล้วกลับไปอ่านคำสั่งใน loop() ทันที
+      return;
     }
 
     if (btnAction == 1) {
