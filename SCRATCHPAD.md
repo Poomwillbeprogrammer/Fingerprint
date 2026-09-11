@@ -4,10 +4,10 @@
 ---
 
 ### 🚀 สรุปสถานะระบบปัจจุบัน (Current Working State)
-* **Arduino UNO Q (STM32 MCU):** เฟิร์มแวร์ C++ เสถียร 100% ควบคุมเซนเซอร์ R307, หน้าจอ SH1106 OLED, ปุ่มกด D2/D3, และระบบตรวจจับลายนิ้วมือซ้ำก่อนบันทึก
-* **Uno Q Linux SoC:** สคริปต์ `unoq_bridge.py` รันเบื้องหลัง (PID 1990) เรนเดอร์ฟอนต์ไทย Tahoma คมชัดสมบูรณ์แบบ และสตรีมภาพ 16-byte chunks ไหลลื่น
-* **Cloud Server (Render):** Node.js Express & Socket.IO เซิร์ฟเวอร์รันปกติที่ `https://fingerprint-hrkp.onrender.com`
-* **Database (Supabase):** ฐานข้อมูล PostgreSQL ซิงก์รายชื่อผู้ใช้แบบ Realtime และเก็บบันทึกประวัติการสแกน (Access Logs) สมบูรณ์
+* **Arduino UNO Q (STM32 MCU):** เฟิร์มแวร์ C++ เสถียร 100% ควบคุมเซนเซอร์ R307, หน้าจอ SH1106 OLED, ปุ่มกด D2/D3, รายงาน `EVENT:IDLE`, `EVENT:NO_MATCH`, และระบบตรวจจับลายนิ้วมือซ้ำก่อนบันทึก
+* **Uno Q Linux SoC:** สคริปต์ `unoq_bridge.py` รันเบื้องหลัง (PID 1331) เรนเดอร์ฟอนต์ไทย Tahoma 11pt คมชัด พร้อมแคชตารางห้อง (`active_room.json`) และประวัติการเช็คชื่อ (`attendance_cache.json`)
+* **Cloud Server (Render):** Node.js Express & Socket.IO เซิร์ฟเวอร์รันปกติที่ `https://fingerprint-hrkp.onrender.com` พร้อมระบบจัดการตารางเรียนแยกห้อง (Multi-room Timetable)
+* **Database (Supabase):** ฐานข้อมูล PostgreSQL ซิงก์รายชื่อผู้ใช้, ตารางเรียน, และประวัติการสแกน (Access Logs) สมบูรณ์
 * **Code Repository:** สาขา `website` บน GitHub ซิงก์ล่าสุดตรงกับระบบที่ติดตั้งจริง
 
 ---
@@ -16,10 +16,12 @@
 * **Internal IPC Port:** `127.0.0.1:7500` (Baudrate 115200 bps)
 * **Sensor Baudrate:** 57600 bps (Serial1 บน Pins 0 RX, 1 TX)
 * **OLED Display:** SH1106 I2C Addr `0x3C` (Software I2C บน Pins A4 SDA, A5 SCL)
-* **Button Confirm (ยืนยัน):** Pin `D2` ต่อลง GND (Active LOW, `INPUT_PULLUP`)
-* **Button Rescan (สแกนใหม่):** Pin `D3` ต่อลง GND (Active LOW, `INPUT_PULLUP`)
+* **Button Confirm (ยืนยัน):** Pin `D2` (ปุ่มฟ้า) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
+* **Button Rescan (สแกนใหม่/ยกเลิก):** Pin `D3` (ปุ่มแดง) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
 * **Font Path บนบอร์ด:** `/home/arduino/tahoma.ttf`
-* **Local Cache บนบอร์ด:** `/home/arduino/users_cache.json`
+* **Local Users Cache:** `/home/arduino/users_cache.json`
+* **Local Attendance Cache:** `/home/arduino/attendance_cache.json`
+* **Active Room Cache:** `/home/arduino/active_room.json`
 
 ---
 
@@ -48,4 +50,23 @@
    - [x] หากพบนิ้วซ้ำ OLED แสดง "DUPLICATE FINGER" และส่ง `RESP:ENROLL_FAIL_DUPLICATE`
    - [x] Server ค้นหาชื่อเจ้าของนิ้วเดิม และส่งเตือนหน้าเว็บ: `ลายนิ้วมือนี้มีในระบบแล้ว (ตรงกับผู้ใช้ ID #...)`
    - [x] แก้ปัญหาเว็บค้าง: ลูปรอ 10 วินาทีใน Arduino แทรก `if (Serial.available()) break;` ตัดเข้าสู่คำสั่งใหม่ได้ทันที ไม่ค้างอีกต่อไป
+6. **[TASK-6] ระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable) และซิงก์ห้องใช้งาน:** ✅ COMPLETED
+   - [x] รองรับการนำเข้าไฟล์ตารางเรียน Excel (.xlsx) พร้อมระบบวิเคราะห์ห้องเรียนอัจฉริยะ (Smart Room Detection)
+   - [x] สร้างหน้าจัดการตารางเรียน `schedules.html` และระบบสลับห้องประจำการของเครื่อง Uno Q บน Dashboard
+   - [x] ส่งอีเวนต์ `sync_device_room` ซิงก์ชื่อห้องลงบอร์ด Uno Q แบบเรียลไทม์ และบันทึกลง `active_room.json`
+   - [x] หน้าจอ Idle บน OLED แสดงแถบสถานะห้องด้านล่าง: `[ <ชื่อห้อง> ] พร้อมใช้งาน` ตลอดเวลา
+7. **[TASK-7] ปรับการแสดงผลปุ่มกดตามสีจริง (ปุ่มฟ้า/ปุ่มแดง) และขยายชื่อเต็ม 11pt Bold บน OLED:** ✅ COMPLETED
+   - [x] ปรับข้อความแนะนำใต้จอเป็น `[ ปุ่มฟ้า:ยืนยัน | ปุ่มแดง:สแกน ]` ตรงกับสีของปุ่มฮาร์ดแวร์จริง
+   - [x] ขยายขนาดฟอนต์ชื่อ-นามสกุลภาษาไทยเป็น 11pt ตัวหนา คมชัด เต็มความกว้างของหน้าจอ
+   - [x] ตัดรหัสนักศึกษา 13 หลักออกจากหน้าจอ OLED เพื่อป้องกันปัญหาข้อความล้นจอหรือตกขอบ (รหัสยังคงบันทึกลงฐานข้อมูลอย่างครบถ้วน)
+8. **[TASK-8] แคชการลงเวลาประจำวันบนเครื่อง (Local Attendance Cache) ป้องกัน Frame Storm:** ✅ COMPLETED
+   - [x] เพิ่มระบบแคช `attendance_cache.json` และตัวแปร `checked_in_records` บน Uno Q Linux
+   - [x] เมื่อกดปุ่มฟ้า D2 ยืนยัน ตัวบอร์ดจะส่งเฟรมภาพเพียงครั้งเดียว และไม่ส่งซ้ำเมื่อเซิร์ฟเวอร์ตอบกลับ
+   - [x] เพิ่ม Socket handler `get_today_attendance` ใน `server.js` ให้บอร์ดดึงประวัติการเช็คชื่อของวันปัจจุบันมาแคชไว้ตั้งแต่เริ่มเชื่อมต่อ
+9. **[TASK-9] ประสานเวลาบู๊ตบอร์ด (Boot Synchronization) และกู้คืนหน้าจออัตโนมัติเมื่อสแกนไม่ผ่าน:** ✅ COMPLETED
+   - [x] แก้ไขบั๊กหน้าจอค้าง "READY FOR SCAN" ตอนเปิดเครื่องครั้งแรก โดยให้ STM32 ส่ง `EVENT:IDLE` เมื่อจบ `setup()`
+   - [x] เพิ่ม Settling Time 2.0 วินาทีและตัวเฝ้าระวัง (Watchdog 3.5s) ฝั่ง Linux ช่วยการันตีว่าจอจะขึ้นหน้าจอ Idle พร้อมชื่อห้อง 100%
+   - [x] จัดการอีเวนต์ `EVENT:NO_MATCH` หน่วงเวลา 1.6 วินาที โชว์หน้าแจ้งเตือนภาษาไทย "ไม่พบข้อมูลลายนิ้วมือ" 3.0 วินาที แล้วกลับสู่หน้าจอ Idle อัตโนมัติ
+   - [x] ติดตั้งตัวคุมความเร็วการส่งเฟรมภาพ (Frame Pacing Gap 600ms) และ Bitmap Hash Deduplication ป้องกันคำสั่งชนกันบน UART
+
 
