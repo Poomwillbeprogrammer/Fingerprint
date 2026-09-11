@@ -22,6 +22,7 @@ sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
 users_cache = {}
 schedules_cache = []
+current_room_name = 'ทค.1-101'
 
 # 1. โหลดฟอนต์ภาษาไทยแท้
 try:
@@ -48,8 +49,10 @@ def img_to_oled_buf(img):
                 buf[x + page * 128] |= (1 << bit)
     return buf
 
-# 3. เรนเดอร์หน้าจอพร้อมใช้งาน (Idle Screen ภาษาไทยคมกริบ)
-def render_idle_screen():
+# 3. เรนเดอร์หน้าจอพร้อมใช้งาน (Idle Screen ภาษาไทยคมกริบ - พร้อมชื่อห้องประจำเครื่อง)
+def render_idle_screen(room_name=None):
+    global current_room_name
+    r_name = room_name or current_room_name or 'ทค.1-101'
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
@@ -68,7 +71,7 @@ def render_idle_screen():
 
     d.line([(2, 47), (125, 47)], fill=1)
 
-    footer = 'สถานะ: พร้อมใช้งาน'
+    footer = f'[ {r_name} ] พร้อมใช้งาน'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
     d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
@@ -556,6 +559,16 @@ def on_sync_schedules_cache(data):
     if isinstance(data, list):
         print(f'📅 [Cloud] ได้รับอัปเดตตารางเรียน {len(data)} คาบ')
         save_schedules_cache(data)
+
+@sio.on('sync_device_room')
+def on_sync_device_room(data):
+    global current_room_name, IDLE_BITMAP
+    if isinstance(data, dict) and data.get('room_name'):
+        r_name = data.get('room_name')
+        print(f'📍 [Cloud] ได้รับคำสั่งสลับห้องประจำเครื่องเป็น: [{r_name}]')
+        current_room_name = r_name
+        IDLE_BITMAP = render_idle_screen(current_room_name)
+        send_bitmap_to_mcu(IDLE_BITMAP)
 
 @sio.on('schedules_updated')
 def on_schedules_updated(data):
