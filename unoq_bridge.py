@@ -337,14 +337,26 @@ DENIED_BITMAP = render_denied_screen()
 CANCELLED_BITMAP = render_cancelled_screen()
 TIMEOUT_BITMAP = render_timeout_screen()
 
+last_frame_sent_time = 0
+last_sent_buf = None
 oled_lock = threading.Lock()
 
 # 6. ส่งภาพ 1024 bytes ไปยัง MCU ทางพอร์ต 7500 (16-byte chunks = 32 hex chars, 46 chars/line safe for 64-byte UART buffer)
 def send_bitmap_to_mcu(buf, initial_wait=0.20):
-    global mcu_sock
+    global mcu_sock, last_frame_sent_time, last_sent_buf
     if not mcu_sock:
         return False
     with oled_lock:
+        now = time.time()
+        elapsed = now - last_frame_sent_time
+        # หากเพิ่งส่งภาพเดิมไปไม่เกิน 1.5 วินาที ข้ามได้เลย (ป้องกันการส่งเฟรมซ้ำซ้อน)
+        if last_sent_buf == buf and elapsed < 1.5:
+            return True
+
+        # ป้องกันการส่งเฟรมติดกันเกินไป (ต้องรอให้ STM32 รัน oled.display() 200ms ให้เสร็จสิ้นก่อน)
+        if elapsed < 0.6:
+            time.sleep(0.6 - elapsed)
+
         try:
             mcu_sock.sendall(b'FRAME_START\n')
             time.sleep(initial_wait)  # หน่วงเวลาให้ STM32 ตื่นจาก delay(120) และเข้าสู่ handleFrameReceive()
@@ -359,6 +371,8 @@ def send_bitmap_to_mcu(buf, initial_wait=0.20):
                 time.sleep(0.008)  # 8ms pacing ป้องกัน UART FIFO เต็ม 100%
             time.sleep(0.03)
             mcu_sock.sendall(b'FRAME_END\n')
+            last_frame_sent_time = time.time()
+            last_sent_buf = buf
             return True
         except Exception as e:
             print(f'❌ [Bitmap] ส่งภาพล้มเหลว: {e}')
@@ -595,8 +609,19 @@ def mcu_reader_thread():
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
-                # ฉ) เมื่อเซนเซอร์พร้อมใช้งาน / กลับสู่หน้าหลัก
-                elif line == 'EVENT:IDLE' or line == 'STATUS:R307_READY':
+                # ฉ.1) เมื่อเซนเซอร์เปิดเครื่องตอนบู๊ต (Boot sequence): STM32 จะหน่วง 1500ms แล้วเรียก showIdleScreen()
+                elif line == 'STATUS:R307_READY':
+                    print('⚡ [Local Engine] เซนเซอร์พร้อมทำงาน รอ STM32 เสร็จสิ้นขั้นตอน Boot (2.0s)...')
+                    if sio.connected:
+                        sio.emit('bridge_serial_data', line)
+                    def send_after_boot():
+                        time.sleep(2.0)
+                        print('⚡ [Local Engine] ส่งหน้าจอพร้อมใช้งานภาษาไทยหลัง Boot สมบูรณ์')
+                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30)
+                    threading.Thread(target=send_after_boot, daemon=True).start()
+
+                # ฉ.2) เมื่อกลับสู่หน้าจอพร้อมใช้งานตามปกติ (หลังสแกนนิ้ว / กดยกเลิก / หมดเวลา)
+                elif line == 'EVENT:IDLE':
                     print('⚡ [Local Engine] กลับสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
                     time.sleep(0.20)  # หน่วงเวลา 200ms รอให้ STM32 รัน showIdleScreen() เสร็จ
                     send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
@@ -730,8 +755,15 @@ if __name__ == '__main__':
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)
     t.start()
+
+    # 3. Boot Watchdog: ตรวจสอบและส่งหน้าจอภาษาไทยรอบแรกหลังเปิดเครื่อง
+    def boot_sync_watchdog():
+        time.sleep(3.5)
+        print('🚀 [Local Engine] Watchdog: ส่งหน้าจอภาษาไทยรอบแรกหลังบู๊ตเครื่องสมบูรณ์')
+        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30)
+    threading.Thread(target=boot_sync_watchdog, daemon=True).start()
     
-    # 3. เชื่อมต่อ Render Cloud ในลูปหลัก
+    # 4. เชื่อมต่อ Render Cloud ในลูปหลัก
     while True:
         try:
             sio.connect(RENDER_URL, wait_timeout=15)

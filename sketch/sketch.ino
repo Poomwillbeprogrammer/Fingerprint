@@ -1035,6 +1035,7 @@ void setup() {
   delay(1500);
 
   showIdleScreen();
+  Serial.println("EVENT:IDLE");
 }
 
 bool handleFrameReceive() {
