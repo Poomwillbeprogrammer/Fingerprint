@@ -229,7 +229,10 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         <div class="w-7 h-7 rounded-full ${isGranted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} flex items-center justify-center text-xs">
           <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
         </div>
-        <span>${log.user_name || 'Unknown User'}</span>
+        <div>
+          <div>${log.user_name || 'Unknown User'}</div>
+          ${log.schedule ? `<div class="text-[10px] text-cyan-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-chalkboard-user text-[9px]"></i><span>${log.schedule.short_name} [${log.schedule.class_type}]</span><span class="${log.attendance_status === 'ON_TIME' ? 'text-emerald-400' : 'text-amber-400'} font-semibold">(${log.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'})</span></div>` : ''}
+        </div>
       </td>
       <td class="px-5 py-3.5 font-mono text-xs text-cyan-400 font-semibold">${log.fingerprint_id > 0 ? '#' + log.fingerprint_id : '-'}</td>
       <td class="px-5 py-3.5">

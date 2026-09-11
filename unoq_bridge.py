@@ -4,6 +4,7 @@ import time
 import sys
 import json
 import os
+import datetime
 import socketio
 from PIL import Image, ImageDraw, ImageFont
 
@@ -11,10 +12,16 @@ RENDER_URL = sys.argv[1] if len(sys.argv) > 1 else 'https://fingerprint-hrkp.onr
 LOCAL_PORT = 7500
 FONT_PATH = '/home/arduino/tahoma.ttf'
 CACHE_FILE = '/home/arduino/users_cache.json'
+SCHEDULES_CACHE_FILE = '/home/arduino/schedules_cache.json'
+
+if not os.path.exists('/home/arduino'):
+    CACHE_FILE = os.path.join(os.path.dirname(__file__), 'users_cache.json')
+    SCHEDULES_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'schedules_cache.json')
 
 sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
 users_cache = {}
+schedules_cache = []
 
 # 1. โหลดฟอนต์ภาษาไทยแท้
 try:
@@ -95,8 +102,8 @@ def render_denied_screen():
 
     return img_to_oled_buf(img)
 
-# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - รอยืนยันด้วยปุ่มกด)
-def render_user_card(student_id, name):
+# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - พร้อมข้อมูลวิชาและสถานะเข้าเรียน)
+def render_user_card(student_id, name, sched_info=None):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
@@ -107,29 +114,45 @@ def render_user_card(student_id, name):
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 16), (125, 16)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
+    # ข้อมูลนักศึกษา
     stu_str = student_id if student_id else '-'
-    d.text((8, 18), f'ID: {stu_str}', font=font_id, fill=1)
+    display_name = name or 'Unknown'
+    stu_line = f"{stu_str} {display_name}"
+    if len(stu_line) > 18:
+        stu_line = stu_line[:17] + '..'
+    d.text((5, 16), stu_line, font=font_small, fill=1)
 
-    display_name = name or 'Unknown Student'
-    name_f = font_name
-    bb = d.textbbox((0, 0), display_name, font=name_f)
-    if (bb[2] - bb[0]) > 112:
-        name_f = font_name_sm
-    d.text((8, 31), display_name, font=name_f, fill=1)
+    # ข้อมูลคาบเรียนและสถานะ
+    sched = sched_info.get('schedule') if sched_info else None
+    att_status = sched_info.get('attendanceStatus', 'OUT_OF_SCHEDULE') if sched_info else 'OUT_OF_SCHEDULE'
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    if sched:
+        short_name = sched.get('short_name') or sched.get('subject_name', 'Class')
+        class_type = sched.get('class_type', 'T')
+        subj_line = f"{short_name} [{class_type}]"
+        if len(subj_line) > 20:
+            subj_line = subj_line[:19] + '..'
+        d.text((5, 27), subj_line, font=font_small, fill=1)
 
-    prompt = '[ D2:ยืนยัน | D3:สแกนใหม่ ]'
+        status_tag = '[ทันเวลา]' if att_status == 'ON_TIME' else '[มาสาย]'
+        d.text((5, 38), f"สถานะ: {status_tag}", font=font_small, fill=1)
+    else:
+        d.text((5, 27), "นอกเวลาเรียน (General)", font=font_small, fill=1)
+        d.text((5, 38), "สถานะ: [บันทึกทั่วไป]", font=font_small, fill=1)
+
+    d.line([(2, 49), (125, 49)], fill=1)
+
+    prompt = '[ D2:ยืนยัน | D3:สแกน ]'
     bb = d.textbbox((0, 0), prompt, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((128 - sw) // 2, 49), prompt, font=font_small, fill=1)
+    d.text(((128 - sw) // 2, 51), prompt, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
 # 5.1 เรนเดอร์หน้าจอยืนยันสำเร็จ (Confirm Success Screen)
-def render_confirm_success(student_id, name):
+def render_confirm_success(student_id, name, sched_info=None):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
@@ -139,24 +162,66 @@ def render_confirm_success(student_id, name):
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 16), (125, 16)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
     stu_str = student_id if student_id else '-'
-    d.text((8, 18), f'ID: {stu_str}', font=font_id, fill=1)
+    display_name = name or 'Unknown'
+    stu_line = f"{stu_str} {display_name}"
+    if len(stu_line) > 18:
+        stu_line = stu_line[:17] + '..'
+    d.text((5, 16), stu_line, font=font_small, fill=1)
 
-    display_name = name or 'Unknown Student'
-    name_f = font_name
-    bb = d.textbbox((0, 0), display_name, font=name_f)
-    if (bb[2] - bb[0]) > 112:
-        name_f = font_name_sm
-    d.text((8, 31), display_name, font=name_f, fill=1)
+    sched = sched_info.get('schedule') if sched_info else None
+    if sched:
+        short_name = sched.get('short_name') or sched.get('subject_name', 'Class')
+        class_type = sched.get('class_type', 'T')
+        subj_line = f"{short_name} [{class_type}]"
+        if len(subj_line) > 20:
+            subj_line = subj_line[:19] + '..'
+        d.text((5, 27), subj_line, font=font_small, fill=1)
+    else:
+        d.text((5, 27), "นอกเวลาเรียน (General)", font=font_small, fill=1)
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    d.line([(2, 49), (125, 49)], fill=1)
 
     status = 'บันทึกเวลาสำเร็จ (OK)'
     bb = d.textbbox((0, 0), status, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((128 - sw) // 2, 49), status, font=font_small, fill=1)
+    d.text(((128 - sw) // 2, 51), status, font=font_small, fill=1)
+
+    return img_to_oled_buf(img)
+
+# 5.1.1 เรนเดอร์หน้าจอแจ้งเตือนลงเวลาซ้ำ (Already Checked In Screen)
+def render_already_checked_in(name, subject_str):
+    img = Image.new('1', (128, 64), 0)
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, 127, 63], outline=1)
+    
+    title = 'แจ้งเตือนการลงเวลา'
+    bb = d.textbbox((0, 0), title, font=font_title)
+    tw = bb[2] - bb[0]
+    d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
+
+    d.line([(2, 14), (125, 14)], fill=1)
+
+    body1 = 'คุณได้ลงเวลาคาบนี้แล้ว'
+    bb = d.textbbox((0, 0), body1, font=font_small)
+    w1 = bb[2] - bb[0]
+    d.text(((128 - w1) // 2, 18), body1, font=font_small, fill=1)
+
+    subj = subject_str or 'วิชาปัจจุบัน'
+    if len(subj) > 18:
+        subj = subj[:17] + '..'
+    bb = d.textbbox((0, 0), subj, font=font_small)
+    w2 = bb[2] - bb[0]
+    d.text(((128 - w2) // 2, 31), subj, font=font_small, fill=1)
+
+    d.line([(2, 49), (125, 49)], fill=1)
+
+    footer = '(ไม่บันทึกเวลาซ้ำ)'
+    bb = d.textbbox((0, 0), footer, font=font_small)
+    fw = bb[2] - bb[0]
+    d.text(((128 - fw) // 2, 51), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -266,6 +331,71 @@ def save_cache(user_list):
     except Exception as e:
         print(f'⚠️ [Local Cache] บันทึกไฟล์แคชล้มเหลว: {e}')
 
+# 7.1 จัดการ Local Cache ตารางเรียนห้อง ทค.1-101
+def load_schedules_cache():
+    global schedules_cache
+    if os.path.exists(SCHEDULES_CACHE_FILE):
+        try:
+            with open(SCHEDULES_CACHE_FILE, 'r', encoding='utf-8-sig') as f:
+                schedules_cache = json.load(f)
+                print(f'📅 [Local Cache] โหลดตารางเรียนสำเร็จ: {len(schedules_cache)} คาบ')
+        except Exception as e:
+            print(f'⚠️ [Local Cache] โหลดไฟล์ตารางเรียนล้มเหลว: {e}')
+
+def save_schedules_cache(sched_list):
+    global schedules_cache
+    try:
+        schedules_cache = sched_list
+        with open(SCHEDULES_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(sched_list, f, ensure_ascii=False, indent=2)
+        print(f'💾 [Local Cache] บันทึกตารางเรียนออฟไลน์สำเร็จ: {len(schedules_cache)} คาบ')
+    except Exception as e:
+        print(f'⚠️ [Local Cache] บันทึกตารางเรียนล้มเหลว: {e}')
+
+# คำนวณคาบเรียนที่กำลังใช้งานในเวลาปัจจุบัน (UTC+7 Bangkok)
+def get_active_schedule():
+    global schedules_cache
+    if not schedules_cache:
+        return {'schedule': None, 'attendanceStatus': 'OUT_OF_SCHEDULE'}
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    thai_now = now_utc + datetime.timedelta(hours=7)
+    day_of_week = thai_now.isoweekday() # 1=Mon ... 7=Sun
+    current_minutes = thai_now.hour * 60 + thai_now.minute
+
+    today_schedules = [s for s in schedules_cache if s.get('day_of_week') == day_of_week and s.get('is_active', True)]
+
+    def parse_min(t_str):
+        parts = t_str.split(':')
+        return int(parts[0]) * 60 + int(parts[1])
+
+    # กฎ 1 & 2: สแกนล่วงหน้า 15 นาที และส่งต่อคาบต่อเนื่อง (Priority ให้คาบใหม่)
+    for s in today_schedules:
+        start_m = parse_min(s['start_time'])
+        if (start_m - 15) <= current_minutes < start_m:
+            return {
+                'schedule': s,
+                'attendanceStatus': 'ON_TIME',
+                'isEarly': True,
+                'timeStr': f"{thai_now.hour:02d}:{thai_now.minute:02d}"
+            }
+
+    # คาบเรียนที่กำลังดำเนินการอยู่
+    for s in today_schedules:
+        start_m = parse_min(s['start_time'])
+        end_m = parse_min(s['end_time'])
+        if start_m <= current_minutes < end_m:
+            late_threshold = start_m + s.get('late_threshold_mins', 15)
+            is_late = current_minutes > late_threshold
+            return {
+                'schedule': s,
+                'attendanceStatus': 'LATE' if is_late else 'ON_TIME',
+                'isEarly': False,
+                'timeStr': f"{thai_now.hour:02d}:{thai_now.minute:02d}"
+            }
+
+    return {'schedule': None, 'attendanceStatus': 'OUT_OF_SCHEDULE'}
+
 # 8. เชื่อมต่อ STM32 Microcontroller ผ่าน Local Socket 7500
 def connect_mcu():
     global mcu_sock
@@ -317,18 +447,19 @@ def mcu_reader_thread():
                     
                     mapped_user_id = (slot_id - 1) // 3 + 1 if slot_id > 0 else 0
                     user = users_cache.get(mapped_user_id) or users_cache.get(slot_id)
+                    sched_info = get_active_schedule()
                     if user:
                         stu_id = user.get('student_id', '-')
                         name = user.get('name', 'Unknown')
                         print(f'⚡ [Local Engine] สแกนติด Slot #{slot_id} -> User ID #{mapped_user_id}: {name} ({stu_id}) รอกดปุ่ม D2/D3')
-                        card_buf = render_user_card(stu_id, name)
+                        card_buf = render_user_card(stu_id, name, sched_info)
                     else:
                         print(f'⚡ [Local Engine] Slot #{slot_id} (User #{mapped_user_id}) ไม่อยู่ในแคช -> ร้องขอแคชใหม่')
                         try:
                             sio.emit('get_users_cache')
                         except:
                             pass
-                        card_buf = render_user_card(f'Slot #{slot_id}', 'Registered User')
+                        card_buf = render_user_card(f'Slot #{slot_id}', 'Registered User', sched_info)
                     
                     send_bitmap_to_mcu(card_buf)
                     # หมายเหตุ: ไม่ส่งบันทึกเวลาขึ้น Cloud ตรงนี้ เพราะต้องรอปุ่ม D2 ก่อน
@@ -348,8 +479,9 @@ def mcu_reader_thread():
                     user = users_cache.get(mapped_user_id) or users_cache.get(slot_id)
                     stu_id = user.get('student_id', '-') if user else f'#{slot_id}'
                     name = user.get('name', 'Unknown') if user else 'Registered User'
+                    sched_info = get_active_schedule()
                     print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
-                    success_buf = render_confirm_success(stu_id, name)
+                    success_buf = render_confirm_success(stu_id, name, sched_info)
                     send_bitmap_to_mcu(success_buf)
 
                     if sio.connected:
@@ -405,8 +537,9 @@ def mcu_reader_thread():
 def connect():
     print(f'☁️ [Cloud] เชื่อมต่อกับ Render สำเร็จ: {RENDER_URL} (SID: {sio.sid})')
     sio.emit('register_bridge')
-    # ขอดึงแคชรายชื่อล่าสุดทันที
+    # ขอดึงแคชรายชื่อและตารางเรียนล่าสุดทันที
     sio.emit('get_users_cache')
+    sio.emit('get_schedules_cache')
 
 @sio.event
 def disconnect():
@@ -417,6 +550,35 @@ def on_sync_users_cache(data):
     if isinstance(data, list):
         print(f'📥 [Cloud] ได้รับอัปเดตแคชรายชื่อนักศึกษา {len(data)} คน')
         save_cache(data)
+
+@sio.on('sync_schedules_cache')
+def on_sync_schedules_cache(data):
+    if isinstance(data, list):
+        print(f'📅 [Cloud] ได้รับอัปเดตตารางเรียน {len(data)} คาบ')
+        save_schedules_cache(data)
+
+@sio.on('schedules_updated')
+def on_schedules_updated(data):
+    if isinstance(data, list):
+        print(f'🔄 [Cloud] ได้รับแจ้งเตือนตารางเรียนอัปเดต: {len(data)} คาบ')
+        save_schedules_cache(data)
+
+@sio.on('already_checked_in')
+def on_already_checked_in(data):
+    print(f'⚠️ [Cloud] แจ้งเตือน: คุณได้ลงเวลาคาบนี้แล้ว ({data.get("user_name")})')
+    user_name = data.get('user_name', '')
+    sched = data.get('schedule') or {}
+    short_name = sched.get('short_name') or sched.get('subject_name', 'คาบเรียน')
+    class_type = sched.get('class_type', '')
+    type_suffix = f" [{class_type}]" if class_type else ""
+    warn_buf = render_already_checked_in(user_name, f"{short_name}{type_suffix}")
+    send_bitmap_to_mcu(warn_buf)
+
+    # ค้างหน้าจอแจ้งเตือน 3 วินาที แล้วกลับสู่หน้าจอพร้อมใช้งาน
+    def return_idle():
+        time.sleep(3.0)
+        send_bitmap_to_mcu(IDLE_BITMAP)
+    threading.Thread(target=return_idle, daemon=True).start()
 
 @sio.on('user_updated')
 def on_user_updated(data=None):
@@ -449,6 +611,7 @@ if __name__ == '__main__':
     
     # 1. โหลดแคชเดิมที่มีในเครื่อง
     load_cache()
+    load_schedules_cache()
 
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)

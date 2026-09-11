@@ -9,6 +9,9 @@ const path = require('path');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { dbAsync, initDatabase } = require('./database');
+const schedulesManager = require('./schedules_manager');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 const app = express();
 const server = http.createServer(app);
@@ -54,6 +57,17 @@ async function broadcastUsersCache() {
     console.log(`📦 [Sync Cache] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ให้ทุก Client แล้ว`);
   } catch (err) {
     console.error('Error broadcasting users cache:', err);
+  }
+}
+
+// บรอดแคสต์ตารางเรียนให้ทุก Bridge และ Client
+function broadcastSchedulesCache() {
+  try {
+    const schedules = schedulesManager.getAllSchedules();
+    io.emit('sync_schedules_cache', schedules || []);
+    console.log(`📅 [Sync Schedules] ส่งตารางเรียน (${schedules.length} คาบ) ให้ทุก Client แล้ว`);
+  } catch (err) {
+    console.error('Error broadcasting schedules cache:', err);
   }
 }
 
@@ -338,6 +352,49 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       }
     }
 
+    // ตรวจสอบตารางการใช้ห้องเรียน (Room Timetable Schedule Matching)
+    const activeSchedInfo = schedulesManager.getActiveSchedule();
+    const currentSchedule = activeSchedInfo.schedule;
+    const attendanceStatus = activeSchedInfo.attendanceStatus; // 'ON_TIME', 'LATE', or 'OUT_OF_SCHEDULE'
+    const thaiDateNow = new Date(Date.now() + 7 * 3600000);
+    const todayStr = thaiDateNow.toISOString().split('T')[0];
+    const timeStr = `${String(thaiDateNow.getHours()).padStart(2, '0')}:${String(thaiDateNow.getMinutes()).padStart(2, '0')}:${String(thaiDateNow.getSeconds()).padStart(2, '0')}`;
+
+    if (isGranted && currentSchedule && userId) {
+      // ตรวจสอบว่าเคยสแกนในคาบนี้ของวันนี้แล้วหรือไม่ (ป้องกันลงเวลาซ้ำ)
+      const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, currentSchedule.id, todayStr);
+      if (alreadyCheckedIn) {
+        console.log(`⚠️ [Room Schedule] ${userName} [${studentId}] ได้ลงเวลาในคาบ "${currentSchedule.subject_name}" แล้วในวันนี้`);
+        io.emit('already_checked_in', {
+          user_id: userId,
+          user_name: userName,
+          student_id: studentId,
+          schedule: currentSchedule,
+          message: 'คุณได้ลงเวลาคาบนี้แล้ว'
+        });
+        return; // ไม่บันทึกซ้ำ รักษาเวลาเดิมที่ลงไว้
+      }
+
+      // บันทึกลงระบบบันทึกเวลาเรียนประจำคาบ
+      const sessionRecord = schedulesManager.recordSessionAttendance({
+        schedule_id: currentSchedule.id,
+        subject_code: currentSchedule.subject_code,
+        subject_name: currentSchedule.subject_name,
+        short_name: currentSchedule.short_name,
+        class_type: currentSchedule.class_type,
+        user_id: userId,
+        student_id: studentId,
+        user_name: userName,
+        fingerprint_id: fingerprint_id || 0,
+        date: todayStr,
+        time: timeStr,
+        timestamp: `${todayStr} ${timeStr}`,
+        attendance_status: attendanceStatus,
+        score: score || 0
+      });
+      io.emit('session_attendance_update', sessionRecord);
+    }
+
     const insertResult = await dbAsync.run(`
       INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
       VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
@@ -352,11 +409,21 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       status: isGranted ? 'GRANTED' : 'DENIED',
       score: score || 0,
       tier: tier,
+      schedule: currentSchedule ? {
+        id: currentSchedule.id,
+        subject_code: currentSchedule.subject_code,
+        subject_name: currentSchedule.subject_name,
+        short_name: currentSchedule.short_name,
+        class_type: currentSchedule.class_type,
+        time_display: currentSchedule.time_display,
+        attendance_status: attendanceStatus
+      } : null,
+      attendance_status: currentSchedule ? attendanceStatus : 'OUT_OF_SCHEDULE',
       timestamp: new Date().toISOString()
     };
 
     io.emit('new_log', newLogEntry);
-    console.log(`🔔 [Access Log] ${userName} [${studentId}] (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score})`);
+    console.log(`🔔 [Access Log] ${userName} [${studentId}] (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score}${currentSchedule ? ` | ${currentSchedule.short_name} [${currentSchedule.class_type}] ${attendanceStatus}` : ''})`);
   } catch (err) {
     console.error('Error in processScanEvent:', err);
   }
@@ -865,6 +932,72 @@ app.get('/api/stats', authRequired, async (req, res) => {
 });
 
 // ==========================================
+// 4.1 Room Timetable & Attendance Routes
+// ==========================================
+app.get('/api/schedules', (req, res) => {
+  try {
+    const schedules = schedulesManager.getAllSchedules();
+    res.json(schedules);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/schedules/current', (req, res) => {
+  try {
+    const current = schedulesManager.getActiveSchedule();
+    res.json(current);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/schedules/:id/attendance', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date } = req.query;
+    const summary = schedulesManager.getSessionAttendance(id, date);
+    res.json(summary);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/schedules/:id/export-excel', (req, res) => {
+  try {
+    const { id } = req.params;
+    const { date } = req.query;
+    const excelBuffer = schedulesManager.exportAttendanceExcel(id, date);
+    const filename = `attendance_schedule_${id}_${date || 'all'}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(excelBuffer);
+  } catch (err) {
+    console.error('Error exporting excel:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/schedules/import-excel', authRequired, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'กรุณาเลือกไฟล์ Excel (.xlsx) ที่ต้องการนำเข้า' });
+    }
+    const parsed = schedulesManager.parseExcelData(req.file.buffer);
+    if (!parsed || parsed.length === 0) {
+      return res.status(400).json({ error: 'ไม่พบข้อมูลตารางเรียนในไฟล์ Excel หรือรูปแบบไม่ถูกต้อง' });
+    }
+    const saved = schedulesManager.saveImportedSchedules(parsed);
+    io.emit('schedules_updated', saved);
+    io.emit('sync_schedules_cache', saved);
+    res.json({ success: true, count: saved.length, schedules: saved });
+  } catch (err) {
+    console.error('Error importing excel:', err);
+    res.status(500).json({ error: 'เกิดข้อผิดพลาดในการนำเข้าไฟล์ Excel: ' + err.message });
+  }
+});
+
+// ==========================================
 // 5. IoT Device Endpoints & Biometric Backup/Restore
 // ==========================================
 app.get('/api/device/serial-status', (req, res) => {
@@ -1101,11 +1234,12 @@ io.on('connection', (socket) => {
     console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id})`);
     io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
 
-    // ส่งแคชรายชื่อนักศึกษาให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
+    // ส่งแคชรายชื่อนักศึกษาและตารางเรียนให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
     try {
       const users = await dbAsync.all('SELECT id, name, student_id FROM users');
       socket.emit('sync_users_cache', users || []);
-      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ไปยังบอร์ดแล้ว`);
+      socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) และตารางเรียน (${schedulesManager.getAllSchedules().length} คาบ) ไปยังบอร์ดแล้ว`);
     } catch (err) {
       console.error('Error sending users cache to bridge:', err);
     }
@@ -1127,6 +1261,15 @@ io.on('connection', (socket) => {
       socket.emit('sync_users_cache', users || []);
     } catch (err) {
       console.error('Error in get_users_cache:', err);
+    }
+  });
+
+  // บอร์ดร้องขอแคชตารางเรียน
+  socket.on('get_schedules_cache', () => {
+    try {
+      socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+    } catch (err) {
+      console.error('Error in get_schedules_cache:', err);
     }
   });
 
