@@ -1,7 +1,7 @@
 # 🌟 IoT Biometric Attendance System (Arduino UNO Q)
-> **ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT) พร้อมการเรนเดอร์ภาษาไทยระดับความละเอียดสูง และระบบยืนยันตัวตนแบบ 2 ขั้นตอน**
+> **ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT) พร้อมการเรนเดอร์ภาษาไทยระดับความละเอียดสูง ระบบยืนยันตัวตน 2 ขั้นตอน และการจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)**
 
-โปรเจกต์นี้เป็นการพัฒนาระบบลงเวลาด้วยลายนิ้วมือที่ใช้สถาปัตยกรรมประมวลผลร่วม **Heterogeneous Dual-Core (STM32 MCU + Linux SoC ARM64)** บนบอร์ด **Arduino UNO Q** ร่วมกับเซนเซอร์ลายนิ้วมือแบบ Optical (R307), หน้าจอแสดงผล OLED SH1106, ปุ่มกดฮาร์ดแวร์ยืนยันตัวตน (D2/D3), และระบบจัดการผ่าน Cloud Web Application (Node.js + Express + Supabase PostgreSQL)
+โปรเจกต์นี้เป็นการพัฒนาระบบลงเวลาด้วยลายนิ้วมือที่ใช้สถาปัตยกรรมประมวลผลร่วม **Heterogeneous Dual-Core (STM32 MCU + Linux SoC ARM64)** บนบอร์ด **Arduino UNO Q** ร่วมกับเซนเซอร์ลายนิ้วมือแบบ Optical (R307), หน้าจอแสดงผล OLED SH1106, ปุ่มกดฮาร์ดแวร์ยืนยันตัวตน (ปุ่มฟ้า D2 / ปุ่มแดง D3), และระบบจัดการผ่าน Cloud Web Application (Node.js + Express + Supabase PostgreSQL)
 
 ---
 
@@ -19,14 +19,24 @@
 ## ✨ จุดเด่นและฟังก์ชันหลัก (Key Features)
 
 * **🇹🇭 Offloaded TrueType Thai Typography:** แก้ปัญหาข้อจำกัดของไมโครคอนโทรลเลอร์ โดยให้ฝั่ง Linux SoC บนบอร์ดประมวลผลเรนเดอร์ภาษาไทยด้วยเวกเตอร์ฟอนต์ TrueType (`tahoma.ttf`) จัดระยะสระ-วรรณยุกต์ได้อย่างสมบูรณ์แบบ แล้วส่งเป็นภาพ Monochrome Bitmap (128x64) ไปเปิดบนจอ OLED
-* **🔒 2-Step Physical Confirmation (Anti-Spoofing):** หลังแตะนิ้วผ่าน หน้าจอจะแสดงชื่อและรหัสนักศึกษา พร้อมรอยืนยันจากปุ่มกดจริง:
-  * **ปุ่ม D2 (Confirm):** กดยืนยันเพื่อบันทึกเวลาลงฐานข้อมูล Cloud
-  * **ปุ่ม D3 (Rescan):** กดยกเลิกและสแกนใหม่ทันที (หากลายนิ้วมือไม่ตรงกับตัวจริง)
+* **🏫 Multi-Room Timetable & Dynamic Room Synchronization:**
+  * รองรับการจัดการตารางสอนแยกรายห้อง (เช่น ทค.1-101, ทค.2-101) พร้อมระบบนำเข้าไฟล์ Excel (.xlsx) และ Smart Room Detection อัตโนมัติ
+  * ผู้ดูแลสามารถสลับห้องที่ใช้งานของเครื่อง Uno Q ได้แบบเรียลไทม์จาก Web Dashboard ผ่านอีเวนต์ `sync_device_room`
+  * หน้าจอหลัก (Idle Screen) ของเครื่องจะแสดงแถบล่างระบุชื่อห้องปัจจุบัน เช่น `[ ทค.2-101 ] พร้อมใช้งาน` คมชัดตลอดเวลา
+* **🔒 2-Step Physical Confirmation (Anti-Spoofing):** หลังแตะนิ้วผ่าน หน้าจอจะแสดงชื่อ-นามสกุลภาษาไทยเต็มบรรทัด (11pt Bold) พร้อมรอยืนยันจากปุ่มกดจริง:
+  * **ปุ่มฟ้า D2 (Confirm):** กดยืนยันเพื่อบันทึกเวลาลงวิชาที่กำลังเรียนอยู่ในห้องนั้น
+  * **ปุ่มแดง D3 (Rescan):** กดยกเลิกและสแกนใหม่ทันที (หากลายนิ้วมือไม่ตรงกับตัวจริง)
   * **Auto-Cancel (10 วินาที):** หากไม่มีการกดปุ่มใด ๆ ภายใน 10 วินาที ระบบจะยกเลิกอัตโนมัติ เพื่อป้องกันการสวมสิทธิ์
+* **🛡️ Local Attendance Cache & Anti-Storm Engine:**
+  * มีระบบแคชการลงเวลาประจำวันบนบอร์ด (`attendance_cache.json`) เมื่อกดยืนยันซ้ำ ระบบจะไม่ส่งเฟรมภาพซ้ำซ้อน ช่วยขจัดปัญหา UART Buffer Overflow
+  * กลไก Frame Pacing หน่วงเวลาส่งเฟรมภาพอย่างน้อย 600ms และ Bitmap Hash Deduplication ป้องกันการชนกันของคำสั่งบนบัสสื่อสาร
+* **🔄 Zero-Hang State Recovery:**
+  * **Initial Boot Watchdog (3.5s):** ป้องกันปัญหาหน้าจอค้างที่ "READY FOR SCAN" เมื่อเปิดเครื่องครั้งแรก ด้วยการตรวจจับ `EVENT:IDLE` จาก MCU และรีเฟรชหน้าจอ Idle พร้อมชื่อห้องโดยอัตโนมัติ
+  * **Access Denied Auto-Recovery:** เมื่อสแกนลายนิ้วมือที่ไม่ตรงกับฐานข้อมูล (`EVENT:NO_MATCH`) หน้าจอจะแสดงข้อความแจ้งเตือนภาษาไทยเป็นเวลา 3 วินาที แล้วสลับกลับสู่หน้าจอ Idle พร้อมใช้งานทันที
 * **🖐️ 3-Finger Biometric Redundancy:** ผู้ใช้ 1 คนสามารถลงทะเบียนลายนิ้วมือได้ 3 นิ้ว (เช่น นิ้วโป้ง, นิ้วชี้, นิ้วกลาง) เพื่อป้องกันปัญหานิ้วเปียกหรือถลอก รองรับผู้ใช้ได้สูงสุด 100 คน (300 Slots)
 * **🚫 Hardware Duplicate Fingerprint Check:** ตรวจสอบลายนิ้วมือซ้ำตั้งแต่ขั้นตอนแรกของการลงทะเบียน หากนิ้วนั้นมีในระบบอยู่แล้ว เซนเซอร์จะปฏิเสธทันที และหน้าเว็บจะแจ้งเตือนพร้อมแสดงชื่อผู้ครอบครองลายนิ้วมือนั้น
 * **🧹 Full Auto-Rollback:** หากการลงทะเบียนลายนิ้วมือไม่ครบทั้ง 3 นิ้ว หรือผู้ใช้กดยกเลิกกลางคัน ระบบจะล้าง Slot ในเซนเซอร์ R307 และสั่งลบแถวข้อมูลใน Cloud Database ทันที 100% ป้องกันการเกิดข้อมูลขยะ (Orphan Records)
-* **⚡ Offline-First Architecture:** ฝั่งบอร์ดมีหน่วยความจำแคช (`users_cache.json`) ทำให้สามารถสแกน ระบุชื่อ และเรนเดอร์ผลลัพธ์ขึ้นจอได้ภายในเวลา < 1ms แม้ไม่มีสัญญาณอินเทอร์เน็ต
+* **⚡ Offline-First Architecture:** ฝั่งบอร์ดมีหน่วยความจำแคชรายชื่อ (`users_cache.json`) และห้องประจำการ ทำให้สามารถสแกน ระบุชื่อ และเรนเดอร์ผลลัพธ์ขึ้นจอได้ภายในเวลา < 1ms แม้ไม่มีสัญญาณอินเทอร์เน็ต
 
 ---
 
@@ -38,13 +48,13 @@ flowchart TD
         subgraph STM32 ["STM32U585 MCU (Zephyr OS)"]
             R307["เซนเซอร์ลายนิ้วมือ R307<br/>(Serial1: Pins 0/1)"]
             OLED["จอ OLED SH1106 1.3 นิ้ว<br/>(Software I2C: A4/A5)"]
-            BTN["ปุ่มกดฮาร์ดแวร์ D2/D3<br/>(Internal Pullup)"]
+            BTN["ปุ่มกดฮาร์ดแวร์ ปุ่มฟ้า D2 / ปุ่มแดง D3<br/>(Internal Pullup)"]
         end
 
         subgraph Linux_SoC ["Linux SoC (Debian ARM64)"]
             Bridge["unoq_bridge.py<br/>(Python 3.13 + Pillow)"]
             Font["Vector Font: tahoma.ttf"]
-            LocalCache["Local Cache: users_cache.json"]
+            LocalCache["Local Cache:<br/>users_cache.json<br/>attendance_cache.json<br/>active_room.json"]
         end
 
         STM32 <== "Internal UART /dev/ttyHS1<br/>(TCP Port 7500 @ 115200 bps)" ==> Linux_SoC
@@ -53,7 +63,7 @@ flowchart TD
     subgraph Cloud ["Cloud Infrastructure"]
         Server["Node.js Express Server<br/>(Deploy บน Render Cloud)"]
         DB[(Supabase PostgreSQL<br/>Cloud Database)]
-        WebUI["Web Management Dashboard<br/>(Tailwind CSS + Socket.IO)"]
+        WebUI["Web Management Dashboard<br/>(Rooms, Users, Schedules, Logs)"]
     end
 
     Linux_SoC <== "WebSocket (Socket.IO Client)" ==> Server
@@ -82,10 +92,10 @@ flowchart TD
 | **SCL** | **Pin A5** | ขาสัญญาณ Clock (Software I2C) |
 
 ### 3. ปุ่มกดยืนยันการลงเวลา (Push Buttons - Active LOW)
-| ปุ่มกด | ฟังก์ชัน | ขาบน Arduino UNO Q | โหมดขาพิน (Firmware) |
-| :--- | :--- | :--- | :--- |
-| **Button 1** | **Confirm (ยืนยัน)** | **Pin D2** ต่อลง **GND** | `INPUT_PULLUP` (กด = LOW) |
-| **Button 2** | **Rescan (สแกนใหม่)** | **Pin D3** ต่อลง **GND** | `INPUT_PULLUP` (กด = LOW) |
+| ปุ่มกด | ฟังก์ชัน | ขาบน Arduino UNO Q | โหมดขาพิน (Firmware) | การแสดงผลบนจอ |
+| :--- | :--- | :--- | :--- | :--- |
+| **Button 1 (สีฟ้า)** | **Confirm (ยืนยัน)** | **Pin D2** ต่อลง **GND** | `INPUT_PULLUP` (กด = LOW) | `ปุ่มฟ้า:ยืนยัน` |
+| **Button 2 (สีแดง)** | **Rescan (สแกนใหม่/ยกเลิก)** | **Pin D3** ต่อลง **GND** | `INPUT_PULLUP` (กด = LOW) | `ปุ่มแดง:สแกน` |
 
 ---
 
@@ -98,6 +108,7 @@ flowchart TD
   * มีความยาวแต่ละบรรทัดเพียง **46 ตัวอักษร** (ไม่เกิน 64 ไบต์)
   * กำหนด **Pacing Delay 6ms** ระหว่างชิ้น
   * ทำงานในโหมด **Quiet UART** (STM32 จะไม่ส่งข้อมูลสวนกลับมาจนกว่าจะจบเฟรม)
+  * กำหนดระยะห่างระหว่างการสลับหน้าจอ (Frame Gap) อย่างน้อย **600ms** และข้ามการส่งภาพเดิมซ้ำ (Deduplication)
 
 ### 2. รหัสคำสั่งสำคัญระหว่าง Linux และ MCU (Serial Command Set)
 | คำสั่ง / รูปแบบ | ทิศทาง | หน้าที่ |
@@ -107,8 +118,11 @@ flowchart TD
 | `DELETE <slot>` | Server $\rightarrow$ MCU | ลบลายนิ้วมือออกจากเซนเซอร์ R307 |
 | `BACKUP <slot>` | Server $\rightarrow$ MCU | ดึงข้อมูล Template (512 ไบต์) ออกมาสำรองลง Cloud |
 | `RESTORE <slot> <data>` | Server $\rightarrow$ MCU | กู้คืน Template จาก Cloud เขียนกลับลงหน่วยความจำเซนเซอร์ |
-| `EVENT:CONFIRMED ID=<slot> SCORE=<val>` | MCU $\rightarrow$ Server | ผู้ใช้กดยืนยันปุ่ม D2 $\rightarrow$ บันทึกเวลาลงฐานข้อมูล |
-| `EVENT:CANCELLED` | MCU $\rightarrow$ Server | ผู้ใช้กดปุ่ม D3 สแกนใหม่ $\rightarrow$ ละเว้นการบันทึก |
+| `STATUS:R307_READY` | MCU $\rightarrow$ Server | เซนเซอร์ R307 เชื่อมต่อสำเร็จและพร้อมทำงาน |
+| `EVENT:IDLE` | MCU $\rightarrow$ Server | แจ้งว่า MCU อยู่ในสถานะสแตนด์บาย รอนิ้วสแกน |
+| `EVENT:NO_MATCH` | MCU $\rightarrow$ Server | ตรวจพบลายนิ้วมือที่ไม่ตรงกับฐานข้อมูลในเซนเซอร์ |
+| `EVENT:CONFIRMED ID=<slot> SCORE=<val>` | MCU $\rightarrow$ Server | ผู้ใช้กดปุ่มฟ้า D2 ยืนยัน $\rightarrow$ บันทึกเวลาลงฐานข้อมูล |
+| `EVENT:CANCELLED` | MCU $\rightarrow$ Server | ผู้ใช้กดปุ่มแดง D3 สแกนใหม่ $\rightarrow$ ละเว้นการบันทึก |
 | `RESP:ENROLL_FAIL_DUPLICATE ID=<slot>` | MCU $\rightarrow$ Server | ตรวจพบลายนิ้วมือซ้ำกับ Slot ที่มีอยู่แล้ว |
 
 ---
@@ -130,6 +144,8 @@ flowchart TD
      1. สั่งลบ Slot 1, 2, 3 ในเซนเซอร์ R307
      2. รันคำสั่ง `DELETE FROM users WHERE id = ?` ใน Supabase
      3. ส่งสัญญาณ Socket.IO ให้หน้าเว็บรีเฟรชตารางรายชื่อทันที
+4. **ระบบ Multi-Room Schedule & Attendance Verification:**
+   * บันทึกการลงเวลาจะตรวจสอบคาบเรียนของห้องที่อุปกรณ์ประจำการอยู่แบบอัตโนมัติ คำนวณสถานะ เข้าเรียน (On-time), มาสาย (Late), หรือขาดเรียน (Absent) ตามเวลาที่กำหนดในตารางเรียน
 
 ---
 
@@ -174,8 +190,11 @@ Fingerprint/
 │   ├── public/
 │   │   ├── index.html         # หน้า Dashboard แสดงสถานะและบันทึกเวลาสแกนนิ้วเรียลไทม์
 │   │   ├── users.html         # หน้าระบบจัดการผู้ใช้งาน และลงทะเบียนลายนิ้วมือ 3 นิ้ว
+│   │   ├── schedules.html     # หน้าระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)
 │   │   ├── login.html         # หน้าระบบล็อกอินสำหรับผู้ดูแลระบบ (Admin)
-│   │   ├── js/app.js          # สคริปต์ Frontend Web Interface
+│   │   ├── js/
+│   │   │   ├── app.js         # สคริปต์ Frontend Web Interface
+│   │   │   └── schedules.js   # สคริปต์จัดการตารางสอนและนำเข้าไฟล์ Excel
 │   │   └── css/               # ไฟล์สไตล์ Tailwind CSS
 ├── DECISIONS.md               # บันทึกการตัดสินใจทางสถาปัตยกรรม (Architecture Decision Records)
 ├── SCRATCHPAD.md              # บันทึกสถานะการพัฒนาปัจจุบัน (Development Context)
