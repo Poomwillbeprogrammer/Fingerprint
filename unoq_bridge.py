@@ -13,16 +13,38 @@ LOCAL_PORT = 7500
 FONT_PATH = '/home/arduino/tahoma.ttf'
 CACHE_FILE = '/home/arduino/users_cache.json'
 SCHEDULES_CACHE_FILE = '/home/arduino/schedules_cache.json'
+ACTIVE_ROOM_FILE = '/home/arduino/active_room.txt'
 
 if not os.path.exists('/home/arduino'):
     CACHE_FILE = os.path.join(os.path.dirname(__file__), 'users_cache.json')
     SCHEDULES_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'schedules_cache.json')
+    ACTIVE_ROOM_FILE = os.path.join(os.path.dirname(__file__), 'active_room.txt')
 
 sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
 users_cache = {}
 schedules_cache = []
 current_room_name = 'ทค.1-101'
+
+def load_active_room():
+    global current_room_name, IDLE_BITMAP
+    if os.path.exists(ACTIVE_ROOM_FILE):
+        try:
+            with open(ACTIVE_ROOM_FILE, 'r', encoding='utf-8') as f:
+                r = f.read().strip()
+                if r:
+                    current_room_name = r
+                    print(f'📍 [Local Cache] โหลดห้องประจำเครื่องเดิม: [{current_room_name}]')
+                    IDLE_BITMAP = render_idle_screen(current_room_name)
+        except Exception as e:
+            print(f'⚠️ [Local Cache] โหลด active_room.txt ล้มเหลว: {e}')
+
+def save_active_room(room_name):
+    try:
+        with open(ACTIVE_ROOM_FILE, 'w', encoding='utf-8') as f:
+            f.write(room_name.strip())
+    except Exception as e:
+        print(f'⚠️ [Local Cache] บันทึก active_room.txt ล้มเหลว: {e}')
 
 # 1. โหลดฟอนต์ภาษาไทยแท้
 try:
@@ -289,13 +311,13 @@ CANCELLED_BITMAP = render_cancelled_screen()
 TIMEOUT_BITMAP = render_timeout_screen()
 
 # 6. ส่งภาพ 1024 bytes ไปยัง MCU ทางพอร์ต 7500 (16-byte chunks = 32 hex chars, 46 chars/line safe for 64-byte UART buffer)
-def send_bitmap_to_mcu(buf):
+def send_bitmap_to_mcu(buf, initial_wait=0.20):
     global mcu_sock
     if not mcu_sock:
         return False
     try:
         mcu_sock.sendall(b'FRAME_START\n')
-        time.sleep(0.03)  # 30ms ให้ MCU เคลียร์บัฟเฟอร์ให้พร้อม
+        time.sleep(initial_wait)  # หน่วงเวลาให้ STM32 ตื่นจาก delay(120) และเข้าสู่ handleFrameReceive()
         offset = 0
         chunk_size = 16
         while offset < 1024:
@@ -304,8 +326,8 @@ def send_bitmap_to_mcu(buf):
             cmd = f'FRAME_DATA {offset} {hex_str}\n'
             mcu_sock.sendall(cmd.encode('utf-8'))
             offset += len(chunk)
-            time.sleep(0.006)  # 6ms pacing ป้องกัน UART FIFO เต็ม 100%
-        time.sleep(0.015)
+            time.sleep(0.008)  # 8ms pacing ป้องกัน UART FIFO เต็ม 100%
+        time.sleep(0.03)
         mcu_sock.sendall(b'FRAME_END\n')
         return True
     except Exception as e:
@@ -366,7 +388,12 @@ def get_active_schedule():
     day_of_week = thai_now.isoweekday() # 1=Mon ... 7=Sun
     current_minutes = thai_now.hour * 60 + thai_now.minute
 
-    today_schedules = [s for s in schedules_cache if s.get('day_of_week') == day_of_week and s.get('is_active', True)]
+    today_schedules = [
+        s for s in schedules_cache 
+        if s.get('day_of_week') == day_of_week 
+        and s.get('is_active', True)
+        and (not s.get('room_name') or s.get('room_name') == current_room_name)
+    ]
 
     def parse_min(t_str):
         parts = t_str.split(':')
@@ -408,8 +435,9 @@ def connect_mcu():
             s.connect(('127.0.0.1', LOCAL_PORT))
             mcu_sock = s
             print('✅ [Uno Q MCU] เชื่อมต่อกับ STM32 พอร์ต 7500 สำเร็จ')
+            time.sleep(0.4)
             # ส่งหน้าจอพร้อมใช้งาน (ภาษาไทย) ทันทีที่เชื่อมต่อ
-            send_bitmap_to_mcu(IDLE_BITMAP)
+            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
             return s
         except Exception as e:
             print(f'⚠️ [Uno Q MCU] กำลังรอเชื่อมต่อ STM32: {e}')
@@ -464,7 +492,7 @@ def mcu_reader_thread():
                             pass
                         card_buf = render_user_card(f'Slot #{slot_id}', 'Registered User', sched_info)
                     
-                    send_bitmap_to_mcu(card_buf)
+                    send_bitmap_to_mcu(card_buf, initial_wait=0.04)
                     # หมายเหตุ: ไม่ส่งบันทึกเวลาขึ้น Cloud ตรงนี้ เพราะต้องรอปุ่ม D2 ก่อน
 
                 # ข) เมื่อกดยืนยัน D2: แสดงผลสำเร็จ และส่ง Event ขึ้น Cloud เพื่อบันทึกลง Database
@@ -485,7 +513,7 @@ def mcu_reader_thread():
                     sched_info = get_active_schedule()
                     print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
                     success_buf = render_confirm_success(stu_id, name, sched_info)
-                    send_bitmap_to_mcu(success_buf)
+                    send_bitmap_to_mcu(success_buf, initial_wait=0.04)
 
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
@@ -493,21 +521,21 @@ def mcu_reader_thread():
                 # ค) เมื่อกดยกเลิก/สแกนใหม่ D3
                 elif line.startswith('EVENT:CANCELLED'):
                     print('🛑 [Local Engine] กดยกเลิก D3 -> ไม่บันทึกเวลา')
-                    send_bitmap_to_mcu(CANCELLED_BITMAP)
+                    send_bitmap_to_mcu(CANCELLED_BITMAP, initial_wait=0.04)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
                 # ง) เมื่อหมดเวลา 5 วินาที (Auto-Cancel ทางเลือก A)
                 elif line == 'EVENT:TIMEOUT':
                     print('⏰ [Local Engine] หมดเวลา 5 วินาที (Auto-Cancel) -> ไม่บันทึกเวลา')
-                    send_bitmap_to_mcu(TIMEOUT_BITMAP)
+                    send_bitmap_to_mcu(TIMEOUT_BITMAP, initial_wait=0.04)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
                 # จ) เมื่อสแกนไม่พบลายนิ้วมือ: แสดงหน้าจอ ACCESS DENIED ภาษาไทย
                 elif line == 'EVENT:NO_MATCH':
                     print('⚡ [Local Engine] ไม่พบลายนิ้วมือ -> แสดงหน้า Denied')
-                    send_bitmap_to_mcu(DENIED_BITMAP)
+                    send_bitmap_to_mcu(DENIED_BITMAP, initial_wait=0.04)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
@@ -522,7 +550,8 @@ def mcu_reader_thread():
                 # ฉ) เมื่อเซนเซอร์พร้อมใช้งาน / กลับสู่หน้าหลัก
                 elif line == 'EVENT:IDLE' or line == 'STATUS:R307_READY':
                     print('⚡ [Local Engine] กลับสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
-                    send_bitmap_to_mcu(IDLE_BITMAP)
+                    time.sleep(0.20)  # หน่วงเวลา 200ms รอให้ STM32 รัน showIdleScreen() เสร็จ
+                    send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
@@ -567,8 +596,9 @@ def on_sync_device_room(data):
         r_name = data.get('room_name')
         print(f'📍 [Cloud] ได้รับคำสั่งสลับห้องประจำเครื่องเป็น: [{r_name}]')
         current_room_name = r_name
+        save_active_room(r_name)
         IDLE_BITMAP = render_idle_screen(current_room_name)
-        send_bitmap_to_mcu(IDLE_BITMAP)
+        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
 
 @sio.on('schedules_updated')
 def on_schedules_updated(data):
@@ -585,12 +615,12 @@ def on_already_checked_in(data):
     class_type = sched.get('class_type', '')
     type_suffix = f" [{class_type}]" if class_type else ""
     warn_buf = render_already_checked_in(user_name, f"{short_name}{type_suffix}")
-    send_bitmap_to_mcu(warn_buf)
+    send_bitmap_to_mcu(warn_buf, initial_wait=0.04)
 
     # ค้างหน้าจอแจ้งเตือน 3 วินาที แล้วกลับสู่หน้าจอพร้อมใช้งาน
     def return_idle():
         time.sleep(3.0)
-        send_bitmap_to_mcu(IDLE_BITMAP)
+        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
     threading.Thread(target=return_idle, daemon=True).start()
 
 @sio.on('user_updated')
@@ -625,6 +655,7 @@ if __name__ == '__main__':
     # 1. โหลดแคชเดิมที่มีในเครื่อง
     load_cache()
     load_schedules_cache()
+    load_active_room()
 
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)
