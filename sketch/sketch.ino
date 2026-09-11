@@ -1113,6 +1113,7 @@ void loop() {
       Serial.println("EVENT:NO_MATCH");
       delay(1500);
       showIdleScreen();
+      Serial.println("EVENT:IDLE");
     } else if (cmd.startsWith("DELETE ")) {
       int id = cmd.substring(7).toInt();
       handleDelete(id);
@@ -1150,6 +1151,7 @@ void loop() {
       Serial.println("EVENT:NO_MATCH");
       delay(1500);
       showIdleScreen();
+      Serial.println("EVENT:IDLE");
     }
     delay(5);
     return;

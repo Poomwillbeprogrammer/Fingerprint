@@ -594,12 +594,23 @@ def mcu_reader_thread():
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
-                # จ) เมื่อสแกนไม่พบลายนิ้วมือ: แสดงหน้าจอ ACCESS DENIED ภาษาไทย
+                # จ) เมื่อสแกนไม่พบลายนิ้วมือ: แสดงหน้าจอ ACCESS DENIED ภาษาไทย แล้วคืนสู่หน้าจอพร้อมใช้งาน
                 elif line == 'EVENT:NO_MATCH':
-                    print('⚡ [Local Engine] ไม่พบลายนิ้วมือ -> แสดงหน้า Denied')
-                    send_bitmap_to_mcu(DENIED_BITMAP, initial_wait=0.04)
+                    print('⚡ [Local Engine] ไม่พบลายนิ้วมือในระบบ -> แสดงหน้า Denied ภาษาไทย')
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
+
+                    def handle_no_match_flow():
+                        # รอ 1.6 วินาที ให้ STM32 พ้น delay(1500) และ showIdleScreen() ของมันก่อน
+                        time.sleep(1.6)
+                        print('⚡ [Local Engine] แสดงหน้าจอ ACCESS DENIED ภาษาไทย')
+                        send_bitmap_to_mcu(DENIED_BITMAP, initial_wait=0.30)
+                        # ค้างหน้าปฏิเสธไว้ 3.0 วินาที ให้อ่านชัดเจน แล้วคืนสู่หน้าจอพร้อมใช้งาน
+                        time.sleep(3.0)
+                        print('⚡ [Local Engine] คืนสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
+                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
+
+                    threading.Thread(target=handle_no_match_flow, daemon=True).start()
 
                 elif line.startswith('RESP:ENROLL_OK') or line.startswith('TEMPLATE:'):
                     try:
