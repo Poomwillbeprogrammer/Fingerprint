@@ -1357,6 +1357,18 @@ io.on('connection', (socket) => {
     }
   });
 
+  // บอร์ดร้องขอรายการลงเวลาเรียนของวันนี้
+  socket.on('get_today_attendance', () => {
+    try {
+      const thaiDateNow = new Date(Date.now() + 7 * 3600000);
+      const todayStr = thaiDateNow.toISOString().split('T')[0];
+      const records = schedulesManager.loadAttendanceRecords().filter(r => r.date === todayStr);
+      socket.emit('sync_today_attendance', records);
+    } catch (err) {
+      console.error('Error in get_today_attendance:', err);
+    }
+  });
+
   // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge
   socket.on('bridge_serial_data', async (rawLine) => {
     // ป้องกันการรับข้อมูลซ้ำซ้อนจาก Bridge ที่ไม่ได้ active

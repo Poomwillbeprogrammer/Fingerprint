@@ -14,16 +14,19 @@ FONT_PATH = '/home/arduino/tahoma.ttf'
 CACHE_FILE = '/home/arduino/users_cache.json'
 SCHEDULES_CACHE_FILE = '/home/arduino/schedules_cache.json'
 ACTIVE_ROOM_FILE = '/home/arduino/active_room.txt'
+ATTENDANCE_CACHE_FILE = '/home/arduino/attendance_cache.json'
 
 if not os.path.exists('/home/arduino'):
     CACHE_FILE = os.path.join(os.path.dirname(__file__), 'users_cache.json')
     SCHEDULES_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'schedules_cache.json')
     ACTIVE_ROOM_FILE = os.path.join(os.path.dirname(__file__), 'active_room.txt')
+    ATTENDANCE_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'attendance_cache.json')
 
 sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
 users_cache = {}
 schedules_cache = []
+checked_in_records = set()
 current_room_name = 'ทค.1-101'
 
 def load_active_room():
@@ -45,6 +48,34 @@ def save_active_room(room_name):
             f.write(room_name.strip())
     except Exception as e:
         print(f'⚠️ [Local Cache] บันทึก active_room.txt ล้มเหลว: {e}')
+
+def load_attendance_cache():
+    global checked_in_records
+    if os.path.exists(ATTENDANCE_CACHE_FILE):
+        try:
+            with open(ATTENDANCE_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                checked_in_records = set(tuple(item) for item in data)
+                print(f'📋 [Local Cache] โหลดประวัติการลงเวลา: {len(checked_in_records)} รายการ')
+        except Exception as e:
+            print(f'⚠️ [Local Cache] โหลดประวัติการลงเวลาล้มเหลว: {e}')
+
+def save_attendance_cache():
+    try:
+        with open(ATTENDANCE_CACHE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(list(checked_in_records), f, ensure_ascii=False)
+    except Exception as e:
+        print(f'⚠️ [Local Cache] บันทึกประวัติการลงเวลาล้มเหลว: {e}')
+
+def record_check_in(user_id, sched_id, date_str):
+    if user_id and sched_id and date_str:
+        checked_in_records.add((int(user_id), int(sched_id), str(date_str)))
+        save_attendance_cache()
+
+def is_already_checked_in(user_id, sched_id, date_str):
+    if not user_id or not sched_id or not date_str:
+        return False
+    return (int(user_id), int(sched_id), str(date_str)) in checked_in_records
 
 # 1. โหลดฟอนต์ภาษาไทยแท้
 try:
@@ -494,7 +525,7 @@ def mcu_reader_thread():
                     send_bitmap_to_mcu(card_buf, initial_wait=0.04)
                     # หมายเหตุ: ไม่ส่งบันทึกเวลาขึ้น Cloud ตรงนี้ เพราะต้องรอปุ่ม D2 ก่อน
 
-                # ข) เมื่อกดยืนยัน D2: แสดงผลสำเร็จ และส่ง Event ขึ้น Cloud เพื่อบันทึกลง Database
+                # ข) เมื่อกดยืนยัน D2: แสดงผลสำเร็จ หรือเตือนหากเคยลงเวลาแล้ว และส่ง Event ขึ้น Cloud
                 elif line.startswith('EVENT:CONFIRMED '):
                     parts = line.split()
                     slot_id = 0
@@ -510,9 +541,27 @@ def mcu_reader_thread():
                     stu_id = user.get('student_id', '-') if user else f'#{slot_id}'
                     name = user.get('name', 'Unknown') if user else 'Registered User'
                     sched_info = get_active_schedule()
-                    print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
-                    success_buf = render_confirm_success(stu_id, name, sched_info)
-                    send_bitmap_to_mcu(success_buf, initial_wait=0.04)
+                    sched = sched_info.get('schedule') if sched_info else None
+
+                    now_utc = datetime.datetime.now(datetime.timezone.utc)
+                    thai_now = now_utc + datetime.timedelta(hours=7)
+                    today_str = thai_now.strftime('%Y-%m-%d')
+                    sched_id = sched.get('id') if sched else None
+
+                    if sched and is_already_checked_in(mapped_user_id, sched_id, today_str):
+                        print(f'⚠️ [Local Engine] ผู้ใช้ #{mapped_user_id}: {name} เคยลงเวลาในคาบนี้แล้ว -> แสดงหน้าแจ้งเตือน')
+                        short_name = sched.get('short_name') or sched.get('subject_name', 'คาบเรียน')
+                        class_type = sched.get('class_type', '')
+                        type_suffix = f" [{class_type}]" if class_type else ""
+                        resp_buf = render_already_checked_in(name, f"{short_name}{type_suffix}")
+                    else:
+                        print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
+                        if sched and sched_id:
+                            record_check_in(mapped_user_id, sched_id, today_str)
+                        resp_buf = render_confirm_success(stu_id, name, sched_info)
+
+                    # ส่ง Frame ให้ STM32 ครั้งเดียวใน ackWait (ห้ามส่งซ้ำระหว่าง delay)
+                    send_bitmap_to_mcu(resp_buf, initial_wait=0.04)
 
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
@@ -568,9 +617,10 @@ def mcu_reader_thread():
 def connect():
     print(f'☁️ [Cloud] เชื่อมต่อกับ Render สำเร็จ: {RENDER_URL} (SID: {sio.sid})')
     sio.emit('register_bridge')
-    # ขอดึงแคชรายชื่อและตารางเรียนล่าสุดทันที
+    # ขอดึงแคชรายชื่อ ตารางเรียน และประวัติลงเวลาล่าสุดทันที
     sio.emit('get_users_cache')
     sio.emit('get_schedules_cache')
+    sio.emit('get_today_attendance')
 
 @sio.event
 def disconnect():
@@ -608,19 +658,39 @@ def on_schedules_updated(data):
 @sio.on('already_checked_in')
 def on_already_checked_in(data):
     print(f'⚠️ [Cloud] แจ้งเตือน: คุณได้ลงเวลาคาบนี้แล้ว ({data.get("user_name")})')
-    user_name = data.get('user_name', '')
+    user_id = data.get('user_id')
     sched = data.get('schedule') or {}
-    short_name = sched.get('short_name') or sched.get('subject_name', 'คาบเรียน')
-    class_type = sched.get('class_type', '')
-    type_suffix = f" [{class_type}]" if class_type else ""
-    warn_buf = render_already_checked_in(user_name, f"{short_name}{type_suffix}")
-    send_bitmap_to_mcu(warn_buf, initial_wait=0.04)
+    sched_id = sched.get('id')
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    thai_now = now_utc + datetime.timedelta(hours=7)
+    today_str = thai_now.strftime('%Y-%m-%d')
+    if user_id and sched_id:
+        record_check_in(user_id, sched_id, today_str)
+    # หมายเหตุ: ไม่ต้องส่ง Frame หรือสร้าง thread คืนค่าหน้าจอที่นี่
+    # เพราะ STM32 อยู่ใน delay(3500) และจะส่ง EVENT:IDLE ออกมาเองเมื่อครบเวลา
+    # ระบบหลักจะส่งหน้าจอพร้อมใช้งาน (IDLE_BITMAP) ให้โดยอัตโนมัติ
 
-    # ค้างหน้าจอแจ้งเตือน 3 วินาที แล้วกลับสู่หน้าจอพร้อมใช้งาน
-    def return_idle():
-        time.sleep(3.0)
-        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
-    threading.Thread(target=return_idle, daemon=True).start()
+@sio.on('session_attendance_update')
+def on_session_attendance_update(data):
+    if isinstance(data, dict):
+        user_id = data.get('user_id')
+        sched_id = data.get('schedule_id')
+        date_str = data.get('date')
+        if user_id and sched_id and date_str:
+            record_check_in(user_id, sched_id, date_str)
+
+@sio.on('sync_today_attendance')
+def on_sync_today_attendance(data):
+    if isinstance(data, list):
+        print(f'📋 [Cloud] ได้รับประวัติการลงเวลาเรียนวันนี้: {len(data)} รายการ')
+        for r in data:
+            if isinstance(r, dict):
+                user_id = r.get('user_id')
+                sched_id = r.get('schedule_id')
+                date_str = r.get('date')
+                if user_id and sched_id and date_str:
+                    checked_in_records.add((int(user_id), int(sched_id), str(date_str)))
+        save_attendance_cache()
 
 @sio.on('user_updated')
 def on_user_updated(data=None):
@@ -655,6 +725,7 @@ if __name__ == '__main__':
     load_cache()
     load_schedules_cache()
     load_active_room()
+    load_attendance_cache()
 
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)
