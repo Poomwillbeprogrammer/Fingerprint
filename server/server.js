@@ -352,8 +352,9 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       }
     }
 
-    // ตรวจสอบตารางการใช้ห้องเรียน (Room Timetable Schedule Matching)
-    const activeSchedInfo = schedulesManager.getActiveSchedule();
+    // ตรวจสอบตารางการใช้ห้องเรียนตามห้องที่เครื่องสแกนประจำอยู่ (Active Device Room)
+    const activeDeviceRoom = schedulesManager.getActiveDeviceRoom();
+    const activeSchedInfo = schedulesManager.getActiveSchedule(new Date(), activeDeviceRoom);
     const currentSchedule = activeSchedInfo.schedule;
     const attendanceStatus = activeSchedInfo.attendanceStatus; // 'ON_TIME', 'LATE', or 'OUT_OF_SCHEDULE'
     const thaiDateNow = new Date(Date.now() + 7 * 3600000);
@@ -364,11 +365,12 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       // ตรวจสอบว่าเคยสแกนในคาบนี้ของวันนี้แล้วหรือไม่ (ป้องกันลงเวลาซ้ำ)
       const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, currentSchedule.id, todayStr);
       if (alreadyCheckedIn) {
-        console.log(`⚠️ [Room Schedule] ${userName} [${studentId}] ได้ลงเวลาในคาบ "${currentSchedule.subject_name}" แล้วในวันนี้`);
+        console.log(`⚠️ [Room Schedule] ${userName} [${studentId}] ได้ลงเวลาในคาบ "${currentSchedule.subject_name}" (ห้อง ${activeDeviceRoom}) แล้วในวันนี้`);
         io.emit('already_checked_in', {
           user_id: userId,
           user_name: userName,
           student_id: studentId,
+          room_name: activeDeviceRoom,
           schedule: currentSchedule,
           message: 'คุณได้ลงเวลาคาบนี้แล้ว'
         });
@@ -378,6 +380,7 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       // บันทึกลงระบบบันทึกเวลาเรียนประจำคาบ
       const sessionRecord = schedulesManager.recordSessionAttendance({
         schedule_id: currentSchedule.id,
+        room_name: activeDeviceRoom,
         subject_code: currentSchedule.subject_code,
         subject_name: currentSchedule.subject_name,
         short_name: currentSchedule.short_name,
@@ -409,8 +412,10 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
       status: isGranted ? 'GRANTED' : 'DENIED',
       score: score || 0,
       tier: tier,
+      room_name: activeDeviceRoom,
       schedule: currentSchedule ? {
         id: currentSchedule.id,
+        room_name: activeDeviceRoom,
         subject_code: currentSchedule.subject_code,
         subject_name: currentSchedule.subject_name,
         short_name: currentSchedule.short_name,
@@ -423,7 +428,7 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
     };
 
     io.emit('new_log', newLogEntry);
-    console.log(`🔔 [Access Log] ${userName} [${studentId}] (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score}${currentSchedule ? ` | ${currentSchedule.short_name} [${currentSchedule.class_type}] ${attendanceStatus}` : ''})`);
+    console.log(`🔔 [Access Log] ${userName} [${studentId}] (ID #${fingerprint_id}): ${isGranted ? 'GRANTED' : 'DENIED'} (${tier}, Score: ${score}${currentSchedule ? ` | [${activeDeviceRoom}] ${currentSchedule.short_name} [${currentSchedule.class_type}] ${attendanceStatus}` : ''})`);
   } catch (err) {
     console.error('Error in processScanEvent:', err);
   }
@@ -932,20 +937,85 @@ app.get('/api/stats', authRequired, async (req, res) => {
 });
 
 // ==========================================
-// 4.1 Room Timetable & Attendance Routes
+// 4.1 Multi-Room & Timetable Attendance Routes
 // ==========================================
+// ดึงรายการห้องเรียนทั้งหมด และห้องที่เครื่องสแกนประจำอยู่
+app.get('/api/rooms', (req, res) => {
+  try {
+    const data = schedulesManager.getRooms();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ตั้งค่าห้องประจำเครื่อง Uno Q (Active Device Room)
+app.post('/api/rooms/active', authRequired, (req, res) => {
+  try {
+    const { room_name } = req.body;
+    if (!room_name) {
+      return res.status(400).json({ error: 'กรุณาระบุชื่อห้อง' });
+    }
+    const updatedRoom = schedulesManager.setActiveDeviceRoom(room_name);
+    const roomSchedules = schedulesManager.getAllSchedules(updatedRoom);
+    
+    io.emit('device_room_updated', { active_device_room: updatedRoom });
+    io.emit('sync_device_room', { room_name: updatedRoom });
+    io.emit('sync_schedules_cache', roomSchedules);
+
+    res.json({ success: true, active_device_room: updatedRoom });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ลบห้องเรียน ตารางเรียน และประวัติการเข้าเรียนของห้องนั้น (Full Purge)
+app.delete('/api/rooms/:roomName', authRequired, (req, res) => {
+  try {
+    const { roomName } = req.params;
+    const result = schedulesManager.deleteRoom(roomName);
+    
+    io.emit('rooms_updated', schedulesManager.getRooms());
+    io.emit('sync_device_room', { room_name: result.active_device_room });
+    io.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+
+    res.json(result);
+  } catch (err) {
+    console.error('Error deleting room:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ดูตัวอย่าง (Preview) ข้อมูลในไฟล์ Excel ก่อนบันทึกจริง
+app.post('/api/schedules/preview-excel', authRequired, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ error: 'กรุณาเลือกไฟล์ Excel (.xlsx)' });
+    }
+    const preview = schedulesManager.previewExcelData(req.file.buffer);
+    res.json(preview);
+  } catch (err) {
+    console.error('Error previewing excel:', err);
+    res.status(500).json({ error: 'ไม่สามารถอ่านไฟล์ Excel ได้: ' + err.message });
+  }
+});
+
+// ดึงตารางเรียน (สามารถกรองตามห้อง ?room=ทค.1-101 ได้)
 app.get('/api/schedules', (req, res) => {
   try {
-    const schedules = schedulesManager.getAllSchedules();
+    const { room } = req.query;
+    const schedules = schedulesManager.getAllSchedules(room);
     res.json(schedules);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// ดึงสถานะคาบเรียนสด (สามารถกรองตามห้อง ?room=ทค.1-101 ได้)
 app.get('/api/schedules/current', (req, res) => {
   try {
-    const current = schedulesManager.getActiveSchedule();
+    const { room } = req.query;
+    const current = schedulesManager.getActiveSchedule(new Date(), room);
     res.json(current);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -978,19 +1048,31 @@ app.get('/api/schedules/:id/export-excel', (req, res) => {
   }
 });
 
+// บันทึกตารางเรียน (รองรับหลายห้อง: แทนที่ถ้าเป็นห้องเดิม, เพิ่มแดชบอร์ดใหม่ถ้าเป็นห้องใหม่)
 app.post('/api/schedules/import-excel', authRequired, upload.single('file'), (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ error: 'กรุณาเลือกไฟล์ Excel (.xlsx) ที่ต้องการนำเข้า' });
     }
-    const parsed = schedulesManager.parseExcelData(req.file.buffer);
+    const roomName = (req.body.room_name || '').trim();
+    const building = (req.body.building || '').trim();
+
+    const parsed = schedulesManager.parseExcelData(req.file.buffer, roomName, building);
     if (!parsed || parsed.length === 0) {
       return res.status(400).json({ error: 'ไม่พบข้อมูลตารางเรียนในไฟล์ Excel หรือรูปแบบไม่ถูกต้อง' });
     }
-    const saved = schedulesManager.saveImportedSchedules(parsed);
+
+    const saved = schedulesManager.saveRoomSchedules(parsed, roomName, building);
+    io.emit('rooms_updated', schedulesManager.getRooms());
     io.emit('schedules_updated', saved);
-    io.emit('sync_schedules_cache', saved);
-    res.json({ success: true, count: saved.length, schedules: saved });
+
+    // ซิงก์แคชให้ Uno Q ถ้าห้องที่เพิ่งนำเข้าคือห้องประจำเครื่อง
+    if (saved.room_name === schedulesManager.getActiveDeviceRoom()) {
+      io.emit('sync_device_room', { room_name: saved.room_name });
+      io.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+    }
+
+    res.json(saved);
   } catch (err) {
     console.error('Error importing excel:', err);
     res.status(500).json({ error: 'เกิดข้อผิดพลาดในการนำเข้าไฟล์ Excel: ' + err.message });
@@ -1234,12 +1316,14 @@ io.on('connection', (socket) => {
     console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id})`);
     io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
 
-    // ส่งแคชรายชื่อนักศึกษาและตารางเรียนให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
+    // ส่งแคชรายชื่อนักศึกษา ตารางเรียน และห้องประจำเครื่องให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
     try {
       const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+      const activeRoom = schedulesManager.getActiveDeviceRoom();
       socket.emit('sync_users_cache', users || []);
+      socket.emit('sync_device_room', { room_name: activeRoom });
       socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
-      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) และตารางเรียน (${schedulesManager.getAllSchedules().length} คาบ) ไปยังบอร์ดแล้ว`);
+      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อ (${users.length} คน), ห้องประจำเครื่อง [${activeRoom}], และตารางเรียน (${schedulesManager.getAllSchedules().length} คาบ) ไปยังบอร์ดแล้ว`);
     } catch (err) {
       console.error('Error sending users cache to bridge:', err);
     }
