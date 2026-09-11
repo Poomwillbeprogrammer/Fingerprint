@@ -127,7 +127,7 @@ def render_denied_screen():
 
     return img_to_oled_buf(img)
 
-# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - พร้อมข้อมูลวิชาและสถานะเข้าเรียน)
+# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - แสดงชื่อเต็มชัดเจน พร้อมข้อมูลวิชาและปุ่มกด)
 def render_user_card(student_id, name, sched_info=None):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
@@ -141,13 +141,11 @@ def render_user_card(student_id, name, sched_info=None):
 
     d.line([(2, 14), (125, 14)], fill=1)
 
-    # ข้อมูลนักศึกษา
-    stu_str = student_id if student_id else '-'
+    # ข้อมูลชื่อนักศึกษา (ไม่แสดงรหัส เพื่อให้แสดงชื่อได้เต็ม ไม่โดนตัด)
     display_name = name or 'Unknown'
-    stu_line = f"{stu_str} {display_name}"
-    if len(stu_line) > 18:
-        stu_line = stu_line[:17] + '..'
-    d.text((5, 16), stu_line, font=font_small, fill=1)
+    if len(display_name) > 24:
+        display_name = display_name[:23] + '..'
+    d.text((5, 16), display_name, font=font_name, fill=1)
 
     # ข้อมูลคาบเรียนและสถานะ
     sched = sched_info.get('schedule') if sched_info else None
@@ -159,17 +157,17 @@ def render_user_card(student_id, name, sched_info=None):
         subj_line = f"{short_name} [{class_type}]"
         if len(subj_line) > 20:
             subj_line = subj_line[:19] + '..'
-        d.text((5, 27), subj_line, font=font_small, fill=1)
+        d.text((5, 28), subj_line, font=font_small, fill=1)
 
         status_tag = '[ทันเวลา]' if att_status == 'ON_TIME' else '[มาสาย]'
         d.text((5, 38), f"สถานะ: {status_tag}", font=font_small, fill=1)
     else:
-        d.text((5, 27), "นอกเวลาเรียน (General)", font=font_small, fill=1)
+        d.text((5, 28), "นอกเวลาเรียน (General)", font=font_small, fill=1)
         d.text((5, 38), "สถานะ: [บันทึกทั่วไป]", font=font_small, fill=1)
 
     d.line([(2, 49), (125, 49)], fill=1)
 
-    prompt = '[ D2:ยืนยัน | D3:สแกน ]'
+    prompt = '[ ปุ่มฟ้า:ยืนยัน | ปุ่มแดง:สแกน ]'
     bb = d.textbbox((0, 0), prompt, font=font_small)
     sw = bb[2] - bb[0]
     d.text(((128 - sw) // 2, 51), prompt, font=font_small, fill=1)
@@ -189,12 +187,10 @@ def render_confirm_success(student_id, name, sched_info=None):
 
     d.line([(2, 14), (125, 14)], fill=1)
 
-    stu_str = student_id if student_id else '-'
     display_name = name or 'Unknown'
-    stu_line = f"{stu_str} {display_name}"
-    if len(stu_line) > 18:
-        stu_line = stu_line[:17] + '..'
-    d.text((5, 16), stu_line, font=font_small, fill=1)
+    if len(display_name) > 24:
+        display_name = display_name[:23] + '..'
+    d.text((5, 16), display_name, font=font_name, fill=1)
 
     sched = sched_info.get('schedule') if sched_info else None
     if sched:
@@ -203,9 +199,9 @@ def render_confirm_success(student_id, name, sched_info=None):
         subj_line = f"{short_name} [{class_type}]"
         if len(subj_line) > 20:
             subj_line = subj_line[:19] + '..'
-        d.text((5, 27), subj_line, font=font_small, fill=1)
+        d.text((5, 28), subj_line, font=font_small, fill=1)
     else:
-        d.text((5, 27), "นอกเวลาเรียน (General)", font=font_small, fill=1)
+        d.text((5, 28), "นอกเวลาเรียน (General)", font=font_small, fill=1)
 
     d.line([(2, 49), (125, 49)], fill=1)
 
@@ -270,7 +266,7 @@ def render_cancelled_screen():
 
     d.line([(2, 47), (125, 47)], fill=1)
 
-    footer = 'สถานะ: ยกเลิกแล้ว (D3)'
+    footer = 'สถานะ: ยกเลิกแล้ว (ปุ่มแดง)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
     d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
