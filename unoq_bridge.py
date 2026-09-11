@@ -310,29 +310,32 @@ DENIED_BITMAP = render_denied_screen()
 CANCELLED_BITMAP = render_cancelled_screen()
 TIMEOUT_BITMAP = render_timeout_screen()
 
+oled_lock = threading.Lock()
+
 # 6. ส่งภาพ 1024 bytes ไปยัง MCU ทางพอร์ต 7500 (16-byte chunks = 32 hex chars, 46 chars/line safe for 64-byte UART buffer)
 def send_bitmap_to_mcu(buf, initial_wait=0.20):
     global mcu_sock
     if not mcu_sock:
         return False
-    try:
-        mcu_sock.sendall(b'FRAME_START\n')
-        time.sleep(initial_wait)  # หน่วงเวลาให้ STM32 ตื่นจาก delay(120) และเข้าสู่ handleFrameReceive()
-        offset = 0
-        chunk_size = 16
-        while offset < 1024:
-            chunk = buf[offset : offset + chunk_size]
-            hex_str = chunk.hex().upper()
-            cmd = f'FRAME_DATA {offset} {hex_str}\n'
-            mcu_sock.sendall(cmd.encode('utf-8'))
-            offset += len(chunk)
-            time.sleep(0.008)  # 8ms pacing ป้องกัน UART FIFO เต็ม 100%
-        time.sleep(0.03)
-        mcu_sock.sendall(b'FRAME_END\n')
-        return True
-    except Exception as e:
-        print(f'❌ [Bitmap] ส่งภาพล้มเหลว: {e}')
-        return False
+    with oled_lock:
+        try:
+            mcu_sock.sendall(b'FRAME_START\n')
+            time.sleep(initial_wait)  # หน่วงเวลาให้ STM32 ตื่นจาก delay(120) และเข้าสู่ handleFrameReceive()
+            offset = 0
+            chunk_size = 16
+            while offset < 1024:
+                chunk = buf[offset : offset + chunk_size]
+                hex_str = chunk.hex().upper()
+                cmd = f'FRAME_DATA {offset} {hex_str}\n'
+                mcu_sock.sendall(cmd.encode('utf-8'))
+                offset += len(chunk)
+                time.sleep(0.008)  # 8ms pacing ป้องกัน UART FIFO เต็ม 100%
+            time.sleep(0.03)
+            mcu_sock.sendall(b'FRAME_END\n')
+            return True
+        except Exception as e:
+            print(f'❌ [Bitmap] ส่งภาพล้มเหลว: {e}')
+            return False
 
 # 7. จัดการ Local Cache รายชื่อนักศึกษา
 def load_cache():
