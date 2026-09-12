@@ -1,8 +1,36 @@
+const fs = require('fs');
+const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
-// ตั้งค่า Supabase Cloud Database (สามารถ override ผ่าน Environment Variables ได้)
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://xahasiyjrfrtfovrxynf.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'sb_publishable_BU-hqTfgRU3QjNc9zcNzdA_fMcVT9T9';
+// โหลด Environment Variables จาก .env หากทำงานในเครื่อง Local
+const envPaths = [path.join(__dirname, '.env'), path.join(__dirname, '..', '.env')];
+for (const ep of envPaths) {
+  if (fs.existsSync(ep)) {
+    try {
+      const lines = fs.readFileSync(ep, 'utf8').split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('#')) continue;
+        const eqIdx = trimmed.indexOf('=');
+        if (eqIdx > 0) {
+          const k = trimmed.substring(0, eqIdx).trim();
+          const v = trimmed.substring(eqIdx + 1).trim().replace(/^['"]|['"]$/g, '');
+          if (!process.env[k]) process.env[k] = v;
+        }
+      }
+    } catch (e) {}
+  }
+}
+
+// ตั้งค่า Supabase Cloud Database จาก Environment Variables (ห้าม Hardcode Secret)
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ [Database Fatal Error] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY in environment variables.');
+  console.error('👉 กรุณากำหนดตัวแปร SUPABASE_URL และ SUPABASE_SERVICE_ROLE_KEY บน Server Environment');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

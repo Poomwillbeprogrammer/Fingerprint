@@ -1,5 +1,16 @@
 const socket = io();
 
+// Toggle Mobile Sidebar Menu
+document.addEventListener('DOMContentLoaded', () => {
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const sidebarMenu = document.getElementById('sidebarMenu');
+  if (mobileMenuBtn && sidebarMenu) {
+    mobileMenuBtn.addEventListener('click', () => {
+      sidebarMenu.classList.toggle('hidden');
+    });
+  }
+});
+
 let allSchedules = [];
 let activeScheduleInfo = null;
 let currentViewingScheduleId = null;

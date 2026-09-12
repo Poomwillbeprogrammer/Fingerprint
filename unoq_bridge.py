@@ -16,6 +16,7 @@ SCHEDULES_CACHE_FILE = '/home/arduino/schedules_cache.json'
 ACTIVE_ROOM_FILE = '/home/arduino/active_room.txt'
 ATTENDANCE_CACHE_FILE = '/home/arduino/attendance_cache.json'
 OFFLINE_QUEUE_FILE = '/home/arduino/offline_queue.json'
+BRIDGE_TOKEN_FILE = '/home/arduino/bridge_token.txt'
 
 if not os.path.exists('/home/arduino'):
     CACHE_FILE = os.path.join(os.path.dirname(__file__), 'users_cache.json')
@@ -23,6 +24,18 @@ if not os.path.exists('/home/arduino'):
     ACTIVE_ROOM_FILE = os.path.join(os.path.dirname(__file__), 'active_room.txt')
     ATTENDANCE_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'attendance_cache.json')
     OFFLINE_QUEUE_FILE = os.path.join(os.path.dirname(__file__), 'offline_queue.json')
+    BRIDGE_TOKEN_FILE = os.path.join(os.path.dirname(__file__), 'bridge_token.txt')
+
+BRIDGE_TOKEN = os.environ.get('BRIDGE_TOKEN', 'fingerprint_unoq_bridge_secure_token_2026')
+if os.path.exists(BRIDGE_TOKEN_FILE):
+    try:
+        with open(BRIDGE_TOKEN_FILE, 'r', encoding='utf-8') as tf:
+            t = tf.read().strip()
+            if t:
+                BRIDGE_TOKEN = t
+                print('🔑 [Security] โหลด BRIDGE_TOKEN จากไฟล์สำเร็จ')
+    except Exception as e:
+        print(f'⚠️ [Security] ไม่สามารถอ่าน {BRIDGE_TOKEN_FILE}: {e}')
 
 sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
@@ -865,7 +878,7 @@ if __name__ == '__main__':
     # 4. เชื่อมต่อ Render Cloud ในลูปหลัก
     while True:
         try:
-            sio.connect(RENDER_URL, wait_timeout=15)
+            sio.connect(RENDER_URL, auth={'token': BRIDGE_TOKEN}, wait_timeout=15)
             sio.wait()
         except Exception as e:
             print(f'⚠️ [Cloud Connection Error] {e}')

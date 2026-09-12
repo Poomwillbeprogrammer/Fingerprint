@@ -75,3 +75,12 @@
     - [x] ระบบ Auto-Sync เบื้องหลังทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ พร้อมกลไก Server ACK ป้องกันข้อมูลสูญหาย
     - [x] Server บันทึกลง Supabase โดยรักษาวันเวลาสแกนจริง และส่งอีเวนต์อัปเดตหน้า Dashboard แบบเรียลไทม์
     - [x] หน้าเว็บแสดงป้ายกำกับสีส้ม `[ซิงก์ออฟไลน์]` และสถานะ `Tier 1 (Offline)`
+11. **[TASK-11] ปรับปรุงความปลอดภัยของระบบและการแก้บั๊กทั้งหมด (Security Hardening & Bug Fixes):** ✅ COMPLETED
+    - [x] ลบ Hardcoded Secrets ทั้งหมดใน `database.js` และ `server.js` บังคับอ่านจาก Env
+    - [x] เพิ่ม `authRequired` middleware บนทุก Endpoint ที่เกี่ยวกับตารางเรียนและข้อมูลนักศึกษา
+    - [x] ติดตั้ง Socket.IO Handshake Auth (`io.use`) แยกสิทธิ์ Admin และ Hardware Bridge (`BRIDGE_TOKEN`)
+    - [x] ลบคำใบ้รหัสผ่านหน้า Login, เพิ่ม Rate Limit (5 req/min) และตั้ง Cookie Flags
+    - [x] ส่งออก `loadAttendanceRecords` ใน `schedules_manager.js` แก้บั๊กตาราง Dashboard หมุนค้าง
+    - [x] เพิ่ม Error UI State พร้อมปุ่ม Retry บน Dashboard และ Users table
+    - [x] ปรับ Mobile Responsive Sidebar ให้ยุบเป็น Hamburger Menu บนจอ < 768px
+    - [x] เพิ่ม `favicon.svg` / `favicon.ico` และแก้ข้อความ SQLite ให้เป็น Cloud Database (Supabase)

@@ -12,21 +12,37 @@ const { dbAsync, initDatabase } = require('./database');
 const schedulesManager = require('./schedules_manager');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: true,
+    credentials: true,
     methods: ['GET', 'POST']
   }
 });
 
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'fingerprint_super_secret_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('❌ [Security Fatal Error] Missing JWT_SECRET in environment variables.');
+  process.exit(1);
+}
+const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || 'fingerprint_unoq_bridge_secure_token_2026';
 const TARGET_PORT = process.env.SERIAL_PORT || 'COM12';
 const SERIAL_ENABLED = process.env.SERIAL_ENABLED !== 'false';
 const BAUD_RATE = 115200;
+
+// Rate Limiter สำหรับป้องกัน Brute Force บนหน้าล็อกอิน
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 นาที
+  max: 5, // สูงสุด 5 ครั้งต่อนาทีต่อ IP
+  message: { error: 'ลองเข้าสู่ระบบถี่เกินไป กรุณารอ 1 นาทีแล้วลองใหม่อีกครั้ง' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Middleware
 app.use(cors());
@@ -734,7 +750,7 @@ async function handleSerialData(rawLine) {
 // ==========================================
 // 2. Authentication Routes
 // ==========================================
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'กรุณากรอก Username และ Password' });
@@ -746,9 +762,15 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Username หรือ Password ไม่ถูกต้อง' });
     }
 
+    const isProd = process.env.NODE_ENV === 'production';
     const token = jwt.sign({ id: admin.id, username: admin.username }, JWT_SECRET, { expiresIn: '24h' });
-    res.cookie('token', token, { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 });
-    res.json({ success: true, message: 'เข้าสู่ระบบสำเร็จ', token, username: admin.username });
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000
+    });
+    res.json({ success: true, message: 'เข้าสู่ระบบสำเร็จ', username: admin.username });
   } catch (err) {
     res.status(500).json({ error: 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
   }
@@ -960,7 +982,7 @@ app.get('/api/stats', authRequired, async (req, res) => {
 // 4.1 Multi-Room & Timetable Attendance Routes
 // ==========================================
 // ดึงรายการห้องเรียนทั้งหมด และห้องที่เครื่องสแกนประจำอยู่
-app.get('/api/rooms', (req, res) => {
+app.get('/api/rooms', authRequired, (req, res) => {
   try {
     const data = schedulesManager.getRooms();
     res.json(data);
@@ -1021,7 +1043,7 @@ app.post('/api/schedules/preview-excel', authRequired, upload.single('file'), (r
 });
 
 // ดึงตารางเรียน (สามารถกรองตามห้อง ?room=ทค.1-101 ได้)
-app.get('/api/schedules', (req, res) => {
+app.get('/api/schedules', authRequired, (req, res) => {
   try {
     const { room } = req.query;
     const schedules = schedulesManager.getAllSchedules(room);
@@ -1032,7 +1054,7 @@ app.get('/api/schedules', (req, res) => {
 });
 
 // ดึงสถานะคาบเรียนสด (สามารถกรองตามห้อง ?room=ทค.1-101 ได้)
-app.get('/api/schedules/current', (req, res) => {
+app.get('/api/schedules/current', authRequired, (req, res) => {
   try {
     const { room } = req.query;
     const current = schedulesManager.getActiveSchedule(new Date(), room);
@@ -1042,7 +1064,7 @@ app.get('/api/schedules/current', (req, res) => {
   }
 });
 
-app.get('/api/schedules/:id/attendance', (req, res) => {
+app.get('/api/schedules/:id/attendance', authRequired, (req, res) => {
   try {
     const { id } = req.params;
     const { date } = req.query;
@@ -1053,7 +1075,7 @@ app.get('/api/schedules/:id/attendance', (req, res) => {
   }
 });
 
-app.get('/api/schedules/:id/export-excel', (req, res) => {
+app.get('/api/schedules/:id/export-excel', authRequired, (req, res) => {
   try {
     const { id } = req.params;
     const { date } = req.query;
@@ -1102,10 +1124,10 @@ app.post('/api/schedules/import-excel', authRequired, upload.single('file'), (re
 // ==========================================
 // 5. IoT Device Endpoints & Biometric Backup/Restore
 // ==========================================
-app.get('/api/device/serial-status', (req, res) => {
+app.get('/api/device/serial-status', authRequired, (req, res) => {
   res.json({
     connected: serialConnected,
-    port: TARGET_PORT
+    port: hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT
   });
 });
 
@@ -1249,16 +1271,64 @@ app.post('/api/device/backup-all', authRequired, async (req, res) => {
 });
 
 // ==========================================
-// 6. Socket.io Real-time Event Handlers
+// 6. Socket.io Authentication Middleware & Event Handlers
 // ==========================================
+io.use((socket, next) => {
+  try {
+    const authHeader = socket.handshake.headers?.authorization;
+    const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    const authToken = socket.handshake.auth?.token || bearerToken;
+    
+    let cookieToken = null;
+    if (socket.handshake.headers?.cookie) {
+      const parsedCookies = socket.handshake.headers.cookie.split(';').reduce((acc, c) => {
+        const [key, val] = c.trim().split('=');
+        if (key && val) acc[key] = decodeURIComponent(val);
+        return acc;
+      }, {});
+      cookieToken = parsedCookies.token;
+    }
+
+    const token = authToken || cookieToken;
+
+    // ก. กรณีเป็น Hardware Bridge (บอร์ด Uno Q ส่ง BRIDGE_TOKEN)
+    if (token && token === BRIDGE_TOKEN) {
+      socket.role = 'bridge';
+      socket.isBridge = true;
+      return next();
+    }
+
+    // ข. กรณีเป็น Admin Web Dashboard (ส่ง JWT token ผ่าน auth หรือ cookie)
+    if (token) {
+      try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        socket.role = 'admin';
+        socket.admin = decoded;
+        return next();
+      } catch (jwtErr) {
+        return next(new Error('Authentication error: Invalid JWT token'));
+      }
+    }
+
+    return next(new Error('Authentication error: Authentication required'));
+  } catch (err) {
+    return next(new Error('Authentication error: ' + err.message));
+  }
+});
+
 io.on('connection', (socket) => {
-  console.log('💻 Web Client Connected:', socket.id);
+  console.log(`💻 Client Connected: ${socket.id} (Role: ${socket.role})`);
 
   // แจ้งสถานะ Serial ให้ client ที่เพิ่งเชื่อมต่อ
-  socket.emit('serial_status', { connected: serialConnected, port: TARGET_PORT });
+  const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
+  socket.emit('serial_status', { connected: serialConnected, port: displayPort });
 
-  // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ (ระบบ 3 นิ้วต่อคน)
+  // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ (ระบบ 3 นิ้วต่อคน) - เฉพาะ Admin
   socket.on('start_enroll', async (data) => {
+    if (socket.role !== 'admin') {
+      console.warn(`🚨 [Security] Blocked unauthorized start_enroll from ${socket.id}`);
+      return;
+    }
     const userId = parseInt(data.id);
     const slot1 = (userId - 1) * 3 + 1;
     const slot2 = (userId - 1) * 3 + 2;
@@ -1296,8 +1366,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ (พร้อม Auto-Rollback ลบ Slot และลบ DB ทันที)
+  // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ - เฉพาะ Admin
   socket.on('cancel_enroll', async (data) => {
+    if (socket.role !== 'admin') {
+      console.warn(`🚨 [Security] Blocked unauthorized cancel_enroll from ${socket.id}`);
+      return;
+    }
     console.log(`🛑 [Cancel Enroll] ได้รับคำสั่งยกเลิกการลงทะเบียน`);
 
     // 1. ส่งคำสั่งให้ Arduino หลุดออกจากลูปทันที
@@ -1325,8 +1399,12 @@ io.on('connection', (socket) => {
     io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
   });
 
-  // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา (รองรับ Uno Q Linux Bridge หรือ PC Bridge)
+  // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา - เฉพาะ Bridge
   socket.on('register_bridge', async () => {
+    if (socket.role !== 'bridge') {
+      console.warn(`🚨 [Security] Blocked unauthorized register_bridge from ${socket.id}`);
+      return;
+    }
     if (hardwareBridgeSocket && hardwareBridgeSocket.id !== socket.id) {
       console.warn(`⚠️ [Hardware Bridge] สลับไปยัง Bridge ตัวใหม่ (${socket.id}) ปลดตัวเก่าออก (${hardwareBridgeSocket.id})`);
       try { hardwareBridgeSocket.disconnect(true); } catch (e) {}
@@ -1389,8 +1467,12 @@ io.on('connection', (socket) => {
     }
   });
 
-  // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge
+  // รับข้อมูลสแกนนิ้ว/ผลตอบกลับจาก Arduino ที่ส่งผ่าน Bridge - เฉพาะ Bridge
   socket.on('bridge_serial_data', async (rawLine) => {
+    if (socket.role !== 'bridge') {
+      console.warn(`🚨 [Security] Blocked unauthorized bridge_serial_data from ${socket.id}`);
+      return;
+    }
     // ป้องกันการรับข้อมูลซ้ำซ้อนจาก Bridge ที่ไม่ได้ active
     if (hardwareBridgeSocket && socket.id !== hardwareBridgeSocket.id) {
       return;
@@ -1398,8 +1480,13 @@ io.on('connection', (socket) => {
     await handleSerialData(rawLine);
   });
 
-  // รับข้อมูลสแกนช่วงออฟไลน์ (Store-and-Forward Offline Sync)
+  // รับข้อมูลสแกนช่วงออฟไลน์ (Store-and-Forward Offline Sync) - เฉพาะ Bridge
   socket.on('sync_offline_attendance', async (records) => {
+    if (socket.role !== 'bridge') {
+      console.warn(`🚨 [Security] Blocked unauthorized sync_offline_attendance from ${socket.id}`);
+      socket.emit('sync_offline_attendance_ack', { success: false, error: 'Unauthorized' });
+      return;
+    }
     if (!Array.isArray(records) || records.length === 0) {
       socket.emit('sync_offline_attendance_ack', { success: true, count: 0, synced_ids: [] });
       return;
