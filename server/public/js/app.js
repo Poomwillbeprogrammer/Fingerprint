@@ -124,6 +124,16 @@ if (openPasswordModalBtn && passwordModal) {
   if (closePasswordModalBtn) closePasswordModalBtn.addEventListener('click', closePasswordModal);
   if (cancelPasswordBtn) cancelPasswordBtn.addEventListener('click', closePasswordModal);
 
+  passwordModal.addEventListener('click', (e) => {
+    if (e.target === passwordModal) closePasswordModal();
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !passwordModal.classList.contains('hidden')) {
+      closePasswordModal();
+    }
+  });
+
   if (changePasswordForm) {
     changePasswordForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -202,6 +212,138 @@ function formatDateTime(str) {
 if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/') {
   checkAuth();
 
+  let currentActiveRoom = 'ทค.1-101';
+  let activeScheduleData = null;
+
+  async function loadAcademicContext() {
+    const banner = document.getElementById('academicStageBanner');
+    if (!banner) return;
+
+    try {
+      // 1. ดึงข้อมูลห้องประจำเครื่องสแกน Uno Q
+      const roomRes = await fetch('/api/rooms');
+      let buildingDisplay = 'อาคารเทคนิคคอมพิวเตอร์';
+      if (roomRes.ok) {
+        const roomData = await roomRes.json();
+        currentActiveRoom = roomData.active_device_room || (roomData.rooms && roomData.rooms[0] ? roomData.rooms[0].name : 'ทค.1-101');
+        const rObj = roomData.rooms ? roomData.rooms.find(r => r.name === currentActiveRoom) : null;
+        if (rObj && rObj.building) buildingDisplay = rObj.building;
+      }
+
+      // 2. ดึงสถานะคาบเรียนสดของห้องนี้
+      const schedRes = await fetch(`/api/schedules/current?room=${encodeURIComponent(currentActiveRoom)}`);
+      let schedData = null;
+      if (schedRes.ok) {
+        schedData = await schedRes.json();
+        activeScheduleData = schedData;
+      }
+
+      // 3. เรนเดอร์ Academic Stage Banner
+      if (schedData && schedData.schedule) {
+        const s = schedData.schedule;
+        const isEarly = schedData.isEarly;
+
+        // ดึงสถิติ attendance ของคาบนี้ถ้ามี
+        let onTime = 0;
+        let late = 0;
+        try {
+          const attRes = await fetch(`/api/schedules/${s.id}/attendance`);
+          if (attRes.ok) {
+            const attData = await attRes.json();
+            onTime = attData.onTimeCount || 0;
+            late = attData.lateCount || 0;
+          }
+        } catch (err) {}
+
+        const statusBadge = isEarly
+          ? '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30"><span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> เปิดให้สแกนล่วงหน้า (15 นาทีก่อนเริ่ม)</span>'
+          : '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> กำลังเรียนอยู่ (Active Class)</span>';
+
+        const typeBadge = s.class_type === 'P'
+          ? '<span class="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">[P] ปฏิบัติ</span>'
+          : '<span class="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">[T] ทฤษฎี</span>';
+
+        banner.innerHTML = `
+          <div class="glass-card rounded-2xl p-5 border border-amber-500/40 bg-gradient-to-r from-amber-950/30 via-stone-900 to-stone-900 shadow-xl shadow-amber-950/20">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div class="flex flex-wrap items-center gap-2 mb-2">
+                  ${statusBadge}
+                  ${typeBadge}
+                  <span class="text-xs text-amber-300 font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25">
+                    <i class="fa-solid fa-microchip mr-1"></i>เครื่องสแกนประจำห้อง ${s.room_name} (${s.building})
+                  </span>
+                  <span class="text-xs text-stone-400 font-mono"><i class="fa-solid fa-clock mr-1"></i>${s.time_display}</span>
+                </div>
+                <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                  <span class="text-amber-400 font-mono">${s.subject_code}</span>
+                  <span>${s.subject_name}</span>
+                </h2>
+                <div class="text-xs text-stone-300 mt-1.5 flex flex-wrap items-center gap-4">
+                  <span><i class="fa-solid fa-user-tie text-stone-400 mr-1.5"></i>${s.instructor || '-'}</span>
+                  <span><i class="fa-solid fa-users-rectangle text-stone-400 mr-1.5"></i>กลุ่มเรียน: ${s.section_group || '-'}</span>
+                  <span class="text-emerald-400 font-medium"><i class="fa-solid fa-hourglass-half mr-1"></i>อนุโลมสาย 15 นาที</span>
+                  <span class="text-stone-300 font-mono"><i class="fa-solid fa-user-check text-emerald-400 mr-1"></i>เช็คชื่อแล้ว: <b class="text-amber-300">${onTime + late}</b> คน (ตรงเวลา ${onTime}, สาย ${late})</span>
+                </div>
+              </div>
+              <div class="flex items-center gap-2.5 shrink-0">
+                <a href="/schedules.html" class="px-4 py-2.5 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
+                  <i class="fa-solid fa-clipboard-check"></i> ดูใบเช็คชื่อคาบนี้
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+
+        const grantedLabel = document.getElementById('statGrantedLabel');
+        const grantedSub = document.getElementById('statGrantedSub');
+        const deniedLabel = document.getElementById('statDeniedLabel');
+        const deniedSub = document.getElementById('statDeniedSub');
+
+        if (grantedLabel) grantedLabel.innerText = `เข้าเรียนตรงเวลา (${onTime} คน)`;
+        if (grantedSub) grantedSub.innerText = `คาบเรียน ${s.subject_code} ตรงเวลา`;
+        if (deniedLabel) deniedLabel.innerText = `มาสาย (${late} คน)`;
+        if (deniedSub) deniedSub.innerText = `เกินกำหนดอนุโลม 15 นาที`;
+      } else {
+        // นอกเวลาเรียน (General Access)
+        banner.innerHTML = `
+          <div class="glass-card rounded-2xl p-4 md:p-5 border border-stone-800/80 bg-stone-900/60 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-xl bg-stone-800 border border-stone-700 flex items-center justify-center text-stone-400 shrink-0">
+                <i class="fa-solid fa-mug-hot text-lg"></i>
+              </div>
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-800 text-stone-300 border border-stone-700">นอกเวลาเรียน (General Access)</span>
+                  <span class="text-xs text-amber-300 font-medium"><i class="fa-solid fa-location-dot mr-1"></i>ห้อง ${currentActiveRoom} (${buildingDisplay})</span>
+                  <span class="text-[11px] text-stone-400 font-mono">• เครื่องสแกน Uno Q ออนไลน์</span>
+                </div>
+                <p class="text-xs text-stone-400 mt-1">ขณะนี้ไม่มีคาบเรียนตามตาราง การสแกนนิ้วจะถูกบันทึกเป็นประวัติการใช้งานทั่วไป</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+              <a href="/schedules.html" class="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 rounded-xl text-xs font-medium flex items-center gap-2 transition">
+                <i class="fa-regular fa-calendar text-amber-400"></i> ตารางเรียนห้องนี้
+              </a>
+            </div>
+          </div>
+        `;
+
+        const grantedLabel = document.getElementById('statGrantedLabel');
+        const grantedSub = document.getElementById('statGrantedSub');
+        const deniedLabel = document.getElementById('statDeniedLabel');
+        const deniedSub = document.getElementById('statDeniedSub');
+
+        if (grantedLabel) grantedLabel.innerText = 'เข้าเรียนตรงเวลา (On-Time)';
+        if (grantedSub) grantedSub.innerText = 'สแกนนิ้วสำเร็จ ทันเวลาเรียน';
+        if (deniedLabel) deniedLabel.innerText = 'มาสาย / ปฏิเสธ (Late / Denied)';
+        if (deniedSub) deniedSub.innerText = 'สแกนเกินเวลาหรือลายนิ้วมือไม่ตรง';
+      }
+    } catch (e) {
+      console.error('Error loading academic context:', e);
+    }
+  }
+
   async function loadStats() {
     try {
       const res = await fetch('/api/stats');
@@ -227,7 +369,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         tbody.innerHTML = '';
 
         if (logs.length === 0) {
-          tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-slate-500">ยังไม่มีประวัติการสแกน</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-stone-500">ยังไม่มีประวัติการสแกน</td></tr>`;
           return;
         }
 
@@ -236,9 +378,9 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         if (tbody) {
           tbody.innerHTML = `
             <tr>
-              <td colspan="5" class="px-5 py-8 text-center text-rose-400">
+              <td colspan="7" class="px-5 py-8 text-center text-rose-400">
                 <i class="fa-solid fa-triangle-exclamation mr-2"></i>ไม่สามารถโหลดประวัติการสแกนได้ (รหัส ${res.status})
-                <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium border border-stone-700 transition">
                   <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
                 </button>
               </td>
@@ -250,9 +392,9 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
       if (tbody) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="5" class="px-5 py-8 text-center text-rose-400">
+            <td colspan="7" class="px-5 py-8 text-center text-rose-400">
               <i class="fa-solid fa-circle-exclamation mr-2"></i>ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อโหลดประวัติได้
-              <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+              <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium border border-stone-700 transition">
                 <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
               </button>
             </td>
@@ -266,7 +408,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     const tbody = document.getElementById('logsTableBody');
     const isGranted = (log.status === 'GRANTED' || log.status === 'OK');
     const tr = document.createElement('tr');
-    tr.className = `border-b border-slate-800/60 hover:bg-slate-800/40 transition ${isLive ? 'animate-new-row' : ''}`;
+    tr.className = `border-b border-stone-800/60 hover:bg-stone-800/40 transition ${isLive ? 'animate-new-row' : ''}`;
 
     const isOffline = log.is_offline || (log.tier && log.tier.includes('Offline'));
     const offlineBadge = isOffline ? `
@@ -294,8 +436,8 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
           ${isGranted ? 'ผ่าน (Granted)' : 'ปฏิเสธ (Denied)'}
         </span>
       </td>
-      <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${log.score || 0}</td>
-      <td class="px-5 py-3.5 text-xs font-medium text-slate-300">${isOffline ? '<span class="text-amber-400">Tier 1 (Offline)</span>' : (log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-'))}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-stone-400">${log.score || 0}</td>
+      <td class="px-5 py-3.5 text-xs font-medium text-stone-300">${isOffline ? '<span class="text-amber-400">Tier 1 (Offline)</span>' : (log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-'))}</td>
     `;
 
     if (isLive) {
@@ -318,6 +460,48 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     appendLogRow(log, true);
     playSound(log.status === 'GRANTED' ? 'granted' : 'denied');
     loadStats();
+    loadAcademicContext();
+  });
+
+  // Socket.io: การเชื่อมต่อหลุด / กลับมาเชื่อมต่อ (Heuristic 1: Visibility of System Status)
+  const liveBadge = document.getElementById('liveBadge');
+  socket.on('disconnect', () => {
+    if (liveBadge) {
+      liveBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/10 text-rose-400 border border-rose-500/20';
+      liveBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-400"></span> ขาดการเชื่อมต่อ (Offline)';
+    }
+  });
+
+  socket.on('connect', () => {
+    if (liveBadge) {
+      liveBadge.className = 'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20';
+      liveBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span> LIVE';
+    }
+    loadAcademicContext();
+    loadStats();
+    loadLogs();
+  });
+
+  // Socket.io: รับแจ้งเตือนเมื่อมีการสลับห้อง หรือสถานะคาบเรียนเปลี่ยน
+  socket.on('device_room_updated', () => {
+    loadAcademicContext();
+    loadStats();
+  });
+  socket.on('sync_device_room', () => {
+    loadAcademicContext();
+    loadStats();
+  });
+  socket.on('schedule_started', () => {
+    loadAcademicContext();
+    loadStats();
+  });
+  socket.on('schedule_ended', () => {
+    loadAcademicContext();
+    loadStats();
+  });
+  socket.on('schedule_scanned', () => {
+    loadAcademicContext();
+    loadStats();
   });
 
   // Socket.io: รับแจ้งเตือนเมื่อระบบซิงก์ข้อมูลออฟไลน์ย้อนหลังเสร็จสิ้น
@@ -325,6 +509,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     console.log(`📡 [Offline Sync] ซิงก์ข้อมูลออฟไลน์ย้อนหลังสำเร็จ ${data.count} รายการ`);
     loadStats();
     loadLogs();
+    loadAcademicContext();
   });
 
   const refreshBtn = document.getElementById('refreshBtn');
@@ -332,10 +517,23 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     refreshBtn.addEventListener('click', () => {
       loadStats();
       loadLogs();
+      loadAcademicContext();
     });
   }
 
+  // Keyboard Accelerator: กด 'R' เพื่อรีเฟรชข้อมูลสด (Heuristic 7: Flexibility & Efficiency)
+  window.addEventListener('keydown', (e) => {
+    if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const tag = document.activeElement ? document.activeElement.tagName : '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      loadStats();
+      loadLogs();
+      loadAcademicContext();
+    }
+  });
+
   // Initial Load
+  loadAcademicContext();
   loadStats();
   loadLogs();
 }
@@ -359,9 +557,9 @@ if (window.location.pathname.endsWith('users.html')) {
         if (tbody) {
           tbody.innerHTML = `
             <tr>
-              <td colspan="7" class="px-5 py-8 text-center text-rose-400">
+              <td colspan="6" class="px-5 py-8 text-center text-rose-400">
                 <i class="fa-solid fa-triangle-exclamation mr-2"></i>ไม่สามารถโหลดรายชื่อผู้ใช้ได้ (รหัส ${res.status})
-                <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium border border-stone-700 transition">
                   <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
                 </button>
               </td>
@@ -373,9 +571,9 @@ if (window.location.pathname.endsWith('users.html')) {
       if (tbody) {
         tbody.innerHTML = `
           <tr>
-            <td colspan="7" class="px-5 py-8 text-center text-rose-400">
+            <td colspan="6" class="px-5 py-8 text-center text-rose-400">
               <i class="fa-solid fa-circle-exclamation mr-2"></i>ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อโหลดรายชื่อผู้ใช้ได้
-              <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+              <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium border border-stone-700 transition">
                 <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
               </button>
             </td>
@@ -392,7 +590,7 @@ if (window.location.pathname.endsWith('users.html')) {
     tbody.innerHTML = '';
 
     if (users.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="px-5 py-8 text-center text-slate-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-8 text-center text-stone-500">ไม่พบรายชื่อผู้ใช้งาน</td></tr>`;
       return;
     }
 
@@ -425,7 +623,7 @@ if (window.location.pathname.endsWith('users.html')) {
         <td class="px-5 py-3.5 font-mono text-xs text-amber-300 font-semibold tracking-wider">${user.student_id || '-'}</td>
         <td class="px-5 py-3.5 font-medium text-white">${user.name}</td>
         <td class="px-5 py-3.5">${tierBadge}</td>
-        <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
+        <td class="px-5 py-3.5 font-mono text-xs text-stone-400">${formatDateTime(user.created_at)}</td>
         <td class="px-5 py-3.5 text-right">
           <div class="flex items-center justify-end gap-1.5">
             <button onclick="deleteUser(${user.id}, '${user.name}')" title="ลบผู้ใช้และลายนิ้วมือ" class="px-2.5 py-1.5 text-rose-400 hover:text-white bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg text-xs font-medium transition flex items-center gap-1">
@@ -602,7 +800,7 @@ if (window.location.pathname.endsWith('users.html')) {
     descEl.innerText = desc;
 
     if (state === 'step1') {
-      icon.innerHTML = '<i class="fa-solid fa-fingerprint animate-bounce text-amber-400"></i>';
+      icon.innerHTML = '<i class="fa-solid fa-fingerprint animate-pulse text-amber-400"></i>';
       icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl';
     } else if (state === 'remove') {
       icon.innerHTML = '<i class="fa-solid fa-hand text-amber-400 animate-pulse"></i>';
@@ -614,8 +812,8 @@ if (window.location.pathname.endsWith('users.html')) {
       icon.innerHTML = '<i class="fa-solid fa-circle-xmark text-rose-400"></i>';
       icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-rose-500/20 border border-rose-500/40 flex items-center justify-center text-xl';
     } else {
-      icon.innerHTML = '<i class="fa-solid fa-hand-pointer text-slate-400"></i>';
-      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-slate-800 flex items-center justify-center text-xl';
+      icon.innerHTML = '<i class="fa-solid fa-hand-pointer text-stone-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-stone-800 flex items-center justify-center text-xl';
     }
   }
 

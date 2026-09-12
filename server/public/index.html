@@ -117,18 +117,36 @@
       </div>
     </div>
 
-    <!-- Stat Cards -->
+    <!-- Academic Stage Banner: บริบทห้องเรียนและตารางเรียนประจำเครื่องสแกน -->
+    <div id="academicStageBanner" class="mb-6">
+      <div class="glass-card rounded-2xl p-4 md:p-5 border border-stone-800/80 bg-stone-900/60 shadow-lg flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+            <i class="fa-solid fa-chalkboard-user text-lg"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="bannerRoomName" class="text-sm font-bold text-white">กำลังตรวจสอบข้อมูลห้องเรียน...</span>
+              <span id="bannerStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-stone-800 text-stone-300 border border-stone-700">เชื่อมต่อตารางเรียน</span>
+            </div>
+            <p id="bannerDesc" class="text-xs text-stone-400 mt-0.5">เชื่อมต่อกับระบบบริหารจัดการตารางเรียนและเซนเซอร์ Uno Q</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stat Cards: สรุปสถิติผู้ใช้และการเช็คชื่อเข้าเรียนประจำวัน -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
       <!-- Total Users -->
       <div class="glass-card rounded-2xl p-5 border border-stone-800/80 shadow-lg">
         <div class="flex items-center justify-between mb-3">
-          <span class="text-xs font-medium text-stone-400">ผู้ใช้งานในระบบทั้งหมด</span>
+          <span class="text-xs font-medium text-stone-400">ผู้ใช้งานในระบบ (Enrolled)</span>
           <div class="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm">
             <i class="fa-solid fa-users"></i>
           </div>
         </div>
         <p id="statTotalUsers" class="text-2xl font-bold text-white font-mono">0</p>
-        <p class="text-[11px] text-stone-500 mt-1">จากความจุสูงสุด 300 ลายนิ้วมือ</p>
+        <p class="text-[11px] text-stone-500 mt-1">ความจุเซนเซอร์ R307 (1,000 แม่แบบ)</p>
       </div>
 
       <!-- Scans Today -->
@@ -143,28 +161,28 @@
         <p class="text-[11px] text-stone-500 mt-1">รวมทุกรายการสแกนในวันนี้</p>
       </div>
 
-      <!-- Granted Today -->
+      <!-- Granted / On-Time -->
       <div class="glass-card rounded-2xl p-5 border border-stone-800/80 shadow-lg">
         <div class="flex items-center justify-between mb-3">
-          <span class="text-xs font-medium text-emerald-400">ผ่านการยืนยัน (Granted)</span>
+          <span id="statGrantedLabel" class="text-xs font-medium text-emerald-400">เข้าเรียนตรงเวลา (On-Time)</span>
           <div class="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-sm">
             <i class="fa-solid fa-circle-check"></i>
           </div>
         </div>
         <p id="statGrantedToday" class="text-2xl font-bold text-emerald-400 font-mono">0</p>
-        <p class="text-[11px] text-stone-500 mt-1">สแกนนิ้วถูกต้อง ยินยอมให้ผ่าน</p>
+        <p id="statGrantedSub" class="text-[11px] text-stone-500 mt-1">สแกนนิ้วสำเร็จ ทันเวลาเรียน</p>
       </div>
 
-      <!-- Denied Today -->
+      <!-- Denied / Late -->
       <div class="glass-card rounded-2xl p-5 border border-stone-800/80 shadow-lg">
         <div class="flex items-center justify-between mb-3">
-          <span class="text-xs font-medium text-rose-400">ปฏิเสธ / ไม่พบลายนิ้วมือ</span>
+          <span id="statDeniedLabel" class="text-xs font-medium text-rose-400">มาสาย / ปฏิเสธ (Late / Denied)</span>
           <div class="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center text-sm">
-            <i class="fa-solid fa-circle-xmark"></i>
+            <i class="fa-solid fa-user-clock"></i>
           </div>
         </div>
         <p id="statDeniedToday" class="text-2xl font-bold text-rose-400 font-mono">0</p>
-        <p class="text-[11px] text-stone-500 mt-1">ลายนิ้วมือไม่ตรงกับในฐานข้อมูล</p>
+        <p id="statDeniedSub" class="text-[11px] text-stone-500 mt-1">สแกนเกินเวลาหรือลายนิ้วมือไม่ตรง</p>
       </div>
     </div>
 

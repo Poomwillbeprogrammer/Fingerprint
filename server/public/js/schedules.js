@@ -73,7 +73,7 @@ function renderRoomTabs() {
 
   if (roomsList.length === 0) {
     container.innerHTML = `
-      <span class="text-xs text-slate-400 px-3 py-1.5 italic">ยังไม่มีข้อมูลห้องเรียน กรุณานำเข้าไฟล์ Excel</span>
+      <span class="text-xs text-stone-400 px-3 py-1.5 italic">ยังไม่มีข้อมูลห้องเรียน กรุณานำเข้าไฟล์ Excel</span>
     `;
     if (actionsContainer) actionsContainer.innerHTML = '';
     return;
@@ -86,7 +86,7 @@ function renderRoomTabs() {
     
     let baseClass = 'px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition shrink-0 cursor-pointer ';
     if (isSelected) {
-      baseClass += 'bg-amber-500 text-stone-950 font-semibold shadow-md shadow-amber-500/20';
+      baseClass += 'bg-amber-500 text-amber-950 font-semibold shadow-md shadow-amber-500/20';
     } else {
       baseClass += 'bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800';
     }
@@ -281,18 +281,18 @@ function renderActiveBanner() {
       </div>
     `;
   } else {
-    banner.className = 'mb-6 p-4 rounded-2xl border border-slate-800 bg-slate-900/60';
+    banner.className = 'mb-6 p-4 rounded-2xl border border-stone-800 bg-stone-900/60';
     banner.innerHTML = `
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
+        <div class="w-10 h-10 rounded-xl bg-stone-800 border border-stone-700 flex items-center justify-center text-stone-400">
           <i class="fa-solid fa-mug-hot text-lg"></i>
         </div>
         <div>
           <div class="flex items-center gap-2">
-            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">นอกเวลาเรียน (General Access)</span>
-            <span class="text-xs text-slate-400">ห้อง ${currentRoom || '-'} (${buildingDisplay})</span>
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-stone-800 text-stone-300 border border-stone-700">นอกเวลาเรียน (General Access)</span>
+            <span class="text-xs text-stone-400">ห้อง ${currentRoom || '-'} (${buildingDisplay})</span>
           </div>
-          <p class="text-xs text-slate-400 mt-1">ขณะนี้ไม่มีคาบเรียนตามตาราง การสแกนนิ้วจะถูกบันทึกเป็นประวัติการใช้งานทั่วไป</p>
+          <p class="text-xs text-stone-400 mt-1">ขณะนี้ไม่มีคาบเรียนตามตาราง การสแกนนิ้วจะถูกบันทึกเป็นประวัติการใช้งานทั่วไป</p>
         </div>
       </div>
     `;
@@ -311,11 +311,11 @@ function renderSchedulesGrid() {
   if (filtered.length === 0) {
     grid.innerHTML = `
       <div class="col-span-full py-16 text-center">
-        <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mx-auto mb-3">
+        <div class="w-14 h-14 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-500 mx-auto mb-3">
           <i class="fa-regular fa-calendar-xmark text-xl"></i>
         </div>
-        <p class="text-base font-medium text-slate-300">ไม่มีคาบเรียนในหมวดนี้</p>
-        <p class="text-xs text-slate-500 mt-1">เลือกดูวันอื่น หรือนำเข้าไฟล์ตารางเรียนใหม่</p>
+        <p class="text-base font-medium text-stone-300">ไม่มีคาบเรียนในหมวดนี้</p>
+        <p class="text-xs text-stone-500 mt-1">เลือกดูวันอื่น หรือนำเข้าไฟล์ตารางเรียนใหม่</p>
       </div>
     `;
     return;
@@ -478,7 +478,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.querySelectorAll('.day-tab').forEach(t => {
         t.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition';
       });
-      tab.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-amber-500 text-stone-950 font-semibold shadow-md shadow-amber-500/20';
+      tab.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-amber-500 text-amber-950 font-semibold shadow-md shadow-amber-500/20';
       selectedDayFilter = tab.dataset.day;
       renderSchedulesGrid();
     });
@@ -593,12 +593,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
             <span>ตรวจพบห้องเรียนเดิม (${data.detected_room_name})</span>
           </div>
-          <p class="text-slate-300">
+          <p class="text-stone-300">
             การนำเข้าไฟล์นี้จะ <b>แทนที่ตารางเรียนเดิมทั้งหมด (${data.existing_schedule_count} คาบ)</b> ของห้องนี้ ด้วยตารางใหม่ (${data.new_schedule_count} คาบ)
           </p>
         `;
         submitImportBtn.innerHTML = `<i class="fa-solid fa-arrows-rotate mr-1"></i> ยืนยันแทนที่ตารางเดิม (${data.new_schedule_count} คาบ)`;
-        submitImportBtn.className = 'px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-slate-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/20 transition';
+        submitImportBtn.className = 'px-4 py-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-stone-950 font-bold rounded-xl text-xs shadow-lg shadow-amber-500/20 transition';
       } else {
         previewAlertBox.className = 'p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-200 text-xs leading-relaxed';
         previewAlertBox.innerHTML = `
@@ -606,7 +606,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <i class="fa-solid fa-circle-plus text-emerald-400"></i>
             <span>ตรวจพบห้องเรียนใหม่ (${data.detected_room_name})</span>
           </div>
-          <p class="text-slate-300">
+          <p class="text-stone-300">
             ระบบจะ <b>สร้าง Dashboard แยกห้องเรียนใหม่</b> ทันที พร้อมตารางเรียน ${data.new_schedule_count} คาบ
           </p>
         `;
@@ -627,7 +627,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         `).join('');
       } else {
-        previewItemsContainer.innerHTML = '<p class="text-center text-slate-500 py-2">ไม่มีข้อมูลตัวอย่าง</p>';
+        previewItemsContainer.innerHTML = '<p class="text-center text-stone-500 py-2">ไม่มีข้อมูลตัวอย่าง</p>';
       }
 
       importPreviewArea.classList.remove('hidden');
