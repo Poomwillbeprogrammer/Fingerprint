@@ -84,3 +84,12 @@
     - [x] เพิ่ม Error UI State พร้อมปุ่ม Retry บน Dashboard และ Users table
     - [x] ปรับ Mobile Responsive Sidebar ให้ยุบเป็น Hamburger Menu บนจอ < 768px
     - [x] เพิ่ม `favicon.svg` / `favicon.ico` และแก้ข้อความ SQLite ให้เป็น Cloud Database (Supabase)
+12. **[TASK-12] ระบบตรวจสอบสถานะเซนเซอร์ R307 แบบแยกอิสระจาก Bridge และป้ายเตือนบนหน้าเว็บ (Accurate R307 Health Tracking & UI Badges):** ✅ COMPLETED
+    - [x] เพิ่มคำสั่ง `CHECK_R307` ใน `sketch.ino` รัน `finger.verifyPassword()` ตอบกลับ `STATUS:R307_READY` หรือ `STATUS:R307_NOT_FOUND`
+    - [x] ใน `unoq_bridge.py` ตั้งค่าเริ่มต้น `r307_connected = False`, ตรวจสอบสถานะทันทีที่ต่อพอร์ต 7500 และแนบไปกับ `register_bridge`
+    - [x] เพิ่ม Background Thread `r307_monitor_thread` ส่ง `CHECK_R307` ตรวจเช็คสถานะเซนเซอร์อัตโนมัติทุก 30 วินาที
+    - [x] ฝั่ง Server (`server.js`) จัดเก็บ `r307Connected`, ส่งต่อผ่าน Socket `serial_status` และ `/api/device/serial-status`
+    - [x] ติดตั้ง Fail-Fast Guard ใน `start_enroll` ปฏิเสธการลงทะเบียนทันทีพร้อมแจ้งเตือนแอดมินหากไม่พบเซนเซอร์ R307 (ไม่ต้องรอ Timeout 20 วิ)
+    - [x] ปรับปรุง UI หน้าเว็บ (`app.js`, `schedules.js`, HTML) แสดงสถานะ 3 ระดับ: 🟢 Online, 🟠 R307 Not Found (ไฟส้มกระพริบ), 🔴 Offline
+    - [x] เปลี่ยนข้อความเริ่มต้นตอนโหลดหน้าเว็บจาก `R307 (COM12)...` เป็น `กำลังตรวจสอบ...`
+    - [x] เพิ่ม Guard หน้าเว็บสกัดการกดยืนยันฟอร์มลงทะเบียนล่วงหน้าหากไม่พบเซนเซอร์
