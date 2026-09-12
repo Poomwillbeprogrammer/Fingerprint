@@ -745,13 +745,20 @@ socket.on('serial_status', (data) => {
   const dot = document.getElementById('serialStatusDot');
   const text = document.getElementById('serialStatusText');
   if (dot && text) {
-    if (data.connected) {
+    const isBridge = Boolean(data && data.connected);
+    const isR307 = Boolean(data && data.connected && data.r307_connected);
+
+    if (isBridge && isR307) {
       dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-500/50';
-      text.textContent = data.port.includes('Cloud') ? 'Cloud Bridge' : 'R307 Online';
+      text.textContent = 'R307 Online';
       text.className = 'text-[11px] text-emerald-400 font-medium';
+    } else if (isBridge && !isR307) {
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-sm shadow-amber-500/50 animate-pulse';
+      text.textContent = 'R307 Not Found';
+      text.className = 'text-[11px] text-amber-400 font-medium';
     } else {
       dot.className = 'w-2 h-2 rounded-full bg-rose-500';
-      text.textContent = 'R307 Offline';
+      text.textContent = 'Offline';
       text.className = 'text-[11px] text-rose-400 font-medium';
     }
   }

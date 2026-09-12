@@ -95,6 +95,7 @@ let serialParser = null;
 let currentEnrollId = null;
 let currentEnrollSession = null;
 let serialConnected = false;
+let r307Connected = false;
 let reconnectTimer = null;
 
 function initSerial() {
@@ -114,6 +115,7 @@ function initSerial() {
     serialPort.open((err) => {
       if (err) {
         serialConnected = false;
+        r307Connected = false;
         console.warn(`⚠️ [Serial] ไม่สามารถเปิดพอร์ต ${TARGET_PORT}: ${err.message}`);
         if (err.message.includes('Access denied')) {
           console.warn(`💡 [คำแนะนำ] พอร์ต ${TARGET_PORT} กำลังถูกใช้งานโดยโปรแกรมอื่น (เช่น Serial Monitor ใน Arduino IDE) กรุณาปิด Serial Monitor ก่อน`);
@@ -124,7 +126,7 @@ function initSerial() {
 
       serialConnected = true;
       console.log(`✅ [Serial] เชื่อมต่อบอร์ด Arduino บน ${TARGET_PORT} สำเร็จ!`);
-      io.emit('serial_status', { connected: true, port: TARGET_PORT });
+      io.emit('serial_status', { connected: true, port: TARGET_PORT, r307_connected: r307Connected });
     });
 
     serialParser.on('data', handleSerialData);
@@ -132,14 +134,16 @@ function initSerial() {
     serialPort.on('error', (err) => {
       console.error(`❌ [Serial Error] ${err.message}`);
       serialConnected = false;
-      io.emit('serial_status', { connected: false, port: TARGET_PORT, error: err.message });
+      r307Connected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, error: err.message });
       scheduleReconnect();
     });
 
     serialPort.on('close', () => {
       console.warn(`🔌 [Serial] พอร์ต ${TARGET_PORT} ปิดการเชื่อมต่อ`);
       serialConnected = false;
-      io.emit('serial_status', { connected: false, port: TARGET_PORT });
+      r307Connected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false });
       scheduleReconnect();
     });
 
@@ -482,6 +486,21 @@ async function handleSerialData(rawLine) {
   const line = rawLine.trim();
   if (!line) return;
   console.log(`📥 [Arduino] ${line}`);
+
+  // ตรวจจับสถานะความพร้อมของฮาร์ดแวร์เซนเซอร์ R307
+  if (line === 'STATUS:R307_READY') {
+    r307Connected = true;
+    const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
+    console.log('✅ [Hardware] เซนเซอร์ R307 พร้อมใช้งาน (Ready)');
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: true });
+    return;
+  } else if (line === 'STATUS:R307_NOT_FOUND') {
+    r307Connected = false;
+    const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
+    console.warn('⚠️ [Hardware] ไม่พบเซนเซอร์ R307 (Not Found)! กรุณาตรวจสอบการต่อสาย Pin 0/1');
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: false });
+    return;
+  }
 
   // 1. สถานะขั้นตอนบันทึกลายนิ้วมือ (3-Finger Enrollment Guide)
   if (line === 'STATUS:ENROLL_STEP1_WAIT') {
@@ -1127,7 +1146,8 @@ app.post('/api/schedules/import-excel', authRequired, upload.single('file'), (re
 app.get('/api/device/serial-status', authRequired, (req, res) => {
   res.json({
     connected: serialConnected,
-    port: hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT
+    port: hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT,
+    r307_connected: r307Connected
   });
 });
 
@@ -1321,7 +1341,7 @@ io.on('connection', (socket) => {
 
   // แจ้งสถานะ Serial ให้ client ที่เพิ่งเชื่อมต่อ
   const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
-  socket.emit('serial_status', { connected: serialConnected, port: displayPort });
+  socket.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected });
 
   // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ (ระบบ 3 นิ้วต่อคน) - เฉพาะ Admin
   socket.on('start_enroll', async (data) => {
@@ -1330,6 +1350,20 @@ io.on('connection', (socket) => {
       return;
     }
     const userId = parseInt(data.id);
+
+    // ตรวจสอบความพร้อมของเซนเซอร์ R307 ก่อนเริ่มลงทะเบียน
+    if (!r307Connected) {
+      console.warn(`⚠️ [Enroll Blocked] ไม่สามารถเริ่มลงทะเบียน User ID #${userId} ได้เนื่องจากไม่พบเซนเซอร์ R307`);
+      socket.emit('enroll_step_update', {
+        status: 'FAILED',
+        message: 'ไม่สามารถเริ่มลงทะเบียนได้ เนื่องจากไม่พบเซนเซอร์ R307 (กรุณาตรวจสอบการต่อสายไฟเซนเซอร์ Pin 0/1)'
+      });
+      await cleanupFailedEnroll(userId, [], 'R307 Sensor Not Connected');
+      currentEnrollSession = null;
+      currentEnrollId = null;
+      return;
+    }
+
     const slot1 = (userId - 1) * 3 + 1;
     const slot2 = (userId - 1) * 3 + 2;
     const slot3 = (userId - 1) * 3 + 3;
@@ -1400,7 +1434,7 @@ io.on('connection', (socket) => {
   });
 
   // เมื่อ Hardware Bridge เชื่อมต่อเข้ามา - เฉพาะ Bridge
-  socket.on('register_bridge', async () => {
+  socket.on('register_bridge', async (data) => {
     if (socket.role !== 'bridge') {
       console.warn(`🚨 [Security] Blocked unauthorized register_bridge from ${socket.id}`);
       return;
@@ -1411,8 +1445,11 @@ io.on('connection', (socket) => {
     }
     hardwareBridgeSocket = socket;
     serialConnected = true;
-    console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id})`);
-    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)' });
+    if (data && typeof data.r307_connected === 'boolean') {
+      r307Connected = data.r307_connected;
+    }
+    console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id}, R307: ${r307Connected ? 'Ready' : 'Not Found'})`);
+    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)', r307_connected: r307Connected });
 
     // ส่งแคชรายชื่อนักศึกษา ตารางเรียน และห้องประจำเครื่องให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
     try {
@@ -1430,10 +1467,25 @@ io.on('connection', (socket) => {
       if (hardwareBridgeSocket && hardwareBridgeSocket.id === socket.id) {
         hardwareBridgeSocket = null;
         serialConnected = false;
+        r307Connected = false;
         console.warn('🔌 [Hardware Bridge] หลุดการเชื่อมต่อจาก Cloud Bridge');
-        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)' });
+        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)', r307_connected: false });
       }
     });
+  });
+
+  // รับการอัปเดตสถานะเซนเซอร์ R307 จาก Bridge
+  socket.on('bridge_sensor_status', (data) => {
+    if (socket.role !== 'bridge') {
+      console.warn(`🚨 [Security] Blocked unauthorized bridge_sensor_status from ${socket.id}`);
+      return;
+    }
+    if (data && typeof data.r307_connected === 'boolean') {
+      r307Connected = data.r307_connected;
+      const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
+      console.log(`📡 [Hardware Bridge] สถานะ R307 อัปเดต: ${r307Connected ? 'Online' : 'Not Found'}`);
+      io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected });
+    }
   });
 
   // บอร์ดร้องขอแคชรายชื่อนักศึกษา

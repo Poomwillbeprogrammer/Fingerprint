@@ -1128,6 +1128,12 @@ void loop() {
       handleFrameReceive();
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
+    } else if (cmd == "CHECK_R307") {
+      if (finger.verifyPassword()) {
+        Serial.println("STATUS:R307_READY");
+      } else {
+        Serial.println("STATUS:R307_NOT_FOUND");
+      }
     }
   }
 

@@ -46,19 +46,29 @@ function playSound(type = 'granted') {
   }
 }
 
+let isR307Online = false;
+let isBridgeConnected = false;
+
 // Hardware Serial Connection Status Listener
 socket.on('serial_status', (data) => {
   const dot = document.getElementById('serialStatusDot');
   const text = document.getElementById('serialStatusText');
+  isBridgeConnected = Boolean(data && data.connected);
+  isR307Online = Boolean(data && data.connected && data.r307_connected);
+
   if (!dot || !text) return;
 
-  if (data.connected) {
+  if (isBridgeConnected && isR307Online) {
     dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
     text.innerText = `R307 Online (${data.port})`;
     text.className = 'text-[11px] text-emerald-400 font-medium';
+  } else if (isBridgeConnected && !isR307Online) {
+    dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse';
+    text.innerText = `R307 Not Found (${data.port})`;
+    text.className = 'text-[11px] text-amber-400 font-medium';
   } else {
     dot.className = 'w-2 h-2 rounded-full bg-rose-400 animate-pulse';
-    text.innerText = `R307 Offline (${data.port})`;
+    text.innerText = `Offline (${data.port || 'Disconnected'})`;
     text.className = 'text-[11px] text-rose-400 font-medium';
   }
 });
@@ -618,6 +628,11 @@ if (window.location.pathname.endsWith('users.html')) {
 
     if (!student_id || !name) {
       alert('กรุณากรอกรหัสนักศึกษาและชื่อ-นามสกุลให้ครบถ้วน');
+      return;
+    }
+
+    if (!isR307Online) {
+      alert('⚠️ ไม่สามารถเริ่มลงทะเบียนได้ เนื่องจากไม่พบเซนเซอร์ R307\n\nกรุณาตรวจสอบว่าเซนเซอร์ลายนิ้วมือเสียบอยู่กับบอร์ด (Pin 0/1) หรือไม่');
       return;
     }
 

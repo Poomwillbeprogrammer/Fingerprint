@@ -44,6 +44,7 @@ schedules_cache = []
 checked_in_records = set()
 offline_queue = []
 current_room_name = 'ทค.1-101'
+r307_connected = False
 
 def load_offline_queue():
     global offline_queue
@@ -523,6 +524,11 @@ def connect_mcu():
             mcu_sock = s
             print('✅ [Uno Q MCU] เชื่อมต่อกับ STM32 พอร์ต 7500 สำเร็จ')
             time.sleep(0.4)
+            # ขอตรวจสอบสถานะเซนเซอร์ R307 ทันทีที่เชื่อมต่อ
+            try:
+                s.sendall(b'CHECK_R307\n')
+            except Exception as e:
+                pass
             # ส่งหน้าจอพร้อมใช้งาน (ภาษาไทย) ทันทีที่เชื่อมต่อ
             send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
             return s
@@ -698,16 +704,25 @@ def mcu_reader_thread():
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
-                # ฉ.1) เมื่อเซนเซอร์เปิดเครื่องตอนบู๊ต (Boot sequence): STM32 จะหน่วง 1500ms แล้วเรียก showIdleScreen()
+                # ฉ.1) เมื่อเซนเซอร์เปิดเครื่องตอนบู๊ต หรือเมื่อตอบกลับ CHECK_R307
                 elif line == 'STATUS:R307_READY':
-                    print('⚡ [Local Engine] เซนเซอร์พร้อมทำงาน รอ STM32 เสร็จสิ้นขั้นตอน Boot (2.0s)...')
+                    r307_connected = True
+                    print('⚡ [Local Engine] เซนเซอร์ R307 พร้อมทำงาน (Ready)')
                     if sio.connected:
+                        sio.emit('bridge_sensor_status', {'r307_connected': True})
                         sio.emit('bridge_serial_data', line)
                     def send_after_boot():
                         time.sleep(2.0)
                         print('⚡ [Local Engine] ส่งหน้าจอพร้อมใช้งานภาษาไทยหลัง Boot สมบูรณ์')
                         send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30)
                     threading.Thread(target=send_after_boot, daemon=True).start()
+
+                elif line == 'STATUS:R307_NOT_FOUND':
+                    r307_connected = False
+                    print('⚠️ [Local Engine] ไม่พบเซนเซอร์ R307 (Not Found)! กรุณาตรวจสอบการต่อสาย Pin 0/1')
+                    if sio.connected:
+                        sio.emit('bridge_sensor_status', {'r307_connected': False})
+                        sio.emit('bridge_serial_data', line)
 
                 # ฉ.2) เมื่อกลับสู่หน้าจอพร้อมใช้งานตามปกติ (หลังสแกนนิ้ว / กดยกเลิก / หมดเวลา)
                 elif line == 'EVENT:IDLE':
@@ -739,7 +754,7 @@ def sync_offline_records_if_any():
 @sio.event
 def connect():
     print(f'☁️ [Cloud] เชื่อมต่อกับ Render สำเร็จ: {RENDER_URL} (SID: {sio.sid})')
-    sio.emit('register_bridge')
+    sio.emit('register_bridge', {'r307_connected': r307_connected})
     # ขอดึงแคชรายชื่อ ตารางเรียน และประวัติลงเวลาล่าสุดทันที
     sio.emit('get_users_cache')
     sio.emit('get_schedules_cache')
@@ -850,6 +865,17 @@ def on_bridge_command(cmd):
         except Exception as e:
             print(f'❌ [Error sending to MCU] {e}')
 
+def r307_monitor_thread():
+    """ตรวจสอบสถานะเซนเซอร์ R307 เป็นระยะ ทุก 30 วินาที"""
+    global mcu_sock
+    while True:
+        time.sleep(30)
+        if mcu_sock:
+            try:
+                mcu_sock.sendall(b'CHECK_R307\n')
+            except Exception as e:
+                pass
+
 if __name__ == '__main__':
     print('====================================================')
     print('🚀 กำลังเริ่ม Local Bitmap Engine บน Uno Q Linux')
@@ -867,6 +893,10 @@ if __name__ == '__main__':
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)
     t.start()
+
+    # 2.1 เริ่ม Thread ตรวจสอบสถานะ R307 ทุก 30 วินาที
+    t_r307 = threading.Thread(target=r307_monitor_thread, daemon=True)
+    t_r307.start()
 
     # 3. Boot Watchdog: ตรวจสอบและส่งหน้าจอภาษาไทยรอบแรกหลังเปิดเครื่อง
     def boot_sync_watchdog():
