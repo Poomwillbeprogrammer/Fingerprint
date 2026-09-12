@@ -4,6 +4,17 @@
 
 const socket = io();
 
+// Toggle Mobile Sidebar Menu
+document.addEventListener('DOMContentLoaded', () => {
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const sidebarMenu = document.getElementById('sidebarMenu');
+  if (mobileMenuBtn && sidebarMenu) {
+    mobileMenuBtn.addEventListener('click', () => {
+      sidebarMenu.classList.toggle('hidden');
+    });
+  }
+});
+
 // Web Audio Beep Notifications
 function playSound(type = 'granted') {
   try {
@@ -197,11 +208,12 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
   }
 
   async function loadLogs() {
+    const tbody = document.getElementById('logsTableBody');
     try {
       const res = await fetch('/api/logs?limit=50');
       if (res.ok) {
         const logs = await res.json();
-        const tbody = document.getElementById('logsTableBody');
+        if (!tbody) return;
         tbody.innerHTML = '';
 
         if (logs.length === 0) {
@@ -210,11 +222,35 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         }
 
         logs.forEach(log => appendLogRow(log, false));
+      } else {
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="5" class="px-5 py-8 text-center text-rose-400">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i>ไม่สามารถโหลดประวัติการสแกนได้ (รหัส ${res.status})
+                <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                  <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
+                </button>
+              </td>
+            </tr>`;
+        }
       }
     } catch (e) {
       console.error('Error loading logs:', e);
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" class="px-5 py-8 text-center text-rose-400">
+              <i class="fa-solid fa-circle-exclamation mr-2"></i>ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อโหลดประวัติได้
+              <button onclick="window.loadLogs()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
+              </button>
+            </td>
+          </tr>`;
+      }
     }
   }
+  window.loadLogs = loadLogs;
 
   function appendLogRow(log, isLive = true) {
     const tbody = document.getElementById('logsTableBody');
@@ -303,16 +339,41 @@ if (window.location.pathname.endsWith('users.html')) {
   let allUsers = [];
 
   async function loadUsers() {
+    const tbody = document.getElementById('usersTableBody');
     try {
       const res = await fetch('/api/users');
       if (res.ok) {
         allUsers = await res.json();
         renderUserTable(allUsers);
+      } else {
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" class="px-5 py-8 text-center text-rose-400">
+                <i class="fa-solid fa-triangle-exclamation mr-2"></i>ไม่สามารถโหลดรายชื่อผู้ใช้ได้ (รหัส ${res.status})
+                <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                  <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
+                </button>
+              </td>
+            </tr>`;
+        }
       }
     } catch (e) {
       console.error('Error loading users:', e);
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="px-5 py-8 text-center text-rose-400">
+              <i class="fa-solid fa-circle-exclamation mr-2"></i>ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อโหลดรายชื่อผู้ใช้ได้
+              <button onclick="window.loadUsers()" class="ml-3 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium border border-slate-700 transition">
+                <i class="fa-solid fa-rotate-right mr-1"></i>ลองใหม่
+              </button>
+            </td>
+          </tr>`;
+      }
     }
   }
+  window.loadUsers = loadUsers;
 
   function renderUserTable(users) {
     const tbody = document.getElementById('usersTableBody');

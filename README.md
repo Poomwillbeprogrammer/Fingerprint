@@ -40,6 +40,11 @@
   * ฝั่งบอร์ดมีหน่วยความจำแคชรายชื่อ (`users_cache.json`) และห้องประจำการ ทำให้สามารถสแกน ระบุชื่อ และเรนเดอร์ผลลัพธ์ขึ้นจอได้ภายในเวลา < 1ms แม้ไม่มีสัญญาณอินเทอร์เน็ต
   * **ระบบคิวออฟไลน์ (`offline_queue.json`):** เมื่อสแกนนิ้วขณะไม่มี Wi-Fi บอร์ดจะบันทึกข้อมูลเข้าคิวออฟไลน์พร้อมเวลาสแกนจริง และหน้าจอ OLED จะแจ้ง `บันทึกออฟไลน์ (รอเน็ต)`
   * **Auto-Sync อัตโนมัติ:** เมื่อสัญญาณ Wi-Fi เชื่อมต่อสำเร็จ ระบบจะซิงก์ข้อมูลขึ้น Cloud ทันทีโดยรักษาวันเวลาสแกนเดิมและสถานะการเข้าเรียน (ตรงเวลา/สาย) พร้อมแสดงป้าย `[ซิงก์ออฟไลน์]` บน Web Dashboard
+* **🔐 Zero-Trust Security & Role-Based Access Control:**
+  * ปิดกั้น API ตารางเรียนและส่งออก Excel ด้วย `authRequired` middleware
+  * การเชื่อมต่อ Socket.IO มีระบบตรวจสอบสิทธิ์ตอน Handshake แยกสิทธิ์ระหว่าง Admin และ Hardware Bridge (`BRIDGE_TOKEN`)
+  * ป้องกัน Brute-force บนหน้าล็อกอินด้วย Rate Limiter และตั้งค่าคุกกี้ `httpOnly`, `sameSite: 'strict'`, `secure`
+  * บังคับใช้ Secrets ผ่าน Environment Variables บน Cloud ทั้งหมด ปราศจาก Hardcoded Secret ในโค้ด
 
 ---
 

@@ -612,6 +612,7 @@ module.exports = {
   getActiveSchedule,
   checkAlreadyCheckedIn,
   recordSessionAttendance,
+  loadAttendanceRecords,
   getSessionAttendance,
   exportAttendanceExcel,
   generateShortName

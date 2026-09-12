@@ -1,4 +1,4 @@
-﻿// bridge.js - รันบนคอมพิวเตอร์ของคุณเพื่อเชื่อมสาย USB เข้ากับ Render Cloud
+// bridge.js - รันบนคอมพิวเตอร์ของคุณเพื่อเชื่อมสาย USB เข้ากับ Render Cloud
 const { io } = require('socket.io-client');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
@@ -14,7 +14,10 @@ console.log(`🔌 พอร์ต Serial ในเครื่อง: ${COM_PORT
 console.log(`🌐 เชื่อมต่อไปยัง Server: ${RENDER_URL}`);
 console.log('====================================================');
 
+const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || 'fingerprint_unoq_bridge_secure_token_2026';
+
 const socket = io(RENDER_URL, {
+  auth: { token: BRIDGE_TOKEN },
   reconnection: true,
   reconnectionDelay: 2000
 });

@@ -67,3 +67,9 @@
   - เมื่อ Wi-Fi กลับมาเชื่อมต่อ (`connect()` event) สคริปต์ `unoq_bridge.py` จะส่งข้อมูลในคิวขึ้น Server ด้วยอีเวนต์ `sync_offline_attendance` ทันทีแบบอัตโนมัติ (Background Auto-Sync)
   - Server จัดเก็บเข้า Supabase พร้อมบันทึกเวลาสแกนเดิม (`timestamp` ตามเวลาจริง ไม่ถูกทับด้วย `now()`), สร้างบันทึก attendance พร้อมแฟล็ก `is_offline: true`, ส่ง ACK `sync_offline_attendance_ack` กลับมาให้บอร์ดลบเฉพาะรายการที่บันทึกสำเร็จ (At-Least-Once Delivery)
   - หน้าเว็บแดชบอร์ดแสดงป้ายสถานะสีส้ม `[ซิงก์ออฟไลน์]` และประเภท `Tier 1 (Offline)` อย่างโปร่งใส
+* **ADR-016:** การยกระดับความปลอดภัยระบบและการพิสูจน์ตัวตนฮาร์ดแวร์แบบแยกสิทธิ์ (Security Hardening & Zero-Trust Bridge Authentication):
+  - **Secret Management:** ลบค่า Hardcoded Secret ทั้งหมดใน `database.js` และ `server.js` บังคับอ่านค่าผ่าน Environment Variables (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `JWT_SECRET`, `BRIDGE_TOKEN`)
+  - **API Authorization:** บังคับใช้ `authRequired` บนทุก Endpoint (`/api/rooms`, `/api/schedules`, `/api/schedules/current`, `/api/schedules/:id/attendance`, `/api/schedules/:id/export-excel`, `/api/device/serial-status`) ป้องกันการรั่วไหลของข้อมูลนักศึกษาและตารางเรียน
+  - **Socket.IO Role-Based Access Control:** ติดตั้ง Middleware `io.use` ตรวจสอบ Token ตอน Handshake แยกสิทธิ์ชัดเจนระหว่าง Web Admin (JWT) และ Hardware Bridge (`BRIDGE_TOKEN`) เพื่อป้องกันการสวมรอยเตะบอร์ดจริงหลุดหรือปลอมแปลงผลสแกนลายนิ้วมือ
+  - **Login Protection:** ลบคำใบ้รหัสเริ่มต้นออกจากหน้าเว็บ, ติดตั้ง `express-rate-limit` (สูงสุด 5 ครั้ง/นาที/IP) และกำหนดคุกกี้ `httpOnly`, `sameSite: 'strict'`, `secure`
+  - **Reliability & UX:** Export ฟังก์ชัน `loadAttendanceRecords` ใน `schedules_manager.js` แก้บั๊กตาราง Dashboard หมุนค้าง, เพิ่ม Error State และปุ่ม Retry บนหน้าเว็บ, ปรับ Mobile Responsive Sidebar ให้ยุบเป็น Hamburger Menu เมื่อจอกว้าง < 768px และเพิ่ม Favicon ของระบบ
