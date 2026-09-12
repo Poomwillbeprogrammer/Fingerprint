@@ -21,7 +21,8 @@
 * **Font Path บนบอร์ด:** `/home/arduino/tahoma.ttf`
 * **Local Users Cache:** `/home/arduino/users_cache.json`
 * **Local Attendance Cache:** `/home/arduino/attendance_cache.json`
-* **Active Room Cache:** `/home/arduino/active_room.json`
+* **Local Offline Queue:** `/home/arduino/offline_queue.json`
+* **Active Room Cache:** `/home/arduino/active_room.txt`
 
 ---
 
@@ -68,5 +69,9 @@
    - [x] เพิ่ม Settling Time 2.0 วินาทีและตัวเฝ้าระวัง (Watchdog 3.5s) ฝั่ง Linux ช่วยการันตีว่าจอจะขึ้นหน้าจอ Idle พร้อมชื่อห้อง 100%
    - [x] จัดการอีเวนต์ `EVENT:NO_MATCH` หน่วงเวลา 1.6 วินาที โชว์หน้าแจ้งเตือนภาษาไทย "ไม่พบข้อมูลลายนิ้วมือ" 3.0 วินาที แล้วกลับสู่หน้าจอ Idle อัตโนมัติ
    - [x] ติดตั้งตัวคุมความเร็วการส่งเฟรมภาพ (Frame Pacing Gap 600ms) และ Bitmap Hash Deduplication ป้องกันคำสั่งชนกันบน UART
-
-
+10. **[TASK-10] ระบบบันทึกเวลาออฟไลน์และซิงก์ย้อนหลังอัตโนมัติ (Store-and-Forward Offline Attendance Logging):** ✅ COMPLETED
+    - [x] จัดทำคิวออฟไลน์ `offline_queue.json` บน Uno Q Linux เก็บประวัติสแกนพร้อมเวลาจริง (Real-Time Timestamp)
+    - [x] OLED แจ้งสถานะ `บันทึกออฟไลน์ (รอเน็ต)` เมื่อไม่มีเน็ต และปฏิเสธทันที `ไม่พบข้อมูล (โหมดออฟไลน์)` เมื่อเป็น Tier 1 No Match
+    - [x] ระบบ Auto-Sync เบื้องหลังทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ พร้อมกลไก Server ACK ป้องกันข้อมูลสูญหาย
+    - [x] Server บันทึกลง Supabase โดยรักษาวันเวลาสแกนจริง และส่งอีเวนต์อัปเดตหน้า Dashboard แบบเรียลไทม์
+    - [x] หน้าเว็บแสดงป้ายกำกับสีส้ม `[ซิงก์ออฟไลน์]` และสถานะ `Tier 1 (Offline)`

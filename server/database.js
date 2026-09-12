@@ -220,7 +220,7 @@ const dbAsync = {
     if (s.includes('INSERT INTO ACCESS_LOGS')) {
       let logObj = {};
       if (params.length >= 6) {
-        const [userId, studentId, userName, fingerprintId, status, score] = params;
+        const [userId, studentId, userName, fingerprintId, status, score, timestamp] = params;
         logObj = {
           user_id: userId,
           student_id: studentId,
@@ -229,8 +229,11 @@ const dbAsync = {
           status: status,
           score: score
         };
+        if (timestamp && typeof timestamp === 'string' && !timestamp.includes('now')) {
+          logObj.timestamp = timestamp;
+        }
       } else {
-        const [userId, userName, fingerprintId, status, score] = params;
+        const [userId, userName, fingerprintId, status, score, timestamp] = params;
         logObj = {
           user_id: userId,
           user_name: userName,
@@ -238,6 +241,9 @@ const dbAsync = {
           status: status,
           score: score
         };
+        if (timestamp && typeof timestamp === 'string' && !timestamp.includes('now')) {
+          logObj.timestamp = timestamp;
+        }
       }
       const { data, error } = await supabase
         .from('access_logs')

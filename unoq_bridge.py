@@ -15,19 +15,49 @@ CACHE_FILE = '/home/arduino/users_cache.json'
 SCHEDULES_CACHE_FILE = '/home/arduino/schedules_cache.json'
 ACTIVE_ROOM_FILE = '/home/arduino/active_room.txt'
 ATTENDANCE_CACHE_FILE = '/home/arduino/attendance_cache.json'
+OFFLINE_QUEUE_FILE = '/home/arduino/offline_queue.json'
 
 if not os.path.exists('/home/arduino'):
     CACHE_FILE = os.path.join(os.path.dirname(__file__), 'users_cache.json')
     SCHEDULES_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'schedules_cache.json')
     ACTIVE_ROOM_FILE = os.path.join(os.path.dirname(__file__), 'active_room.txt')
     ATTENDANCE_CACHE_FILE = os.path.join(os.path.dirname(__file__), 'attendance_cache.json')
+    OFFLINE_QUEUE_FILE = os.path.join(os.path.dirname(__file__), 'offline_queue.json')
 
 sio = socketio.Client(reconnection=True, reconnection_delay=2)
 mcu_sock = None
 users_cache = {}
 schedules_cache = []
 checked_in_records = set()
+offline_queue = []
 current_room_name = 'ทค.1-101'
+
+def load_offline_queue():
+    global offline_queue
+    if os.path.exists(OFFLINE_QUEUE_FILE):
+        try:
+            with open(OFFLINE_QUEUE_FILE, 'r', encoding='utf-8') as f:
+                offline_queue = json.load(f)
+                print(f'📦 [Offline Queue] โหลดคิวออฟไลน์ที่ค้างอยู่: {len(offline_queue)} รายการ')
+        except Exception as e:
+            print(f'⚠️ [Offline Queue] โหลด offline_queue.json ล้มเหลว: {e}')
+            offline_queue = []
+    else:
+        offline_queue = []
+
+def save_offline_queue():
+    global offline_queue
+    try:
+        with open(OFFLINE_QUEUE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(offline_queue, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f'⚠️ [Offline Queue] บันทึก offline_queue.json ล้มเหลว: {e}')
+
+def add_to_offline_queue(record):
+    global offline_queue
+    offline_queue.append(record)
+    save_offline_queue()
+    print(f'💾 [Offline Queue] บันทึกลงคิวออฟไลน์สำเร็จ! (ค้างอยู่ {len(offline_queue)} รายการ)')
 
 def load_active_room():
     global current_room_name, IDLE_BITMAP
@@ -132,7 +162,7 @@ def render_idle_screen(room_name=None):
     return img_to_oled_buf(img)
 
 # 4. เรนเดอร์หน้าจอไม่พบลายนิ้วมือ (Denied Screen ภาษาไทย)
-def render_denied_screen():
+def render_denied_screen(is_offline=False):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
@@ -151,7 +181,7 @@ def render_denied_screen():
 
     d.line([(2, 47), (125, 47)], fill=1)
 
-    footer = 'ไม่มีสิทธิ์เข้าถึง (DENIED)'
+    footer = 'ไม่พบข้อมูล (โหมดออฟไลน์)' if is_offline else 'ไม่มีสิทธิ์เข้าถึง (DENIED)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
     d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
@@ -206,7 +236,7 @@ def render_user_card(student_id, name, sched_info=None):
     return img_to_oled_buf(img)
 
 # 5.1 เรนเดอร์หน้าจอยืนยันสำเร็จ (Confirm Success Screen)
-def render_confirm_success(student_id, name, sched_info=None):
+def render_confirm_success(student_id, name, sched_info=None, is_offline=False):
     img = Image.new('1', (128, 64), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, 127, 63], outline=1)
@@ -236,7 +266,7 @@ def render_confirm_success(student_id, name, sched_info=None):
 
     d.line([(2, 49), (125, 49)], fill=1)
 
-    status = 'บันทึกเวลาสำเร็จ (OK)'
+    status = 'บันทึกออฟไลน์ (รอเน็ต)' if is_offline else 'บันทึกเวลาสำเร็จ (OK)'
     bb = d.textbbox((0, 0), status, font=font_small)
     sw = bb[2] - bb[0]
     d.text(((128 - sw) // 2, 51), status, font=font_small, fill=1)
@@ -569,16 +599,38 @@ def mcu_reader_thread():
                         type_suffix = f" [{class_type}]" if class_type else ""
                         resp_buf = render_already_checked_in(name, f"{short_name}{type_suffix}")
                     else:
-                        print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
-                        if sched and sched_id:
-                            record_check_in(mapped_user_id, sched_id, today_str)
-                        resp_buf = render_confirm_success(stu_id, name, sched_info)
+                        is_offline = not sio.connected
+                        if is_offline:
+                            print(f'💾 [Offline Engine] Wi-Fi ล่ม/ออฟไลน์: บันทึกข้อมูลลงคิวออฟไลน์ User #{mapped_user_id}: {name}')
+                            record = {
+                                'record_id': f"{int(time.time()*1000)}_{mapped_user_id}",
+                                'user_id': mapped_user_id,
+                                'student_id': stu_id,
+                                'name': name,
+                                'slot_id': slot_id,
+                                'score': score,
+                                'room_name': current_room_name,
+                                'schedule_id': sched_id,
+                                'subject_name': sched.get('subject_name') if sched else None,
+                                'short_name': sched.get('short_name') if sched else None,
+                                'class_type': sched.get('class_type') if sched else None,
+                                'attendance_status': sched_info.get('attendanceStatus', 'OUT_OF_SCHEDULE'),
+                                'scanned_at': thai_now.isoformat(),
+                                'is_offline': True
+                            }
+                            add_to_offline_queue(record)
+                            if sched and sched_id:
+                                record_check_in(mapped_user_id, sched_id, today_str)
+                            resp_buf = render_confirm_success(stu_id, name, sched_info, is_offline=True)
+                        else:
+                            print(f'✅ [Local Engine] กดยืนยัน D2 สำเร็จ! User #{mapped_user_id}: {name} -> บันทึกลง Cloud')
+                            if sched and sched_id:
+                                record_check_in(mapped_user_id, sched_id, today_str)
+                            resp_buf = render_confirm_success(stu_id, name, sched_info, is_offline=False)
+                            sio.emit('bridge_serial_data', line)
 
-                    # ส่ง Frame ให้ STM32 ครั้งเดียวใน ackWait (ห้ามส่งซ้ำระหว่าง delay)
-                    send_bitmap_to_mcu(resp_buf, initial_wait=0.04)
-
-                    if sio.connected:
-                        sio.emit('bridge_serial_data', line)
+                        # ส่ง Frame ให้ STM32 ครั้งเดียวใน ackWait (ห้ามส่งซ้ำระหว่าง delay)
+                        send_bitmap_to_mcu(resp_buf, initial_wait=0.04)
 
                 # ค) เมื่อกดยกเลิก/สแกนใหม่ D3
                 elif line.startswith('EVENT:CANCELLED'):
@@ -594,23 +646,36 @@ def mcu_reader_thread():
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
-                # จ) เมื่อสแกนไม่พบลายนิ้วมือ: แสดงหน้าจอ ACCESS DENIED ภาษาไทย แล้วคืนสู่หน้าจอพร้อมใช้งาน
+                # จ.1) เมื่อเซนเซอร์ไม่พบใน Flash ออนบอร์ด (Tier 1 No Match)
+                elif line == 'EVENT:TIER1_NO_MATCH':
+                    if not sio.connected:
+                        print('⚡ [Offline Engine] ไม่พบลายนิ้วมือในเครื่อง และ Wi-Fi ออฟไลน์ (ยกเลิกค้นหา Cloud Tier 2)')
+                        if mcu_sock:
+                            try:
+                                mcu_sock.sendall(b'CANCEL_TIER2\n')
+                            except Exception as e:
+                                print(f'⚠️ ส่ง CANCEL_TIER2 ล้มเหลว: {e}')
+                    else:
+                        print('📡 [Tier 1] ไม่พบในเซนเซอร์ -> ส่งให้ Cloud ค้นหา Tier 2')
+                        sio.emit('bridge_serial_data', line)
+
+                # จ.2) เมื่อสแกนไม่พบลายนิ้วมือ: แสดงหน้าจอ ACCESS DENIED ภาษาไทย แล้วคืนสู่หน้าจอพร้อมใช้งาน
                 elif line == 'EVENT:NO_MATCH':
-                    print('⚡ [Local Engine] ไม่พบลายนิ้วมือในระบบ -> แสดงหน้า Denied ภาษาไทย')
+                    is_off = not sio.connected
+                    print(f'⚡ [Local Engine] ไม่พบลายนิ้วมือในระบบ -> แสดงหน้า Denied ภาษาไทย (Offline={is_off})')
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
-                    def handle_no_match_flow():
+                    def handle_no_match_flow(offline_mode=False):
                         # รอ 1.6 วินาที ให้ STM32 พ้น delay(1500) และ showIdleScreen() ของมันก่อน
                         time.sleep(1.6)
-                        print('⚡ [Local Engine] แสดงหน้าจอ ACCESS DENIED ภาษาไทย')
-                        send_bitmap_to_mcu(DENIED_BITMAP, initial_wait=0.30)
+                        send_bitmap_to_mcu(render_denied_screen(is_offline=offline_mode), initial_wait=0.30)
                         # ค้างหน้าปฏิเสธไว้ 3.0 วินาที ให้อ่านชัดเจน แล้วคืนสู่หน้าจอพร้อมใช้งาน
                         time.sleep(3.0)
                         print('⚡ [Local Engine] คืนสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
                         send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
 
-                    threading.Thread(target=handle_no_match_flow, daemon=True).start()
+                    threading.Thread(target=handle_no_match_flow, args=(is_off,), daemon=True).start()
 
                 elif line.startswith('RESP:ENROLL_OK') or line.startswith('TEMPLATE:'):
                     try:
@@ -649,6 +714,15 @@ def mcu_reader_thread():
             time.sleep(1)
 
 # 9. Socket.IO Handlers เชื่อมต่อ Render Cloud
+def sync_offline_records_if_any():
+    global offline_queue
+    if offline_queue and sio.connected:
+        print(f'🔄 [Offline Sync] ตรวจพบข้อมูลออฟไลน์ค้างอยู่ {len(offline_queue)} รายการ กำลังซิงก์ขึ้น Cloud...')
+        try:
+            sio.emit('sync_offline_attendance', offline_queue)
+        except Exception as e:
+            print(f'⚠️ [Offline Sync] ส่งข้อมูลออฟไลน์ล้มเหลว: {e}')
+
 @sio.event
 def connect():
     print(f'☁️ [Cloud] เชื่อมต่อกับ Render สำเร็จ: {RENDER_URL} (SID: {sio.sid})')
@@ -657,6 +731,7 @@ def connect():
     sio.emit('get_users_cache')
     sio.emit('get_schedules_cache')
     sio.emit('get_today_attendance')
+    sync_offline_records_if_any()
 
 @sio.event
 def disconnect():
@@ -736,6 +811,18 @@ def on_user_updated(data=None):
     except:
         pass
 
+@sio.on('sync_offline_attendance_ack')
+def on_sync_offline_attendance_ack(data):
+    global offline_queue
+    if isinstance(data, dict):
+        synced_ids = set(data.get('synced_ids', []))
+        if synced_ids:
+            before_cnt = len(offline_queue)
+            offline_queue = [item for item in offline_queue if item.get('record_id') not in synced_ids]
+            save_offline_queue()
+            after_cnt = len(offline_queue)
+            print(f'✅ [Offline Sync] ซิงก์ข้อมูลออฟไลน์สำเร็จ {len(synced_ids)} รายการ! (คงเหลือในคิว: {after_cnt} รายการ)')
+
 @sio.on('bridge_command')
 def on_bridge_command(cmd):
     global mcu_sock
@@ -762,6 +849,7 @@ if __name__ == '__main__':
     load_schedules_cache()
     load_active_room()
     load_attendance_cache()
+    load_offline_queue()
 
     # 2. เริ่ม Thread รับส่งข้อมูลกับ MCU (Port 7500)
     t = threading.Thread(target=mcu_reader_thread, daemon=True)

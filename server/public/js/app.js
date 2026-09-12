@@ -222,6 +222,13 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     const tr = document.createElement('tr');
     tr.className = `border-b border-slate-800/60 hover:bg-slate-800/40 transition ${isLive ? 'animate-new-row' : ''}`;
 
+    const isOffline = log.is_offline || (log.tier && log.tier.includes('Offline'));
+    const offlineBadge = isOffline ? `
+      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30 ml-1.5" title="สแกนตอนเครือข่ายออฟไลน์">
+        <i class="fa-solid fa-wifi-slash text-[8px]"></i>ซิงก์ออฟไลน์
+      </span>
+    ` : '';
+
     tr.innerHTML = `
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(log.timestamp)}</td>
       <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold">${log.student_id || '-'}</td>
@@ -230,8 +237,8 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
           <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
         </div>
         <div>
-          <div>${log.user_name || 'Unknown User'}</div>
-          ${log.schedule ? `<div class="text-[10px] text-cyan-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-chalkboard-user text-[9px]"></i><span>${log.schedule.short_name} [${log.schedule.class_type}]</span><span class="${log.attendance_status === 'ON_TIME' ? 'text-emerald-400' : 'text-amber-400'} font-semibold">(${log.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'})</span></div>` : ''}
+          <div class="flex items-center">${log.user_name || 'Unknown User'}${offlineBadge}</div>
+          ${log.schedule ? `<div class="text-[10px] text-cyan-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-chalkboard-user text-[9px]"></i><span>${log.schedule.short_name || log.schedule.subject_name} [${log.schedule.class_type || 'T'}]</span><span class="${log.attendance_status === 'ON_TIME' ? 'text-emerald-400' : 'text-amber-400'} font-semibold">(${log.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'})</span></div>` : ''}
         </div>
       </td>
       <td class="px-5 py-3.5 font-mono text-xs text-cyan-400 font-semibold">${log.fingerprint_id > 0 ? '#' + log.fingerprint_id : '-'}</td>
@@ -242,7 +249,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
         </span>
       </td>
       <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${log.score || 0}</td>
-      <td class="px-5 py-3.5 text-xs font-medium text-slate-300">${log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-')}</td>
+      <td class="px-5 py-3.5 text-xs font-medium text-slate-300">${isOffline ? '<span class="text-amber-400">Tier 1 (Offline)</span>' : (log.tier || (log.fingerprint_id > 0 ? 'Tier 1' : '-'))}</td>
     `;
 
     if (isLive) {
@@ -265,6 +272,13 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     appendLogRow(log, true);
     playSound(log.status === 'GRANTED' ? 'granted' : 'denied');
     loadStats();
+  });
+
+  // Socket.io: รับแจ้งเตือนเมื่อระบบซิงก์ข้อมูลออฟไลน์ย้อนหลังเสร็จสิ้น
+  socket.on('offline_sync_completed', (data) => {
+    console.log(`📡 [Offline Sync] ซิงก์ข้อมูลออฟไลน์ย้อนหลังสำเร็จ ${data.count} รายการ`);
+    loadStats();
+    loadLogs();
   });
 
   const refreshBtn = document.getElementById('refreshBtn');
