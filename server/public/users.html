@@ -3,77 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>User Management - Fingerprint Admin</title>
+  <title>User Management - Fingerprint Admin (RMUTL)</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+<body class="min-h-screen bg-stone-950 text-stone-100 flex flex-col md:flex-row">
 
   <!-- Mobile Top Bar (แสดงเฉพาะจอมือถือ < md) -->
-  <div class="flex md:hidden items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-30">
+  <div class="flex md:hidden items-center justify-between px-4 py-3 bg-stone-900 border-b border-stone-800 sticky top-0 z-30">
     <div class="flex items-center gap-2.5">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white text-sm shadow-md">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-700 via-amber-600 to-yellow-500 flex items-center justify-center text-white text-sm shadow-md">
         <i class="fa-solid fa-fingerprint"></i>
       </div>
       <div>
         <span class="font-bold text-white tracking-wide text-xs">FINGERPRINT</span>
-        <span class="text-[10px] text-cyan-400 font-mono block leading-none">UNO Q IoT</span>
+        <span class="text-[10px] text-amber-400 font-mono block leading-none">UNO Q IoT (RMUTL)</span>
       </div>
     </div>
-    <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+    <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition">
       <i class="fa-solid fa-bars"></i>
     </button>
   </div>
 
   <!-- Sidebar -->
-  <aside id="sidebarMenu" class="hidden md:flex w-full md:w-64 glass border-r border-slate-800 p-5 flex-col justify-between shrink-0">
+  <aside id="sidebarMenu" class="hidden md:flex w-full md:w-64 glass border-r border-stone-800 p-5 flex-col justify-between shrink-0">
     <div>
       <!-- Brand -->
       <div class="flex items-center gap-3 px-2 py-3 mb-6">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-700 via-amber-600 to-yellow-500 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
           <i class="fa-solid fa-fingerprint text-xl"></i>
         </div>
         <div>
           <h2 class="font-bold text-white tracking-wide text-sm">FINGERPRINT</h2>
-          <p class="text-xs text-cyan-400 font-mono">UNO Q IoT System</p>
+          <p class="text-xs text-amber-400 font-mono">UNO Q IoT System</p>
         </div>
       </div>
 
       <!-- Navigation -->
       <nav class="space-y-1.5">
-        <a href="/index.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium text-sm transition">
+        <a href="/index.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800/50 font-medium text-sm transition">
           <i class="fa-solid fa-chart-line w-4 text-center"></i>
           <span>แดชบอร์ดสด</span>
         </a>
-        <a href="/schedules.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium text-sm transition">
+        <a href="/schedules.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800/50 font-medium text-sm transition">
           <i class="fa-solid fa-calendar-days w-4 text-center"></i>
           <span>ตารางเรียน & เช็คชื่อ</span>
         </a>
-        <a href="/users.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 font-medium border border-cyan-500/20 text-sm transition">
+        <a href="/users.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-amber-500/15 text-amber-400 font-medium border border-amber-500/30 text-sm transition">
           <i class="fa-solid fa-users w-4 text-center"></i>
           <span>จัดการผู้ใช้งาน</span>
         </a>
       </nav>
       <!-- Hardware Connection Status -->
-      <div class="mt-4 pt-3 border-t border-slate-800/80 px-2">
-        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+      <div class="mt-4 pt-3 border-t border-stone-800/80 px-2">
+        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs">
           <div class="flex items-center gap-2">
             <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"></span>
-            <span id="serialStatusText" class="text-[11px] text-slate-400">กำลังตรวจสอบ...</span>
+            <span id="serialStatusText" class="text-[11px] text-stone-400">กำลังตรวจสอบ...</span>
           </div>
-          <i class="fa-solid fa-microchip text-slate-500 text-xs"></i>
+          <i class="fa-solid fa-microchip text-stone-500 text-xs"></i>
         </div>
       </div>
     </div>
 
     <!-- User / Logout -->
-    <div class="pt-4 border-t border-slate-800/80">
+    <div class="pt-4 border-t border-stone-800/80">
       <div class="flex items-center justify-between px-2 py-2">
         <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs">
+          <div class="w-8 h-8 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-stone-300 text-xs">
             <i class="fa-solid fa-user-shield"></i>
           </div>
           <div>
@@ -82,11 +82,12 @@
               <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span> Online
             </p>
           </div>
+        </div>
         <div class="flex items-center gap-1">
-          <button id="openChangePasswordBtn" title="เปลี่ยนรหัสผ่าน" class="text-slate-400 hover:text-cyan-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+          <button id="openChangePasswordBtn" title="เปลี่ยนรหัสผ่าน" class="text-stone-400 hover:text-amber-400 transition p-1.5 rounded-lg hover:bg-stone-800">
             <i class="fa-solid fa-key text-sm"></i>
           </button>
-          <button id="logoutBtn" title="ออกจากระบบ" class="text-slate-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+          <button id="logoutBtn" title="ออกจากระบบ" class="text-stone-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-stone-800">
             <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
           </button>
         </div>
@@ -103,10 +104,10 @@
         <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2.5">
           <span>รายชื่อผู้ใช้งานและลายนิ้วมือ (User Management)</span>
         </h1>
-        <p class="text-sm text-slate-400 mt-1">จัดการรายชื่อผู้ใช้งาน, สิทธิ์การเข้าถึง และการลงทะเบียนลายนิ้วมือใหม่</p>
+        <p class="text-sm text-stone-400 mt-1">จัดการรายชื่อผู้ใช้งาน, สิทธิ์การเข้าถึง และการลงทะเบียนลายนิ้วมือใหม่</p>
       </div>
       <div class="flex items-center gap-2.5 flex-wrap">
-        <button id="openEnrollModalBtn" class="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg shadow-cyan-500/25 transition">
+        <button id="openEnrollModalBtn" class="px-4 py-2.5 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white rounded-xl text-sm font-medium flex items-center gap-2 shadow-lg shadow-amber-500/25 transition">
           <i class="fa-solid fa-user-plus"></i> เพิ่มผู้ใช้งาน / บันทึกนิ้ว
         </button>
       </div>
@@ -115,32 +116,32 @@
     <!-- Search & Filter Bar -->
     <div class="glass-card rounded-2xl p-5 mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
       <div class="relative w-full sm:w-80">
-        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-400">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-stone-400">
           <i class="fa-solid fa-magnifying-glass text-xs"></i>
         </span>
         <input type="text" id="searchInput"
-          class="w-full pl-9 pr-4 py-2 bg-slate-900/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 text-xs transition"
+          class="w-full pl-9 pr-4 py-2 bg-stone-900/80 border border-stone-700 rounded-xl text-white placeholder-stone-500 focus:outline-none focus:border-amber-500 text-xs transition"
           placeholder="ค้นหาชื่อ, รหัสนักศึกษา หรือ Slot ID...">
       </div>
-      <div class="text-xs text-slate-400 flex items-center gap-2">
+      <div class="text-xs text-stone-400 flex items-center gap-2">
         <span>จำนวนผู้ใช้: <span id="userCount" class="font-bold text-white font-mono">0</span> คน</span>
       </div>
     </div>
 
     <!-- Users Table -->
-    <div class="glass-card rounded-2xl border border-slate-800/80 shadow-xl overflow-hidden">
-      <div class="p-5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div class="glass-card rounded-2xl border border-stone-800/80 shadow-xl overflow-hidden">
+      <div class="p-5 border-b border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 class="font-semibold text-white text-base md:text-lg flex items-center gap-2">
-            <i class="fa-solid fa-address-book text-cyan-400"></i> รายชื่อผู้ใช้และลายนิ้วมือที่ลงทะเบียน
+            <i class="fa-solid fa-address-book text-amber-400"></i> รายชื่อผู้ใช้และลายนิ้วมือที่ลงทะเบียน
           </h2>
-          <p class="text-xs text-slate-400 mt-0.5">จัดการข้อมูลและตรวจเช็คสถานะการบันทึกลายนิ้วมือ</p>
+          <p class="text-xs text-stone-400 mt-0.5">จัดการข้อมูลและตรวจเช็คสถานะการบันทึกลายนิ้วมือ</p>
         </div>
-        <span class="text-xs text-slate-400 font-mono">ความจุเซนเซอร์: สูงสุด 300 ลายนิ้วมือ</span>
+        <span class="text-xs text-stone-400 font-mono">ความจุเซนเซอร์: สูงสุด 300 ลายนิ้วมือ</span>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-slate-300">
-          <thead class="text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+        <table class="w-full text-left text-sm text-stone-300">
+          <thead class="text-xs uppercase font-semibold text-stone-400 border-b border-stone-800">
             <tr>
               <th class="px-5 py-3.5">Slot ID</th>
               <th class="px-5 py-3.5">รหัสนักศึกษา</th>
@@ -150,9 +151,9 @@
               <th class="px-5 py-3.5 text-right">การจัดการ</th>
             </tr>
           </thead>
-          <tbody id="usersTableBody" class="divide-y divide-slate-800/60">
+          <tbody id="usersTableBody" class="divide-y divide-stone-800/60">
             <tr>
-              <td colspan="6" class="px-5 py-8 text-center text-slate-500">
+              <td colspan="6" class="px-5 py-8 text-center text-stone-500">
                 <i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังโหลดรายชื่อ...
               </td>
             </tr>
@@ -164,32 +165,32 @@
   </main>
 
   <!-- Interactive Fingerprint Enrollment Modal -->
-  <div id="enrollModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="glass-card w-full max-w-lg rounded-2xl border border-slate-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
+  <div id="enrollModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-lg rounded-2xl border border-stone-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
       
       <!-- Close Button -->
-      <button id="closeModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+      <button id="closeModalBtn" class="absolute top-4 right-4 text-stone-400 hover:text-white p-1.5 rounded-lg hover:bg-stone-800">
         <i class="fa-solid fa-xmark text-lg"></i>
       </button>
 
       <!-- Modal Title -->
       <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
           <i class="fa-solid fa-fingerprint"></i>
         </div>
         <div>
           <h2 class="text-xl font-bold text-white">ลงทะเบียนลายนิ้วมือใหม่</h2>
-          <p class="text-xs text-slate-400">กรอกข้อมูลผู้ใช้งานและทำตามขั้นตอนสแกนสด</p>
+          <p class="text-xs text-stone-400">กรอกข้อมูลผู้ใช้งานและทำตามขั้นตอนสแกนสด</p>
         </div>
       </div>
 
       <!-- Form Inputs -->
       <form id="enrollForm" class="space-y-4">
         <!-- Auto Slot ID Banner -->
-        <div class="p-3 bg-slate-900/40 rounded-xl flex items-center justify-between">
+        <div class="p-3 bg-stone-900/40 rounded-xl flex items-center justify-between">
           <div class="flex items-center gap-2.5">
-            <span class="text-xs text-slate-400 font-medium">ตำแหน่งเซนเซอร์ (Slot ID):</span>
-            <span id="enrollSlotIdBadge" class="px-2.5 py-0.5 rounded-lg bg-cyan-500/20 text-cyan-300 font-bold font-mono text-sm">#1</span>
+            <span class="text-xs text-stone-400 font-medium">ตำแหน่งเซนเซอร์ (Slot ID):</span>
+            <span id="enrollSlotIdBadge" class="px-2.5 py-0.5 rounded-lg bg-amber-500/20 text-amber-300 font-bold font-mono text-sm">#1</span>
           </div>
           <span class="text-[11px] text-emerald-400 flex items-center gap-1.5 font-medium">
             <i class="fa-solid fa-wand-magic-sparkles text-[10px]"></i> รันเลขอัตโนมัติ (แทนที่ช่องว่าง)
@@ -198,34 +199,34 @@
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">รหัสนักศึกษา (Student ID) *</label>
+          <label class="block text-xs font-medium text-stone-300 mb-1.5">รหัสนักศึกษา (Student ID) *</label>
           <input type="text" id="enrollStudentId" required
-            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500 font-mono tracking-wider"
+            class="w-full px-3.5 py-2.5 bg-stone-900/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500 font-mono tracking-wider"
             placeholder="เช่น 6604101311">
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">ชื่อ-นามสกุล (Full Name) *</label>
+          <label class="block text-xs font-medium text-stone-300 mb-1.5">ชื่อ-นามสกุล (Full Name) *</label>
           <input type="text" id="enrollName" required
-            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            class="w-full px-3.5 py-2.5 bg-stone-900/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
             placeholder="เช่น นายภูมิ สมบูรณ์">
         </div>
 
         <!-- Live Step-by-Step Guidance Box -->
-        <div id="guidanceBox" class="mt-4 p-4 rounded-xl bg-slate-900/40 text-center">
-          <div id="stepIcon" class="w-12 h-12 mx-auto mb-2 rounded-full bg-slate-800 flex items-center justify-center text-xl text-cyan-400">
+        <div id="guidanceBox" class="mt-4 p-4 rounded-xl bg-stone-900/40 text-center">
+          <div id="stepIcon" class="w-12 h-12 mx-auto mb-2 rounded-full bg-stone-800 flex items-center justify-center text-xl text-amber-400">
             <i class="fa-solid fa-hand-pointer"></i>
           </div>
           <h3 id="stepTitle" class="text-sm font-semibold text-white">พร้อมลงทะเบียน</h3>
-          <p id="stepDesc" class="text-xs text-slate-400 mt-1">กดปุ่ม "บันทึกและเริ่มสแกน" ด้านล่างเพื่อเริ่มบันทึก</p>
+          <p id="stepDesc" class="text-xs text-stone-400 mt-1">กดปุ่ม "บันทึกและเริ่มสแกน" ด้านล่างเพื่อเริ่มบันทึก</p>
         </div>
 
         <!-- Submit Button -->
         <div class="pt-3 flex gap-3">
-          <button type="button" id="cancelEnrollBtn" class="w-1/2 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+          <button type="button" id="cancelEnrollBtn" class="w-1/2 py-2.5 px-4 bg-stone-800 hover:bg-stone-700 text-stone-300 text-sm font-medium rounded-xl transition">
             ยกเลิก
           </button>
-          <button type="submit" id="submitEnrollBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2">
+          <button type="submit" id="submitEnrollBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-amber-500/25 transition flex items-center justify-center gap-2">
             <i class="fa-solid fa-floppy-disk"></i>
             <span>บันทึกข้อมูล</span>
           </button>
@@ -236,19 +237,19 @@
   </div>
 
   <!-- Change Password Modal -->
-  <div id="passwordModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
-    <div class="glass-card w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
-      <button id="closePasswordModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800">
+  <div id="passwordModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="glass-card w-full max-w-md rounded-2xl border border-stone-700 shadow-2xl p-6 relative animate-in fade-in zoom-in duration-200">
+      <button id="closePasswordModalBtn" class="absolute top-4 right-4 text-stone-400 hover:text-white p-1.5 rounded-lg hover:bg-stone-800">
         <i class="fa-solid fa-xmark text-lg"></i>
       </button>
 
       <div class="flex items-center gap-3 mb-6">
-        <div class="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+        <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
           <i class="fa-solid fa-key"></i>
         </div>
         <div>
           <h2 class="text-xl font-bold text-white">เปลี่ยนรหัสผ่าน Admin</h2>
-          <p class="text-xs text-slate-400">กำหนดรหัสผ่านใหม่เพื่อความปลอดภัย</p>
+          <p class="text-xs text-stone-400">กำหนดรหัสผ่านใหม่เพื่อความปลอดภัย</p>
         </div>
       </div>
 
@@ -256,31 +257,31 @@
 
       <form id="changePasswordForm" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">รหัสผ่านเดิม (Current Password) *</label>
+          <label class="block text-xs font-medium text-stone-300 mb-1">รหัสผ่านเดิม (Current Password) *</label>
           <input type="password" id="currentPassword" required
-            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            class="w-full px-3.5 py-2.5 bg-stone-900/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
             placeholder="••••••••">
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">รหัสผ่านใหม่ (New Password) *</label>
+          <label class="block text-xs font-medium text-stone-300 mb-1">รหัสผ่านใหม่ (New Password) *</label>
           <input type="password" id="newPassword" required minlength="6"
-            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            class="w-full px-3.5 py-2.5 bg-stone-900/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
             placeholder="อย่างน้อย 6 ตัวอักษร">
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1">ยืนยันรหัสผ่านใหม่ (Confirm Password) *</label>
+          <label class="block text-xs font-medium text-stone-300 mb-1">ยืนยันรหัสผ่านใหม่ (Confirm Password) *</label>
           <input type="password" id="confirmPassword" required minlength="6"
-            class="w-full px-3.5 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-white text-sm focus:outline-none focus:border-cyan-500"
+            class="w-full px-3.5 py-2.5 bg-stone-900/80 border border-stone-700 rounded-xl text-white text-sm focus:outline-none focus:border-amber-500"
             placeholder="พิมพ์รหัสผ่านใหม่อีกครั้ง">
         </div>
 
         <div class="pt-3 flex gap-3">
-          <button type="button" id="cancelPasswordBtn" class="w-1/2 py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-xl transition">
+          <button type="button" id="cancelPasswordBtn" class="w-1/2 py-2.5 px-4 bg-stone-800 hover:bg-stone-700 text-stone-300 text-sm font-medium rounded-xl transition">
             ยกเลิก
           </button>
-          <button type="submit" id="submitPasswordBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-blue-600 to-cyan-500 hover:from-blue-500 hover:to-cyan-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-cyan-500/25 transition flex items-center justify-center gap-2">
+          <button type="submit" id="submitPasswordBtn" class="w-1/2 py-2.5 px-4 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white text-sm font-medium rounded-xl shadow-lg shadow-amber-500/25 transition flex items-center justify-center gap-2">
             <i class="fa-solid fa-check"></i>
             <span>บันทึกรหัสผ่าน</span>
           </button>

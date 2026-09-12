@@ -86,16 +86,16 @@ function renderRoomTabs() {
     
     let baseClass = 'px-3.5 py-2 rounded-xl text-xs font-medium flex items-center gap-2 transition shrink-0 cursor-pointer ';
     if (isSelected) {
-      baseClass += 'bg-cyan-500 text-slate-950 font-semibold shadow-md shadow-cyan-500/20';
+      baseClass += 'bg-amber-500 text-stone-950 font-semibold shadow-md shadow-amber-500/20';
     } else {
-      baseClass += 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800';
+      baseClass += 'bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800';
     }
 
     const deviceIndicator = isDeviceRoom
-      ? `<span class="w-2 h-2 rounded-full ${isSelected ? 'bg-slate-950' : 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]'} inline-block" title="เครื่องสแกน Uno Q ประจำห้องนี้"></span>`
+      ? `<span class="w-2 h-2 rounded-full ${isSelected ? 'bg-stone-950' : 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]'} inline-block" title="เครื่องสแกน Uno Q ประจำห้องนี้"></span>`
       : '';
 
-    const badgeClass = isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400';
+    const badgeClass = isSelected ? 'bg-stone-950/20 text-stone-950' : 'bg-stone-800 text-stone-400';
 
     return `
       <button onclick="switchRoom('${r.name}')" class="${baseClass}">
@@ -114,7 +114,7 @@ function renderRoomTabs() {
            <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)] inline-block"></span>
            เครื่องสแกนประจำห้องนี้
          </span>`
-      : `<button onclick="handleSetActiveRoom('${currentRoom}')" class="px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition">
+      : `<button onclick="handleSetActiveRoom('${currentRoom}')" class="px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition">
            <i class="fa-solid fa-microchip"></i>
            กำหนดให้เครื่องสแกนคุมห้องนี้
          </button>`;
@@ -246,35 +246,35 @@ function renderActiveBanner() {
     const isEarly = activeScheduleInfo.isEarly;
 
     const statusBadge = isEarly
-      ? '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"><span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span> เปิดให้สแกนล่วงหน้า (15 นาทีก่อนเริ่ม)</span>'
+      ? '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30"><span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span> เปิดให้สแกนล่วงหน้า (15 นาทีก่อนเริ่ม)</span>'
       : '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> กำลังเรียนอยู่ (Active Class)</span>';
 
     const typeBadge = s.class_type === 'P'
       ? '<span class="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">[P] ปฏิบัติ</span>'
       : '<span class="px-2.5 py-0.5 rounded-lg text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/30">[T] ทฤษฎี</span>';
 
-    banner.className = 'mb-6 p-5 rounded-2xl border border-cyan-500/40 bg-gradient-to-r from-cyan-950/40 via-slate-900 to-slate-900 shadow-xl shadow-cyan-950/20';
+    banner.className = 'mb-6 p-5 rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-950/40 via-stone-900 to-stone-900 shadow-xl shadow-amber-950/20';
     banner.innerHTML = `
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <div class="flex flex-wrap items-center gap-2 mb-2">
             ${statusBadge}
             ${typeBadge}
-            <span class="text-xs text-slate-400 font-mono"><i class="fa-solid fa-clock"></i> ${s.time_display}</span>
-            <span class="text-xs text-slate-400"><i class="fa-solid fa-location-dot"></i> ห้อง ${s.room_name} (${s.building})</span>
+            <span class="text-xs text-stone-400 font-mono"><i class="fa-solid fa-clock"></i> ${s.time_display}</span>
+            <span class="text-xs text-stone-400"><i class="fa-solid fa-location-dot"></i> ห้อง ${s.room_name} (${s.building})</span>
           </div>
           <h2 class="text-lg font-bold text-white flex items-center gap-2">
-            <span class="text-cyan-400 font-mono">${s.subject_code}</span>
+            <span class="text-amber-400 font-mono">${s.subject_code}</span>
             <span>${s.subject_name}</span>
           </h2>
-          <p class="text-xs text-slate-300 mt-1 flex flex-wrap items-center gap-4">
-            <span><i class="fa-solid fa-user-tie text-slate-400 mr-1"></i> ${s.instructor || '-'}</span>
-            <span><i class="fa-solid fa-users-rectangle text-slate-400 mr-1"></i> ${s.section_group || '-'}</span>
+          <p class="text-xs text-stone-300 mt-1 flex flex-wrap items-center gap-4">
+            <span><i class="fa-solid fa-user-tie text-stone-400 mr-1"></i> ${s.instructor || '-'}</span>
+            <span><i class="fa-solid fa-users-rectangle text-stone-400 mr-1"></i> ${s.section_group || '-'}</span>
             <span class="text-emerald-400 font-medium"><i class="fa-solid fa-hourglass-half mr-1"></i> อนุโลมสาย 15 นาที</span>
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <button onclick="openAttendanceModal(${s.id})" class="px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 transition">
+          <button onclick="openAttendanceModal(${s.id})" class="px-4 py-2.5 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
             <i class="fa-solid fa-clipboard-check"></i> ดูใบเช็คชื่อคาบนี้
           </button>
         </div>
@@ -332,10 +332,10 @@ function renderSchedulesGrid() {
       : '';
 
     return `
-      <div class="glass-card rounded-2xl p-5 border ${isCurrent ? 'border-cyan-500/50 shadow-lg shadow-cyan-950/20' : 'border-slate-800/80'} hover:border-slate-700 transition flex flex-col justify-between">
+      <div class="glass-card rounded-2xl p-5 border ${isCurrent ? 'border-amber-500/50 shadow-lg shadow-amber-950/20' : 'border-stone-800/80'} hover:border-stone-700 transition flex flex-col justify-between">
         <div>
           <div class="flex items-center justify-between gap-2 mb-3">
-            <span class="text-xs font-semibold text-cyan-400 bg-cyan-500/10 px-2.5 py-1 rounded-lg border border-cyan-500/20">
+            <span class="text-xs font-semibold text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
               <i class="fa-regular fa-calendar mr-1"></i> ${s.day_name}
             </span>
             <div class="flex items-center gap-1.5">
@@ -344,31 +344,31 @@ function renderSchedulesGrid() {
             </div>
           </div>
 
-          <div class="flex items-center gap-1.5 text-xs text-slate-300 font-mono mb-2">
-            <i class="fa-solid fa-clock text-slate-500 text-[11px]"></i>
+          <div class="flex items-center gap-1.5 text-xs text-stone-300 font-mono mb-2">
+            <i class="fa-solid fa-clock text-stone-500 text-[11px]"></i>
             <span>${s.time_display}</span>
           </div>
 
           <div class="mb-3">
-            <p class="text-xs text-slate-400 font-mono font-medium">${s.subject_code}</p>
+            <p class="text-xs text-stone-400 font-mono font-medium">${s.subject_code}</p>
             <h3 class="text-sm font-bold text-white mt-0.5 leading-snug line-clamp-2" title="${s.subject_name}">${s.subject_name}</h3>
           </div>
 
-          <div class="space-y-1 text-[11px] text-slate-400 mb-4 pt-3 border-t border-slate-800/60">
+          <div class="space-y-1 text-[11px] text-stone-400 mb-4 pt-3 border-t border-stone-800/60">
             <p class="flex items-center gap-1.5 truncate">
-              <i class="fa-solid fa-user-tie text-slate-500 w-3.5 text-center"></i>
+              <i class="fa-solid fa-user-tie text-stone-500 w-3.5 text-center"></i>
               <span>${s.instructor || '-'}</span>
             </p>
             <p class="flex items-center gap-1.5 truncate">
-              <i class="fa-solid fa-users text-slate-500 w-3.5 text-center"></i>
+              <i class="fa-solid fa-users text-stone-500 w-3.5 text-center"></i>
               <span>${s.section_group || '-'}</span>
             </p>
           </div>
         </div>
 
-        <div class="flex items-center gap-2 pt-2 border-t border-slate-800/80">
-          <button onclick="openAttendanceModal(${s.id})" class="flex-1 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition">
-            <i class="fa-solid fa-list-check text-cyan-400"></i> ใบเช็คชื่อ
+        <div class="flex items-center gap-2 pt-2 border-t border-stone-800/80">
+          <button onclick="openAttendanceModal(${s.id})" class="flex-1 py-2 px-3 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition">
+            <i class="fa-solid fa-list-check text-amber-400"></i> ใบเช็คชื่อ
           </button>
           <a href="/api/schedules/${s.id}/export-excel" download title="ดาวน์โหลด Excel" class="p-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs transition">
             <i class="fa-solid fa-file-excel"></i>
@@ -444,13 +444,13 @@ async function loadAttendanceSheetData(scheduleId, dateStr) {
         : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-clock"></i> มาสาย</span>';
 
       return `
-        <tr class="hover:bg-slate-800/30 transition">
-          <td class="py-3 text-center text-slate-400 font-mono">${idx + 1}</td>
-          <td class="py-3 text-cyan-400 font-mono font-medium">${att.student_id || '-'}</td>
+        <tr class="hover:bg-stone-800/30 transition">
+          <td class="py-3 text-center text-stone-400 font-mono">${idx + 1}</td>
+          <td class="py-3 text-amber-400 font-mono font-medium">${att.student_id || '-'}</td>
           <td class="py-3 font-medium text-white">${att.user_name || '-'}</td>
-          <td class="py-3 text-slate-300 font-mono">${att.time || '-'}</td>
+          <td class="py-3 text-stone-300 font-mono">${att.time || '-'}</td>
           <td class="py-3">${statusBadge}</td>
-          <td class="py-3 text-right text-slate-400 font-mono">${att.score || 0}</td>
+          <td class="py-3 text-right text-stone-400 font-mono">${att.score || 0}</td>
         </tr>
       `;
     }).join('');
@@ -476,9 +476,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.day-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.day-tab').forEach(t => {
-        t.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition';
+        t.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition';
       });
-      tab.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-cyan-500 text-slate-950 font-semibold shadow-md shadow-cyan-500/20';
+      tab.className = 'day-tab px-4 py-2 rounded-xl text-xs font-medium bg-amber-500 text-stone-950 font-semibold shadow-md shadow-amber-500/20';
       selectedDayFilter = tab.dataset.day;
       renderSchedulesGrid();
     });
@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     const file = e.target.files[0];
     pendingImportFile = file;
-    uploadLabel.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-1.5 text-cyan-400"></i> กำลังตรวจสอบไฟล์ <b>${file.name}</b>...`;
+    uploadLabel.innerHTML = `<i class="fa-solid fa-spinner animate-spin mr-1.5 text-amber-400"></i> กำลังตรวจสอบไฟล์ <b>${file.name}</b>...`;
     importError.classList.add('hidden');
     importPreviewArea.classList.add('hidden');
     submitImportBtn.disabled = true;
@@ -617,10 +617,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // แสดงรายการตัวอย่างคาบเรียน
       if (data.preview && data.preview.length > 0) {
         previewItemsContainer.innerHTML = data.preview.map(p => `
-          <div class="p-1.5 rounded-lg bg-slate-900/60 border border-slate-800 flex items-center justify-between gap-2">
+          <div class="p-1.5 rounded-lg bg-stone-900/60 border border-stone-800 flex items-center justify-between gap-2">
             <div class="truncate">
-              <span class="text-cyan-400">${p.day_name}</span>
-              <span class="text-slate-400">${p.time_display}</span>
+              <span class="text-amber-400">${p.day_name}</span>
+              <span class="text-stone-400">${p.time_display}</span>
               <span class="text-white ml-1 font-sans">${p.subject_name}</span>
             </div>
             <span class="px-1.5 py-0.5 rounded text-[10px] ${p.class_type === 'P' ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'} shrink-0">[${p.class_type}]</span>
@@ -812,7 +812,7 @@ socket.on('already_checked_in', (data) => {
 // Toast notification helper
 function showToast(message, type = 'info') {
   const toast = document.createElement('div');
-  let bgClass = 'bg-slate-900/90 border-cyan-500/50 text-cyan-200';
+  let bgClass = 'bg-stone-900/90 border-amber-500/50 text-amber-200';
   let icon = 'fa-circle-check';
 
   if (type === 'warning') {
