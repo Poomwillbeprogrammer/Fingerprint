@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-12T20:06:00.000Z",
+  "title": "Design System: IoT Biometric Attendance System",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Electric Cyan", "canonical": "#06b6d4" },
+      "secondary": { "role": "secondary", "displayName": "Cobalt Pulse", "canonical": "#2563eb" },
+      "accent-cyan": { "role": "accent", "displayName": "Bright Cyan", "canonical": "#22d3ee" },
+      "status-success": { "role": "status-success", "displayName": "Bio Emerald", "canonical": "#10b981" },
+      "status-warning": { "role": "status-warning", "displayName": "Beacon Amber", "canonical": "#f59e0b" },
+      "status-danger": { "role": "status-danger", "displayName": "Alert Crimson", "canonical": "#f43f5e" },
+      "bg-void": { "role": "neutral", "displayName": "Deep Void Slate", "canonical": "#020617" },
+      "bg-surface": { "role": "neutral", "displayName": "Surface Slate", "canonical": "#0f172a" },
+      "bg-card": { "role": "neutral", "displayName": "Glass Card Slate", "canonical": "rgba(30, 41, 59, 0.85)" },
+      "text-main": { "role": "neutral", "displayName": "Text Main", "canonical": "#f8fafc" },
+      "text-muted": { "role": "neutral", "displayName": "Text Muted", "canonical": "#94a3b8" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Main dashboard headers" },
+      "headline": { "displayName": "Headline", "purpose": "Section and modal headers" },
+      "title": { "displayName": "Title", "purpose": "Table headers and card titles" },
+      "body": { "displayName": "Body", "purpose": "Regular text and data rows" },
+      "label": { "displayName": "Label", "purpose": "Student IDs, telemetry timestamps, and status" }
+    },
+    "shadows": [
+      { "name": "card-ambient", "value": "0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)", "purpose": "Elevation for glass cards and modal dialogs" },
+      { "name": "cyan-glow", "value": "0 0 15px rgba(6, 182, 212, 0.25)", "purpose": "Primary button and branding ambient glow" },
+      { "name": "emerald-pulse", "value": "0 0 8px rgba(52, 211, 153, 0.8)", "purpose": "R307 online status indicator glow" },
+      { "name": "amber-pulse", "value": "0 0 8px rgba(251, 191, 36, 0.8)", "purpose": "R307 warning status indicator pulse" }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Standard UI transition curve" },
+      { "name": "row-flash", "value": "rowFlash 1.5s ease-out", "purpose": "Real-time scan entry animation" }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Gradient CTA button for primary user flows (Enroll, Export, Save)",
+      "html": "<button class=\"ds-btn-primary\"><i class=\"fa-solid fa-floppy-disk\"></i><span>บันทึกข้อมูล</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(to right, #2563eb, #06b6d4); color: #ffffff; padding: 10px 16px; border-radius: 12px; font-family: 'Prompt', sans-serif; font-size: 14px; font-weight: 500; border: none; box-shadow: 0 4px 14px rgba(6, 182, 212, 0.25); cursor: pointer; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background: linear-gradient(to right, #1d4ed8, #0891b2); transform: translateY(-1px); box-shadow: 0 6px 20px rgba(6, 182, 212, 0.35); }"
+    },
+    {
+      "name": "Glassmorphism Card",
+      "kind": "card",
+      "refersTo": "card-glass",
+      "description": "Frosted acrylic container for statistics, timetable, and scan logs",
+      "html": "<div class=\"ds-card-glass\"><h3>สถิติการเข้าเรียน</h3><p>เนื้อหาการ์ดสไตล์กระจกฝ้า</p></div>",
+      "css": ".ds-card-glass { background: rgba(30, 41, 59, 0.85); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 20px; color: #f8fafc; font-family: 'Prompt', sans-serif; }"
+    },
+    {
+      "name": "Hardware Status Badge",
+      "kind": "custom",
+      "refersTo": "badge-telemetry",
+      "description": "Real-time IoT device connection and R307 sensor health indicator",
+      "html": "<div class=\"ds-badge-telemetry\"><span class=\"ds-dot-online\"></span><span class=\"ds-status-text\">R307 Online (Cloud Bridge)</span></div>",
+      "css": ".ds-badge-telemetry { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; background: #0f172a; border: 1px solid #1e293b; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 11px; } .ds-dot-online { width: 8px; height: 8px; border-radius: 9999px; background: #34d399; box-shadow: 0 0 8px rgba(52, 211, 153, 0.8); } .ds-status-text { color: #34d399; font-weight: 500; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Cyber-Physical Classroom",
+    "overview": "ระบบการออกแบบนี้สะท้อนจุดบรรจบระหว่างความก้าวหน้าของฮาร์ดแวร์ IoT ชีวมิติ และความเคร่งครัดเป็นระเบียบของระบบวิชาการในมหาวิทยาลัย บรรยากาศโดยรวมถูกสร้างขึ้นในโทน Deep Tech & Precise โดยใช้พื้นหลังสีรัตติกาลลึก ตัดกับพื้นผิวแผ่นกระจกฝ้าซ้อนทับ (Glassmorphism) ที่ขับเน้นความรู้สึกเสมือนห้องปฏิบัติการคอมพิวเตอร์ระดับสูงในศตวรรษที่ 21",
+    "keyCharacteristics": [
+      "Cyber-Physical Glass Surfaces: แผงควบคุมและกล่องข้อมูลแบบกระจกฝ้าโปร่งแสง ขอบบาง 1px รับแสงสะท้อนนุ่มนวล",
+      "Luminous Telemetry Accents: แสงเรืองรอง (Ambient Glow) ของสี Electric Cyan และสีสถานะชีวมิติ ที่ทำหน้าที่ชี้นำสายตา",
+      "Bilingual Typographic Harmony: การจัดวางฟอนต์ภาษาไทย Prompt ที่อ่านง่ายและอบอุ่น เข้ากับรหัสตัวเลขทางเทคนิค JetBrains Mono",
+      "Tactile & Confident Interactivity: การโต้ตอบที่หนักแน่น มั่นใจ มี Micro-animation ตอบรับการลงเวลาสด"
+    ],
+    "rules": [
+      { "name": "The Telemetry Glow Rule", "body": "สีเน้นเรืองแสงจะถูกใช้เฉพาะบนจุดที่มีความหมายทางฟังก์ชันเท่านั้น ห้ามใช้เป็นสีพื้นหลังกว้าง ๆ โดยไม่มีบทบาท", "section": "colors" },
+      { "name": "The Monospace Identity Rule", "body": "ข้อมูลตัวเลขที่เป็นรหัสชีวมิติ เวลาประทับ รหัสประจำตัวนักศึกษา และสถานะพอร์ตฮาร์ดแวร์ ต้องใช้ฟอนต์ JetBrains Mono เสมอ", "section": "typography" },
+      { "name": "The Functional Luminance Rule", "body": "แสงเรืองและเงาสะท้อนต้องแสดงเพื่อบอกสถานะหรือการตอบสนองเท่านั้น ไม่ประดับประดาอย่างไร้เหตุผล", "section": "elevation" }
+    ],
+    "dos": [
+      "Do ใช้ฟอนต์ JetBrains Mono สำหรับรหัสนักศึกษา, รหัสวิชา, หมายเลข Slot ลายนิ้วมือ และเวลาสแกนเสมอ",
+      "Do แสดงสถานะฮาร์ดแวร์ด้วยทั้งจุดสีและข้อความระบุพอร์ต/สถานะที่ชัดเจน",
+      "Do ใช้ปุ่มกดแบบ Gradient ฟ้า-ไซแอนเฉพาะกับการกระทำหลัก เช่น สแกนนิ้ว, บันทึกตาราง, ส่งออก Excel",
+      "Do รักษาระดับความลึกของ Dark Theme ไว้อย่างมั่นคง เพื่อความสบายตาในการใช้งานระยะยาวในห้องเรียน"
+    ],
+    "donts": [
+      "Don't นำธีมสีสว่างพื้นขาวจ้า (Light Theme) มาใช้ปะปน ซึ่งจะทำลายเอกลักษณ์ Cyber-Physical Glassmorphism",
+      "Don't ใส่เอฟเฟกต์สีรุ้งหรือแสงนีออนฟุ่มเฟือยแบบ Dashboard เกมมิ่ง ซึ่งจะลดทอนความน่าเชื่อถือทางวิชาการ",
+      "Don't ซ่อนข้อผิดพลาดหรือรายงานสถานะออนไลน์ปลอมหากเซนเซอร์ไม่ได้เชื่อมต่อจริง",
+      "Don't ใช้ฟอนต์ Serif หรือฟอนต์ลายมือที่ทำให้อ่านรหัสนักศึกษาและตารางเรียนยาก"
+    ]
+  }
+}
