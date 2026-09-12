@@ -70,10 +70,25 @@ components:
     padding: "10px 16px"
   button-primary-hover:
     backgroundColor: "{colors.primary-dark}"
+  button-secondary:
+    backgroundColor: "{colors.bg-surface}"
+    textColor: "{colors.text-muted}"
+    rounded: "{rounded.lg}"
+    padding: "10px 16px"
   card-glass:
     backgroundColor: "{colors.bg-card}"
     rounded: "{rounded.xl}"
-    padding: "20px"
+    padding: "24px"
+  input-field:
+    backgroundColor: "{colors.bg-surface}"
+    textColor: "{colors.text-main}"
+    rounded: "{rounded.lg}"
+    padding: "10px 14px"
+  badge-status:
+    backgroundColor: "rgba(16, 185, 129, 0.15)"
+    textColor: "{colors.status-success}"
+    rounded: "{rounded.full}"
+    padding: "4px 10px"
 ---
 
 # Design System: IoT Biometric Attendance System
@@ -99,7 +114,7 @@ components:
 ชุดสีหลักแบบ **Cybernetic Bio-Lab** ผสมผสานโทนสีดำ-น้ำเงินลึกของจักรวาล เข้ากับแสงนีออนของสัญญาณข้อมูลดิจิทัล
 
 ### Primary
-- **Electric Cyan** (`#06b6d4` / `#22d3ee`): สีหลักของระบบ เป็นตัวแทนของสัญญาณข้อมูลชีวมิติและฮาร์ดแวร์ดิจิทัล ใช้กับปุ่มแอคชันหลัก, ไอคอนระบบ, และเส้นเน้น Active State
+- **Electric Cyan** (`#06b6d4` / `#22d3ee`): สีหลักของระบบ เป็นตัวแทนของสัญญาณข้อมูลชีวมิติและฮาร์ดแวร์ดิจิทัล ใช้กับปุ่มแอคชันหลัก, ไอคอนระบบ, เคอร์เซอร์พิมพ์, และเส้นเน้น Active State
 - **Cobalt Pulse** (`#2563eb`): สีน้ำเงินเข้มลึกที่ใช้เป็น Gradient คู่กับ Electric Cyan เพื่อสร้างมิติของพลังงานและความมั่นคง
 
 ### Secondary
@@ -112,7 +127,7 @@ components:
 
 ### Neutral
 - **Deep Void Slate** (`#020617`): พื้นหลังสุดลึกของหน้าจอ สร้างความสงัดและลดแสงสะท้อนรบกวนสายตา
-- **Surface Slate** (`#0f172a`): พื้นหลังระดับกลางสำหรับคอนเทนเนอร์หลักและแถบนำทาง
+- **Surface Slate** (`#0f172a`): พื้นหลังระดับกลางสำหรับคอนเทนเนอร์หลัก แถบนำทาง และช่องกรอกข้อมูล
 - **Glass Card Slate** (`rgba(30, 41, 59, 0.85)`): พื้นผิวการ์ดกระจกฝ้าซ้อนทับ พร้อมเส้นขอบขาวบาง 10%
 - **Text Main** (`#f8fafc`): สีข้อความหลักสีขาวนวล คอนทราสต์สูง อ่านง่ายสบายตา
 - **Text Muted** (`#94a3b8`): สีข้อความรองและคำอธิบายสเตตัสที่ไม่แย่งสายตา
@@ -139,7 +154,7 @@ components:
 - **Label / Mono** (Semibold 600, 11px / 0.6875rem, Letter-spacing 0.05em): รหัสนักศึกษา (เช่น `6604101311`), รหัสวิชา (เช่น `04-024-301`), เวลาสแกน (`13:30:15`), และสถานะฮาร์ดแวร์
 
 ### Named Rules
-- **The Monospace Identity Rule:** ข้อมูลตัวเลขที่เป็นรหัสชีวมิติ, เวลาประทับ (Timestamp), รหัสประจำตัวนักศึกษา และสถานะพอร์ตฮาร์ดแวร์ **ต้องใช้ฟอนต์ `JetBrains Mono` เสมอ** เพื่อรักษาความกว้างของตัวเลขให้ตรงแถวและอ่านได้อย่างแม่นยำ
+- **The Monospace Identity Rule:** ข้อมูลตัวเลขที่เป็นรหัสชีวมิติ, เวลาประทับ (Timestamp), รหัสประจำตัวนักศึกษา และสถานะพอร์ตฮาร์ดแวร์ **ต้องใช้ฟอนต์ `JetBrains Mono` พร้อม `font-variant-numeric: tabular-nums` เสมอ** เพื่อรักษาความกว้างของตัวเลขให้ตรงหลักและอ่านได้อย่างแม่นยำ
 
 ---
 
@@ -154,7 +169,7 @@ components:
    - Sidebar ด้านข้างจะถูกยุบซ่อน และแทนที่ด้วย **Sticky Top Bar** พร้อมปุ่ม Hamburger Toggle Menu เมื่อกดจะเปิดถาดสลับหน้าลงมาอย่างราบรื่น
    - ตารางข้อมูลและกริดสถิติจะสลับเป็นแบบเลื่อนในแนวนอน (`overflow-x-auto`) ป้องกันการบีบอัดตัวอักษรจนเสียรูป
 3. **ระยะจังหวะช่องไฟ (Spatial Rhythm):**
-   - ใช้ระบบมาตรส่วน Base-4 (4px, 8px, 12px, 16px, 24px, 32px) เพื่อให้ช่องไฟมีความสมดุลและเป็นระเบียบ
+   - ใช้ระบบมาตรส่วน Base-4 (4px, 8px, 12px, 16px, 24px, 32px) โดยมีระยะ Inset มาตรฐานของแผ่นกระจกการ์ดอยู่ที่ 24px (`1.5rem`) เพื่อให้ช่องไฟมีความสมดุลและเป็นระเบียบ
 
 ---
 
@@ -188,14 +203,32 @@ components:
 ### Buttons
 - **Primary Action Button:**
   - พื้นหลังไล่เฉด `bg-gradient-to-r from-blue-600 to-cyan-500`
-  - ขอบโค้งมน `rounded-xl`, ข้อความสีขาวคมกริบ พร้อมเงาสี Cyan เรืองเบา ๆ (`shadow-cyan-500/25`)
+  - ขอบโค้งมน `rounded-xl` (12px), ข้อความสีขาวคมกริบ พร้อมเงาสี Cyan เรืองเบา ๆ (`shadow-cyan-500/25`)
   - โต้ตอบเมื่อชี้เมาส์ (Hover): สว่างขึ้นเล็กน้อยและยกตัวขึ้น 1px (`hover:from-blue-500 hover:to-cyan-400`)
 - **Secondary / Ghost Button:**
-  - พื้นหลังสีเทาเข้มโปร่งแสง `bg-slate-800` เส้นขอบ `border-slate-700` ตัวอักษรสีเทาสว่าง `text-slate-300`
+  - พื้นหลังสีเทาเข้มโปร่งแสง `bg-slate-800` เส้นขอบ `border-slate-700` ตัวอักษรสีเทาสว่าง `text-slate-300` ขอบโค้งมน 8px - 12px
+  - โต้ตอบเมื่อชี้เมาส์: เปลี่ยนสีพื้นหลังเป็น `hover:bg-slate-700` ตัวอักษรสีขาว `hover:text-white`
 
-### Glass Cards & Containers
-- **Glass Card:** พื้นหลัง `rgba(30, 41, 59, 0.85)` พร้อมฟิลเตอร์ `backdrop-blur(16px)` และเส้นขอบกระจกบางเบา
+### Cards / Containers
+- **Glass Card:** พื้นหลัง `rgba(30, 41, 59, 0.85)` พร้อมฟิลเตอร์ `backdrop-blur(16px)` และเส้นขอบกระจกบางเบา Inset สม่ำเสมอ 24px (`1.5rem`)
 - **Live Feed Row Insertion:** แถวสแกนใหม่ล่าสุดมีแอนิเมชันแฟลชสีเขียวเรืองรอง (`.animate-new-row`) ขยายตัว 101% ใน 1.5 วินาทีก่อนคืนสู่ปกติ
+
+### Inputs / Fields
+- **Search & Text Input:**
+  - พื้นผิว `bg-slate-900` เส้นขอบ `border-slate-700` ขอบโค้งมน `rounded-lg` (8px - 12px) ภายในมี Padding `10px 14px`
+  - ตัวอักษรสีขาวสว่าง เคอร์เซอร์สีฟ้าไซแอน (`caret-color: #06b6d4`)
+  - โฟกัส (Focus-Visible): วงแหวนสีฟ้าสว่างคมชัด `outline: 2px solid #06b6d4; outline-offset: 2px;`
+
+### Navigation
+- **Sidebar Nav Link:**
+  - สถานะปกติ (Inactive): ข้อความและไอคอนสี `text-slate-400` โฮเวอร์เป็น `hover:text-cyan-300 hover:bg-slate-800/60`
+  - สถานะเลือกอยู่ (Active): พื้นหลังไฮไลต์ไล่เฉดโปร่งแสง `bg-gradient-to-r from-cyan-500/15 to-transparent`, ข้อความสี `text-cyan-400` พร้อมแถบเน้นเรืองแสงสีไซแอนชิดขอบซ้าย
+
+### Status Chips / Badges
+- **Attendance Status Badges:**
+  - 🟢 **ตรงเวลา (On-Time):** แคปซูลสีเขียวโปร่งแสง `bg-emerald-500/15` ขอบ `border-emerald-500/30` ข้อความ `text-emerald-400 font-mono`
+  - 🟠 **มาสาย (Late):** แคปซูลสีส้มโปร่งแสง `bg-amber-500/15` ขอบ `border-amber-500/30` ข้อความ `text-amber-400 font-mono`
+  - 🔴 **ขาดเรียน (Absent):** แคปซูลสีแดงโปร่งแสง `bg-rose-500/15` ขอบ `border-rose-500/30` ข้อความ `text-rose-400 font-mono`
 
 ### Hardware Telemetry Badge (Signature Component)
 - **Sidebar Hardware Badge:** กล่องสถานะการเชื่อมต่อบอร์ด Arduino Uno Q และเซนเซอร์ R307
@@ -205,7 +238,7 @@ components:
 
 ### Tables
 - หัวตารางสีพื้นเทาเข้ม ตัวอักษรเล็กกึ่งกลางหนา (`text-xs font-semibold text-slate-400`)
-- แถวตารางมีเส้นคั่นบางเบา `border-slate-800/60` พร้อมการไฮไลต์สีพื้นหลังเมื่อชี้เมาส์ (`hover:bg-slate-800/40`)
+- แถวตารางมีเส้นคั่นบางเบา `border-slate-800/60` ตัวเลขจัดเรียงแบบ Monospace Tabular (`font-variant-numeric: tabular-nums`) พร้อมการไฮไลต์สีพื้นหลังเมื่อชี้เมาส์ (`hover:bg-slate-800/40`)
 
 ---
 
@@ -216,9 +249,11 @@ components:
 - **Do** แสดงสถานะฮาร์ดแวร์ด้วยทั้งจุดสีและข้อความระบุพอร์ต/สถานะที่ชัดเจน
 - **Do** ใช้ปุ่มกดแบบ Gradient ฟ้า-ไซแอนเฉพาะกับการกระทำหลัก (Primary Actions เช่น สแกนนิ้ว, บันทึกตาราง, ส่งออก Excel)
 - **Do** รักษาระดับความลึกของ Dark Theme ไว้อย่างมั่นคง เพื่อความสบายตาในการใช้งานระยะยาวในห้องเรียน
+- **Do** จัดระยะ Padding ของการ์ดกระจกให้มีความกว้างสม่ำเสมอ 24px (`1.5rem`)
 
 ### Don't:
 - **Don't** นำธีมสีสว่างพื้นขาวจ้า (Light Theme) มาใช้ปะปน ซึ่งจะทำลายเอกลักษณ์ Cyber-Physical Glassmorphism ของระบบ
 - **Don't** ใส่เอฟเฟกต์สีรุ้งหรือแสงนีออนฟุ่มเฟือยแบบ Dashboard เกมมิ่ง ซึ่งจะลดทอนความน่าเชื่อถือทางวิชาการ
 - **Don't** ซ่อนข้อผิดพลาดหรือรายงานสถานะออนไลน์ปลอมหากเซนเซอร์ไม่ได้เชื่อมต่อจริง
 - **Don't** ใช้ฟอนต์ Serif หรือฟอนต์ลายมือที่ทำให้อ่านรหัสนักศึกษาและตารางเรียนยาก
+- **Don't** ซ้อนการ์ดที่มีทั้งเส้นขอบ สีพื้นหลัง และมุมโค้งซ้ำซ้อนภายใน `.glass-card` เดียวกัน
