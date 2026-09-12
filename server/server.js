@@ -906,7 +906,27 @@ app.get('/api/logs', authRequired, async (req, res) => {
       ORDER BY access_logs.timestamp DESC 
       LIMIT ?
     `, [limit]);
-    res.json(logs);
+
+    const attendanceRecords = schedulesManager.loadAttendanceRecords();
+    const enrichedLogs = logs.map(log => {
+      const dateStr = log.timestamp ? log.timestamp.split('T')[0].split(' ')[0] : '';
+      const match = attendanceRecords.find(r => r.user_id === log.user_id && r.date === dateStr);
+      return {
+        ...log,
+        is_offline: match ? !!match.is_offline : false,
+        attendance_status: match ? match.attendance_status : (log.status === 'GRANTED' ? 'ON_TIME' : 'OUT_OF_SCHEDULE'),
+        schedule: match ? {
+          id: match.schedule_id,
+          room_name: match.room_name,
+          subject_code: match.subject_code,
+          subject_name: match.subject_name,
+          short_name: match.short_name,
+          class_type: match.class_type
+        } : null
+      };
+    });
+
+    res.json(enrichedLogs);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1376,6 +1396,118 @@ io.on('connection', (socket) => {
       return;
     }
     await handleSerialData(rawLine);
+  });
+
+  // รับข้อมูลสแกนช่วงออฟไลน์ (Store-and-Forward Offline Sync)
+  socket.on('sync_offline_attendance', async (records) => {
+    if (!Array.isArray(records) || records.length === 0) {
+      socket.emit('sync_offline_attendance_ack', { success: true, count: 0, synced_ids: [] });
+      return;
+    }
+
+    console.log(`📥 [Offline Sync] ได้รับข้อมูลสแกนช่วงออฟไลน์ ${records.length} รายการ กำลังบันทึกลงฐานข้อมูล...`);
+    const syncedIds = [];
+
+    for (const rec of records) {
+      try {
+        const userId = rec.user_id;
+        const studentId = rec.student_id || '-';
+        const userName = rec.name || 'Unknown User';
+        const fingerprintId = rec.slot_id || 0;
+        const score = rec.score || 0;
+        const roomName = rec.room_name || schedulesManager.getActiveDeviceRoom();
+        const schedId = rec.schedule_id;
+        const attendanceStatus = rec.attendance_status || 'OUT_OF_SCHEDULE';
+        const scannedAt = rec.scanned_at || new Date().toISOString();
+
+        // คำนวณวันและเวลาตามเวลาสแกนจริง
+        const scanDate = new Date(scannedAt);
+        const thaiDateStr = rec.scanned_at.includes('T') ? rec.scanned_at.split('T')[0] : new Date(Date.now() + 7 * 3600000).toISOString().split('T')[0];
+        const timePart = rec.scanned_at.includes('T') ? rec.scanned_at.split('T')[1].substring(0, 8) : '00:00:00';
+        const dbTimestamp = `${thaiDateStr} ${timePart}`;
+
+        if (userId) {
+          try {
+            await dbAsync.run("UPDATE users SET last_scanned_at = ? WHERE id = ?", [dbTimestamp, userId]);
+          } catch (e) {}
+        }
+
+        let schedObj = null;
+        if (schedId && userId) {
+          const schedules = schedulesManager.getAllSchedules();
+          schedObj = schedules.find(s => s.id === schedId);
+
+          const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, schedId, thaiDateStr);
+          if (!alreadyCheckedIn && schedObj) {
+            const sessionRecord = schedulesManager.recordSessionAttendance({
+              schedule_id: schedId,
+              room_name: roomName,
+              subject_code: schedObj.subject_code,
+              subject_name: schedObj.subject_name,
+              short_name: schedObj.short_name,
+              class_type: schedObj.class_type,
+              user_id: userId,
+              student_id: studentId,
+              user_name: userName,
+              fingerprint_id: fingerprintId,
+              date: thaiDateStr,
+              time: timePart,
+              timestamp: dbTimestamp,
+              attendance_status: attendanceStatus,
+              score: score,
+              is_offline: true
+            });
+            io.emit('session_attendance_update', sessionRecord);
+          }
+        }
+
+        const insertResult = await dbAsync.run(`
+          INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
+          VALUES (?, ?, ?, ?, 'GRANTED', ?, ?)
+        `, [userId, studentId, userName, fingerprintId, score, dbTimestamp]);
+
+        const logEntry = {
+          id: insertResult ? insertResult.lastID : 0,
+          user_id: userId,
+          student_id: studentId,
+          user_name: userName,
+          fingerprint_id: fingerprintId,
+          status: 'GRANTED',
+          score: score,
+          tier: 'Tier 1 (Offline Sync)',
+          room_name: roomName,
+          schedule: schedObj ? {
+            id: schedObj.id,
+            room_name: roomName,
+            subject_code: schedObj.subject_code,
+            subject_name: schedObj.subject_name,
+            short_name: schedObj.short_name,
+            class_type: schedObj.class_type,
+            time_display: schedObj.time_display,
+            attendance_status: attendanceStatus
+          } : null,
+          attendance_status: schedObj ? attendanceStatus : 'OUT_OF_SCHEDULE',
+          timestamp: scanDate.toISOString(),
+          is_offline: true
+        };
+
+        io.emit('new_log', logEntry);
+        syncedIds.push(rec.record_id);
+        console.log(`✅ [Offline Sync] บันทึกสำเร็จ: ${userName} (${studentId}) [${roomName}] เวลา: ${dbTimestamp} (สถานะ: ${attendanceStatus})`);
+      } catch (err) {
+        console.error('❌ [Offline Sync Error] ข้อผิดพลาดในการบันทึกแถว:', err);
+      }
+    }
+
+    socket.emit('sync_offline_attendance_ack', {
+      success: true,
+      count: syncedIds.length,
+      synced_ids: syncedIds
+    });
+
+    if (syncedIds.length > 0) {
+      io.emit('offline_sync_completed', { count: syncedIds.length });
+    }
   });
 
   socket.on('disconnect', () => {
