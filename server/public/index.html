@@ -61,7 +61,7 @@
       <div class="mt-4 pt-3 border-t border-slate-800/80 px-2">
         <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
           <div class="flex items-center gap-2">
-            <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"></span>
             <span id="serialStatusText" class="text-[11px] text-slate-400">กำลังตรวจสอบ...</span>
           </div>
           <i class="fa-solid fa-microchip text-slate-500 text-xs"></i>
@@ -78,8 +78,8 @@
           </div>
           <div>
             <p id="navUsername" class="text-xs font-semibold text-white">Admin</p>
-            <p class="text-[10px] text-emerald-400 flex items-center gap-1">
-              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Online
+            <p class="text-[10px] text-emerald-400 flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span> Online
             </p>
           </div>
         <div class="flex items-center gap-1">
@@ -100,10 +100,10 @@
     <!-- Top Header -->
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
       <div>
-        <h1 class="text-2xl font-bold text-white flex items-center gap-2.5">
+        <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2.5">
           <span>ประวัติการเข้า-ออกสด (Real-time Live Logs)</span>
-          <span id="liveBadge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> LIVE
+          <span id="liveBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]"></span> LIVE
           </span>
         </h1>
         <p class="text-sm text-slate-400 mt-1">ข้อมูลการสแกนลายนิ้วมือจากเซนเซอร์ R307 บันทึกลง Cloud Database (Supabase) อัตโนมัติ</p>
@@ -169,15 +169,15 @@
     <!-- Live Access Logs Table -->
     <div class="glass-card rounded-2xl border border-slate-800/80 shadow-xl overflow-hidden">
       <div class="p-5 border-b border-slate-800 flex items-center justify-between">
-        <h3 class="font-semibold text-white text-base flex items-center gap-2">
+        <h2 class="font-semibold text-white text-base md:text-lg flex items-center gap-2">
           <i class="fa-solid fa-list-ul text-cyan-400"></i> ตารางบันทึกการเข้า-ออกล่าสุด
-        </h3>
+        </h2>
         <span class="text-xs text-slate-500">แสดงผล 50 รายการล่าสุด</span>
       </div>
 
       <div class="overflow-x-auto">
         <table class="w-full text-left text-sm text-slate-300">
-          <thead class="bg-slate-900/80 text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
+          <thead class="text-xs uppercase font-semibold text-slate-400 border-b border-slate-800">
             <tr>
               <th class="px-5 py-3.5">เวลาที่สแกน</th>
               <th class="px-5 py-3.5">รหัสนักศึกษา</th>
@@ -214,12 +214,12 @@
           <i class="fa-solid fa-key"></i>
         </div>
         <div>
-          <h3 class="text-lg font-bold text-white">เปลี่ยนรหัสผ่าน Admin</h3>
+          <h2 class="text-xl font-bold text-white">เปลี่ยนรหัสผ่าน Admin</h2>
           <p class="text-xs text-slate-400">กำหนดรหัสผ่านใหม่เพื่อความปลอดภัย</p>
         </div>
       </div>
 
-      <div id="pwdAlert" class="hidden mb-4 p-3 rounded-xl text-xs flex items-center gap-2"></div>
+      <div id="pwdAlert" class="hidden mb-4 px-3.5 py-2.5 rounded-lg text-xs flex items-center gap-2"></div>
 
       <form id="changePasswordForm" class="space-y-4">
         <div>
