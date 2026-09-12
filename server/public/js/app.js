@@ -276,18 +276,18 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
     ` : '';
 
     tr.innerHTML = `
-      <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(log.timestamp)}</td>
-      <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold">${log.student_id || '-'}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-stone-400">${formatDateTime(log.timestamp)}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-amber-300 font-semibold">${log.student_id || '-'}</td>
       <td class="px-5 py-3.5 font-medium text-white flex items-center gap-2">
         <div class="w-7 h-7 rounded-full ${isGranted ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'} flex items-center justify-center text-xs">
           <i class="fa-solid ${isGranted ? 'fa-user-check' : 'fa-user-xmark'}"></i>
         </div>
         <div>
           <div class="flex items-center">${log.user_name || 'Unknown User'}${offlineBadge}</div>
-          ${log.schedule ? `<div class="text-[10px] text-cyan-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-chalkboard-user text-[9px]"></i><span>${log.schedule.short_name || log.schedule.subject_name} [${log.schedule.class_type || 'T'}]</span><span class="${log.attendance_status === 'ON_TIME' ? 'text-emerald-400' : 'text-amber-400'} font-semibold">(${log.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'})</span></div>` : ''}
+          ${log.schedule ? `<div class="text-[10px] text-amber-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-chalkboard-user text-[9px]"></i><span>${log.schedule.short_name || log.schedule.subject_name} [${log.schedule.class_type || 'T'}]</span><span class="${log.attendance_status === 'ON_TIME' ? 'text-emerald-400' : 'text-amber-400'} font-semibold">(${log.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'})</span></div>` : ''}
         </div>
       </td>
-      <td class="px-5 py-3.5 font-mono text-xs text-cyan-400 font-semibold">${log.fingerprint_id > 0 ? '#' + log.fingerprint_id : '-'}</td>
+      <td class="px-5 py-3.5 font-mono text-xs text-amber-400 font-semibold">${log.fingerprint_id > 0 ? '#' + log.fingerprint_id : '-'}</td>
       <td class="px-5 py-3.5">
         <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isGranted ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/15 text-rose-400 border border-rose-500/30'}">
           <i class="fa-solid ${isGranted ? 'fa-check' : 'fa-xmark'} text-[10px]"></i>
@@ -419,10 +419,10 @@ if (window.location.pathname.endsWith('users.html')) {
       }
 
       const tr = document.createElement('tr');
-      tr.className = 'border-b border-slate-800/60 hover:bg-slate-800/40 transition';
+      tr.className = 'border-b border-stone-800/60 hover:bg-stone-800/40 transition';
       tr.innerHTML = `
-        <td class="px-5 py-3.5 font-mono text-sm font-bold text-cyan-400">#${user.id}</td>
-        <td class="px-5 py-3.5 font-mono text-xs text-cyan-300 font-semibold tracking-wider">${user.student_id || '-'}</td>
+        <td class="px-5 py-3.5 font-mono text-sm font-bold text-amber-400">#${user.id}</td>
+        <td class="px-5 py-3.5 font-mono text-xs text-amber-300 font-semibold tracking-wider">${user.student_id || '-'}</td>
         <td class="px-5 py-3.5 font-medium text-white">${user.name}</td>
         <td class="px-5 py-3.5">${tierBadge}</td>
         <td class="px-5 py-3.5 font-mono text-xs text-slate-400">${formatDateTime(user.created_at)}</td>
@@ -602,8 +602,8 @@ if (window.location.pathname.endsWith('users.html')) {
     descEl.innerText = desc;
 
     if (state === 'step1') {
-      icon.innerHTML = '<i class="fa-solid fa-fingerprint animate-bounce text-cyan-400"></i>';
-      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center text-xl';
+      icon.innerHTML = '<i class="fa-solid fa-fingerprint animate-bounce text-amber-400"></i>';
+      icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl';
     } else if (state === 'remove') {
       icon.innerHTML = '<i class="fa-solid fa-hand text-amber-400 animate-pulse"></i>';
       icon.className = 'w-12 h-12 mx-auto mb-2 rounded-full bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-xl';

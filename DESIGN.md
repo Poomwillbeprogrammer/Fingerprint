@@ -1,28 +1,29 @@
 ---
-name: IoT Biometric Attendance System
-description: Cyber-physical classroom attendance and hardware dashboard
+name: IoT Biometric Attendance System (RMUTL)
+description: Cyber-physical classroom attendance and hardware dashboard for RMUTL
 colors:
-  primary: "#06b6d4"
-  primary-glow: "rgba(6, 182, 212, 0.25)"
-  primary-dark: "#0891b2"
-  secondary: "#2563eb"
-  accent-cyan: "#22d3ee"
+  primary: "#f59e0b"
+  primary-glow: "rgba(245, 158, 11, 0.25)"
+  primary-dark: "#d97706"
+  secondary: "#b45309"
+  accent-gold: "#fbbf24"
+  accent-yellow: "#eab308"
   status-success: "#10b981"
   status-success-glow: "rgba(16, 185, 129, 0.5)"
   status-warning: "#f59e0b"
   status-warning-glow: "rgba(245, 158, 11, 0.5)"
   status-danger: "#f43f5e"
   status-danger-glow: "rgba(244, 63, 94, 0.5)"
-  bg-void: "#020617"
-  bg-surface: "#0f172a"
-  bg-card: "rgba(30, 41, 59, 0.85)"
-  bg-glass: "rgba(30, 41, 59, 0.7)"
-  border-subtle: "rgba(255, 255, 255, 0.08)"
-  border-card: "rgba(255, 255, 255, 0.1)"
-  border-slate: "#334155"
-  text-main: "#f8fafc"
-  text-muted: "#94a3b8"
-  text-dim: "#64748b"
+  bg-void: "#0c0a09"
+  bg-surface: "#1c1917"
+  bg-card: "rgba(28, 25, 23, 0.9)"
+  bg-glass: "rgba(28, 25, 23, 0.8)"
+  border-subtle: "rgba(245, 158, 11, 0.12)"
+  border-card: "rgba(245, 158, 11, 0.18)"
+  border-stone: "#44403c"
+  text-main: "#f5f5f4"
+  text-muted: "#a8a29e"
+  text-dim: "#78716c"
 typography:
   display:
     fontFamily: "Prompt, -apple-system, BlinkMacSystemFont, sans-serif"
@@ -65,7 +66,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.text-main}"
+    textColor: "#ffffff"
     rounded: "{rounded.lg}"
     padding: "10px 16px"
   button-primary-hover:
@@ -91,34 +92,34 @@ components:
     padding: "4px 10px"
 ---
 
-# Design System: IoT Biometric Attendance System
+# Design System: IoT Biometric Attendance System (RMUTL)
 
 ## Overview
 
-**Creative North Star: "The Cyber-Physical Classroom"**
+**Creative North Star: "The Lanna Golden Tech"**
 
-ระบบการออกแบบนี้สะท้อนจุดบรรจบระหว่างความก้าวหน้าของฮาร์ดแวร์ IoT ชีวมิติ (Biometric IoT Hardware) และความเคร่งครัดเป็นระเบียบของระบบวิชาการในมหาวิทยาลัย บรรยากาศโดยรวมถูกสร้างขึ้นในโทน **Deep Tech & Precise** โดยใช้พื้นหลังสีรัตติกาลลึก (Deep Void Slate `#020617` และ `#0f172a`) ตัดกับพื้นผิวแผ่นกระจกฝ้าซ้อนทับ (Glassmorphism) ที่ขับเน้นความรู้สึกเสมือนห้องปฏิบัติการคอมพิวเตอร์ระดับสูงในศตวรรษที่ 21
+ระบบการออกแบบนี้สะท้อนอัตลักษณ์อันทรงเกียรติของ **มหาวิทยาลัยเทคโนโลยีราชมงคลล้านนา (มทร.ล้านนา - RMUTL)** ที่ผสานระหว่างรากเหง้าภูมิปัญญาวิศวกรรมและเทคโนโลยีชีวมิติ IoT ประจำห้องเรียนเข้าด้วยกัน บรรยากาศโดยรวมถูกถ่ายทอดผ่านคู่สีประจำมหาวิทยาลัย **"สีน้ำตาลทอง" (Golden Brown & Lanna Bronze)** บนผืนผ้าใบสีดำเอสเปรสโซเข้มลึก (Deep Void Espresso `#0c0a09`) ตัดกับพื้นผิวแผ่นกระจกฝ้าซ้อนทับโทนบรอนซ์อุ่น (Warm Bronze Glassmorphism) และขับเน้นด้วยแสงประกายทองคำ (Luminous Lanna Gold)
 
-เอกลักษณ์ของระบบอยู่ที่การใช้แสงสว่างเฉพาะจุด (Luminance Hierarchy) ดุจสัญญาณไฟเซนเซอร์และหน้าจอเทอร์มินัล การปฏิสัมพันธ์ทุกจุดได้รับการออกแบบให้มีความมั่นใจ หนักแน่น และโปร่งใส (Tactile & Confident) ทุกข้อมูลการแตะนิ้ว ตารางสอน และสถานะการเชื่อมต่อบอร์ดฮาร์ดแวร์ ได้รับการจัดลำดับชั้นอย่างมีระเบียบ ไร้สิ่งรบกวนสายตาที่ไม่จำเป็น
+เอกลักษณ์ของระบบอยู่ที่การใช้แสงสว่างเฉพาะจุด (Luminance Hierarchy) เพื่อชี้นำสายตา ทุกการตอบสนองมีความหนักแน่น มั่นคง โปร่งใส (Tactile & Confident) และสะท้อนภาพลักษณ์สถาบันการศึกษาชั้นนำได้อย่างสง่างาม
 
 **Key Characteristics:**
-- **Cyber-Physical Glass Surfaces:** แผงควบคุมและกล่องข้อมูลแบบกระจกฝ้าโปร่งแสง ขอบบาง 1px รับแสงสะท้อนนุ่มนวล
-- **Luminous Telemetry Accents:** แสงเรืองรอง (Ambient Glow) ของสี Electric Cyan และสีสถานะชีวมิติ ที่ทำหน้าที่ชี้นำสายตา
+- **Warm Bronze Glass Surfaces:** แผงควบคุมและกล่องข้อมูลแบบกระจกฝ้าโทนบรอนซ์อุ่น ขอบบางสีทอง 1px รับแสงสะท้อนนุ่มนวล
+- **Luminous Lanna Gold Accents:** แสงเรืองรอง (Ambient Glow) ของสีทองคำ Lanna Royal Gold (`#f59e0b` / `#fbbf24`) ที่ทำหน้าที่ชี้นำสายตา
 - **Bilingual Typographic Harmony:** การจัดวางฟอนต์ภาษาไทย `Prompt` ที่อ่านง่ายและอบอุ่น เข้ากับรหัสตัวเลขทางเทคนิค `JetBrains Mono` ได้อย่างลงตัว
-- **Anti-References:** หลีกเลี่ยงหน้าตาแบบ Generic Bootstrap/Admin ขาว-เทา และหลีกเลี่ยงความฉูดฉาดแบบเกมมิ่งคีย์บอร์ด RGB ที่ขาดความน่าเชื่อถือทางวิชาการ
+- **Institutional Pride:** สะท้อนเอกลักษณ์สีน้ำตาลทองของ มทร.ล้านนา อย่างภาคภูมิใจ หลีกเลี่ยงหน้าตา Generic Bootstrap ทั่วไป
 
 ---
 
 ## Colors
 
-ชุดสีหลักแบบ **Cybernetic Bio-Lab** ผสมผสานโทนสีดำ-น้ำเงินลึกของจักรวาล เข้ากับแสงนีออนของสัญญาณข้อมูลดิจิทัล
+ชุดสีหลักแบบ **Lanna Golden Brown & Deep Espresso** ผสมผสานสีน้ำตาลเข้มลึกของเนื้อไม้และทองแดง เข้ากับประกายทองคำอันเจริญรุ่งเรือง
 
 ### Primary
-- **Electric Cyan** (`#06b6d4` / `#22d3ee`): สีหลักของระบบ เป็นตัวแทนของสัญญาณข้อมูลชีวมิติและฮาร์ดแวร์ดิจิทัล ใช้กับปุ่มแอคชันหลัก, ไอคอนระบบ, เคอร์เซอร์พิมพ์, และเส้นเน้น Active State
-- **Cobalt Pulse** (`#2563eb`): สีน้ำเงินเข้มลึกที่ใช้เป็น Gradient คู่กับ Electric Cyan เพื่อสร้างมิติของพลังงานและความมั่นคง
+- **Lanna Royal Gold** (`#f59e0b` / `#fbbf24`): สีทองประกายหลักของระบบ ตัวแทนของความเจริญก้าวหน้าทางวิชาการและเทคโนโลยี ใช้กับปุ่มแอคชันหลัก, ตราระบบ, เคอร์เซอร์พิมพ์, และเส้นเน้น Active State
+- **Lanna Deep Bronze** (`#b45309` / `#d97706`): สีน้ำตาลบรอนซ์เข้มอบอุ่น สัญลักษณ์ของความมั่นคงและรากเหง้าล้านนา ใช้เป็นคู่ Gradient เพื่อสร้างมิติของพลังงาน
 
 ### Secondary
-- **Indigo Beam** (`#6366f1`): สีม่วงครามที่ใช้สำหรับป้ายระบุประเภทข้อมูลขั้นสูง เช่น ป้ายสิทธิ์แอดมิน หรือโหมดการประมวลผลพิเศษ
+- **Solar Yellow** (`#eab308`): สีเหลืองทองอร่าม ใช้เสริมแสงไฮไลต์บนปุ่มและสถิติการสแกน
 
 ### Status Colors
 - **Bio Emerald** (`#10b981` / `#34d399`): สัญลักษณ์ของความถูกต้อง เช่น สถานะ "ตรงเวลา" (On-Time), "R307 Online", และการลงเวลาผ่านสำเร็จ
@@ -126,14 +127,14 @@ components:
 - **Alert Crimson** (`#f43f5e` / `#fb7185`): สัญญาณข้อผิดพลาดหรือการปฏิเสธ เช่น "ขาดเรียน" (Absent), การสแกนลายนิ้วมือไม่ผ่าน (Denied), และระบบออฟไลน์สมบูรณ์
 
 ### Neutral
-- **Deep Void Slate** (`#020617`): พื้นหลังสุดลึกของหน้าจอ สร้างความสงัดและลดแสงสะท้อนรบกวนสายตา
-- **Surface Slate** (`#0f172a`): พื้นหลังระดับกลางสำหรับคอนเทนเนอร์หลัก แถบนำทาง และช่องกรอกข้อมูล
-- **Glass Card Slate** (`rgba(30, 41, 59, 0.85)`): พื้นผิวการ์ดกระจกฝ้าซ้อนทับ พร้อมเส้นขอบขาวบาง 10%
-- **Text Main** (`#f8fafc`): สีข้อความหลักสีขาวนวล คอนทราสต์สูง อ่านง่ายสบายตา
-- **Text Muted** (`#94a3b8`): สีข้อความรองและคำอธิบายสเตตัสที่ไม่แย่งสายตา
+- **Deep Void Espresso** (`#0c0a09`): พื้นหลังสุดลึกของหน้าจอ สร้างบรรยากาศสุขุม อบอุ่น และลดแสงสะท้อนรบกวนสายตา
+- **Warm Stone Surface** (`#1c1917`): พื้นหลังระดับกลางสำหรับคอนเทนเนอร์หลัก แถบนำทาง และช่องกรอกข้อมูล
+- **Warm Bronze Glass** (`rgba(28, 25, 23, 0.9)`): พื้นผิวการ์ดกระจกฝ้าซ้อนทับ พร้อมเส้นขอบทองบางเบา
+- **Text Main** (`#f5f5f4`): สีข้อความหลักสีขาวนวลโทนอุ่น คอนทราสต์สูง อ่านง่ายสบายตา
+- **Text Muted** (`#a8a29e`): สีข้อความรองและคำอธิบายสเตตัสที่ไม่แย่งสายตา
 
 ### Named Rules
-- **The Telemetry Glow Rule:** สีเน้นเรืองแสง (Cyan, Emerald, Amber, Crimson) จะต้องถูกใช้เฉพาะบนจุดที่มีความหมายทางฟังก์ชัน (สถานะอุปกรณ์, ปุ่มกระทำสำคัญ, ผลการสแกน) เท่านั้น ห้ามใช้เป็นสีพื้นหลังกว้าง ๆ โดยไม่มีบทบาท
+- **The Golden Luster Rule:** สีทองเรืองแสง (Royal Gold, Solar Yellow) จะต้องถูกใช้เฉพาะบนจุดที่มีความหมายทางฟังก์ชัน (สถานะอุปกรณ์, ปุ่มกระทำสำคัญ, ผลการสแกน) เท่านั้น ห้ามใช้เป็นสีพื้นหลังกว้าง ๆ โดยไม่มีบทบาท
 - **The Status Contrast Rule:** ทุกป้ายสถานะต้องประกอบด้วยไฟสีและข้อความตัวอักษรกำกับคู่กันเสมอ ห้ามพึ่งพาการแสดงผลด้วยจุดสีเพียงอย่างเดียว
 
 ---
@@ -163,7 +164,7 @@ components:
 ระบบใช้รูปแบบ **Sidebar + Focused Stage Model**:
 
 1. **โครงสร้างสัดส่วนหน้าจอ (Desktop):**
-   - **Sidebar คงที่ด้านซ้าย:** กว้าง 256px (`w-64`) เป็น Glass Panel แสดงแบรนด์, ลิงก์นำทาง, ป้ายสถานะฮาร์ดแวร์เซนเซอร์, และข้อมูลโปรไฟล์แอดมิน
+   - **Sidebar คงที่ด้านซ้าย:** กว้าง 256px (`w-64`) เป็น Warm Glass Panel แสดงแบรนด์, ลิงก์นำทาง, ป้ายสถานะฮาร์ดแวร์เซนเซอร์, และข้อมูลโปรไฟล์แอดมิน
    - **Main Stage ด้านขวา:** ขยายเต็มพื้นที่ที่เหลือ (`flex-1`) พร้อม Padding ขนาดใหญ่ (`p-6` ถึง `p-8`) จัดการ์ดเป็นระบบ Grid Responsive
 2. **การตอบสนองบนจอมือถือ (Mobile < 768px):**
    - Sidebar ด้านข้างจะถูกยุบซ่อน และแทนที่ด้วย **Sticky Top Bar** พร้อมปุ่ม Hamburger Toggle Menu เมื่อกดจะเปิดถาดสลับหน้าลงมาอย่างราบรื่น
@@ -175,13 +176,13 @@ components:
 
 ## Elevation & Depth
 
-ระบบใช้ปรัชญา **Layered Glassmorphism with Ambient Telemetry**:
-- ไม่ใช้เงาทึบหนักแบบกล่องลอย (Heavy Drop Shadows) แต่ใช้การซ้อนทับของแผ่นอะคริลิกกระจกฝ้า (Frosted Glass) ที่ยอมให้แสงสะท้อนและสีพื้นหลังทะลุผ่าน
-- ใช้เส้นขอบไฮไลต์สีขาวบางพิเศษ (`border: 1px solid rgba(255, 255, 255, 0.08)`) ที่ขอบบนและด้านข้าง เพื่อสร้างขอบตัดคมชัดของวัตถุ
+ระบบใช้ปรัชญา **Warm Layered Glassmorphism with Golden Telemetry**:
+- ใช้การซ้อนทับของแผ่นอะคริลิกกระจกฝ้าโทนบรอนซ์ (Warm Bronze Glass) ที่กลมกลืนกับพื้นหลังเอสเปรสโซ
+- ใช้เส้นขอบไฮไลต์สีทองบางพิเศษ (`border: 1px solid rgba(245, 158, 11, 0.18)`) เพื่อสร้างขอบตัดคมชัดของวัตถุ
 
 ### Shadow Vocabulary
-- **Card Ambient** (`box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)`): เงาลึกใต้การ์ดโมดอลเพื่อลอยเด่นเหนือพื้นหลัง
-- **Cyan Glow** (`box-shadow: 0 0 15px rgba(6, 182, 212, 0.25)`): แสงเรืองสีฟ้าอมเขียวรอบปุ่ม Primary และตราสัญลักษณ์ระบบ
+- **Card Ambient** (`box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6)`): เงาลึกใต้การ์ดโมดอลเพื่อลอยเด่นเหนือพื้นหลัง
+- **Gold Glow** (`box-shadow: 0 0 15px rgba(245, 158, 11, 0.25)`): แสงเรืองสีทองรอบปุ่ม Primary และตราสัญลักษณ์ระบบ
 - **Emerald Pulse** (`box-shadow: 0 0 8px rgba(52, 211, 153, 0.8)`): จุดเรืองแสงสีเขียวของไฟสถานะ `R307 Online`
 - **Amber Pulse** (`box-shadow: 0 0 8px rgba(251, 191, 36, 0.8)`): จุดเรืองแสงสีกระพริบเตือนของ `R307 Not Found`
 
@@ -202,27 +203,27 @@ components:
 
 ### Buttons
 - **Primary Action Button:**
-  - พื้นหลังไล่เฉด `bg-gradient-to-r from-blue-600 to-cyan-500`
-  - ขอบโค้งมน `rounded-xl` (12px), ข้อความสีขาวคมกริบ พร้อมเงาสี Cyan เรืองเบา ๆ (`shadow-cyan-500/25`)
-  - โต้ตอบเมื่อชี้เมาส์ (Hover): สว่างขึ้นเล็กน้อยและยกตัวขึ้น 1px (`hover:from-blue-500 hover:to-cyan-400`)
+  - พื้นหลังไล่เฉด `bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500`
+  - ขอบโค้งมน `rounded-xl` (12px), ข้อความสีขาวคมกริบ พร้อมเงาสีทองเรืองเบา ๆ (`shadow-amber-500/25`)
+  - โต้ตอบเมื่อชี้เมาส์ (Hover): สว่างขึ้นเล็กน้อยและยกตัวขึ้น 1px (`hover:from-amber-600 hover:to-yellow-400`)
 - **Secondary / Ghost Button:**
-  - พื้นหลังสีเทาเข้มโปร่งแสง `bg-slate-800` เส้นขอบ `border-slate-700` ตัวอักษรสีเทาสว่าง `text-slate-300` ขอบโค้งมน 8px - 12px
-  - โต้ตอบเมื่อชี้เมาส์: เปลี่ยนสีพื้นหลังเป็น `hover:bg-slate-700` ตัวอักษรสีขาว `hover:text-white`
+  - พื้นหลังสีเทาเข้มโปร่งแสง `bg-stone-800` เส้นขอบ `border-stone-700` ตัวอักษรสีเทาสว่าง `text-stone-300` ขอบโค้งมน 8px - 12px
+  - โต้ตอบเมื่อชี้เมาส์: เปลี่ยนสีพื้นหลังเป็น `hover:bg-stone-700` ตัวอักษรสีขาว `hover:text-white`
 
 ### Cards / Containers
-- **Glass Card:** พื้นหลัง `rgba(30, 41, 59, 0.85)` พร้อมฟิลเตอร์ `backdrop-blur(16px)` และเส้นขอบกระจกบางเบา Inset สม่ำเสมอ 24px (`1.5rem`)
-- **Live Feed Row Insertion:** แถวสแกนใหม่ล่าสุดมีแอนิเมชันแฟลชสีเขียวเรืองรอง (`.animate-new-row`) ขยายตัว 101% ใน 1.5 วินาทีก่อนคืนสู่ปกติ
+- **Glass Card:** พื้นหลัง `rgba(28, 25, 23, 0.9)` พร้อมฟิลเตอร์ `backdrop-blur(16px)` และเส้นขอบกระจกบางเบาสีทอง Inset สม่ำเสมอ 24px (`1.5rem`)
+- **Live Feed Row Insertion:** แถวสแกนใหม่ล่าสุดมีแอนิเมชันแฟลชสีทองเรืองรอง (`.animate-new-row`) ขยายตัว 101% ใน 1.5 วินาทีก่อนคืนสู่ปกติ
 
 ### Inputs / Fields
 - **Search & Text Input:**
-  - พื้นผิว `bg-slate-900` เส้นขอบ `border-slate-700` ขอบโค้งมน `rounded-lg` (8px - 12px) ภายในมี Padding `10px 14px`
-  - ตัวอักษรสีขาวสว่าง เคอร์เซอร์สีฟ้าไซแอน (`caret-color: #06b6d4`)
-  - โฟกัส (Focus-Visible): วงแหวนสีฟ้าสว่างคมชัด `outline: 2px solid #06b6d4; outline-offset: 2px;`
+  - พื้นผิว `bg-stone-900` เส้นขอบ `border-stone-700` ขอบโค้งมน `rounded-lg` (8px - 12px) ภายในมี Padding `10px 14px`
+  - ตัวอักษรสีขาวสว่าง เคอร์เซอร์สีทอง (`caret-color: #f59e0b`)
+  - โฟกัส (Focus-Visible): วงแหวนสีทองสว่างคมชัด `outline: 2px solid #f59e0b; outline-offset: 2px;`
 
 ### Navigation
 - **Sidebar Nav Link:**
-  - สถานะปกติ (Inactive): ข้อความและไอคอนสี `text-slate-400` โฮเวอร์เป็น `hover:text-cyan-300 hover:bg-slate-800/60`
-  - สถานะเลือกอยู่ (Active): พื้นหลังไฮไลต์ไล่เฉดโปร่งแสง `bg-gradient-to-r from-cyan-500/15 to-transparent`, ข้อความสี `text-cyan-400` พร้อมแถบเน้นเรืองแสงสีไซแอนชิดขอบซ้าย
+  - สถานะปกติ (Inactive): ข้อความและไอคอนสี `text-stone-400` โฮเวอร์เป็น `hover:text-amber-300 hover:bg-stone-800/60`
+  - สถานะเลือกอยู่ (Active): พื้นหลังไฮไลต์ไล่เฉดโปร่งแสง `bg-gradient-to-r from-amber-500/15 to-transparent`, ข้อความสี `text-amber-400` พร้อมแถบเน้นเรืองแสงสีทองชิดขอบซ้าย
 
 ### Status Chips / Badges
 - **Attendance Status Badges:**
@@ -237,8 +238,8 @@ components:
   - 🔴 **Offline State:** จุดไฟสีแดง `bg-rose-400` ข้อความ `Offline (Cloud Bridge (Offline))`
 
 ### Tables
-- หัวตารางสีพื้นเทาเข้ม ตัวอักษรเล็กกึ่งกลางหนา (`text-xs font-semibold text-slate-400`)
-- แถวตารางมีเส้นคั่นบางเบา `border-slate-800/60` ตัวเลขจัดเรียงแบบ Monospace Tabular (`font-variant-numeric: tabular-nums`) พร้อมการไฮไลต์สีพื้นหลังเมื่อชี้เมาส์ (`hover:bg-slate-800/40`)
+- หัวตารางสีพื้นเทาเข้ม ตัวอักษรเล็กกึ่งกลางหนา (`text-xs font-semibold text-stone-400`)
+- แถวตารางมีเส้นคั่นบางเบา `border-stone-800/60` ตัวเลขจัดเรียงแบบ Monospace Tabular (`font-variant-numeric: tabular-nums`) พร้อมการไฮไลต์สีพื้นหลังเมื่อชี้เมาส์ (`hover:bg-stone-800/40`)
 
 ---
 
@@ -247,12 +248,12 @@ components:
 ### Do:
 - **Do** ใช้ฟอนต์ `JetBrains Mono` สำหรับรหัสนักศึกษา, รหัสวิชา, หมายเลข Slot ลายนิ้วมือ และเวลาสแกนเสมอ
 - **Do** แสดงสถานะฮาร์ดแวร์ด้วยทั้งจุดสีและข้อความระบุพอร์ต/สถานะที่ชัดเจน
-- **Do** ใช้ปุ่มกดแบบ Gradient ฟ้า-ไซแอนเฉพาะกับการกระทำหลัก (Primary Actions เช่น สแกนนิ้ว, บันทึกตาราง, ส่งออก Excel)
-- **Do** รักษาระดับความลึกของ Dark Theme ไว้อย่างมั่นคง เพื่อความสบายตาในการใช้งานระยะยาวในห้องเรียน
+- **Do** ใช้ปุ่มกดแบบ Gradient น้ำตาลทอง (Amber-Gold) เฉพาะกับการกระทำหลัก (Primary Actions เช่น สแกนนิ้ว, บันทึกตาราง, ส่งออก Excel)
+- **Do** รักษาระดับความลึกของ Dark Theme และโทนอบอุ่นของผืนผ้าใบเอสเปรสโซ เพื่อความสบายตาและความภูมิฐานของ มทร.ล้านนา
 - **Do** จัดระยะ Padding ของการ์ดกระจกให้มีความกว้างสม่ำเสมอ 24px (`1.5rem`)
 
 ### Don't:
-- **Don't** นำธีมสีสว่างพื้นขาวจ้า (Light Theme) มาใช้ปะปน ซึ่งจะทำลายเอกลักษณ์ Cyber-Physical Glassmorphism ของระบบ
+- **Don't** นำธีมสีสว่างพื้นขาวจ้า (Light Theme) มาใช้ปะปน ซึ่งจะทำลายเอกลักษณ์ Warm Bronze Glassmorphism ของระบบ
 - **Don't** ใส่เอฟเฟกต์สีรุ้งหรือแสงนีออนฟุ่มเฟือยแบบ Dashboard เกมมิ่ง ซึ่งจะลดทอนความน่าเชื่อถือทางวิชาการ
 - **Don't** ซ่อนข้อผิดพลาดหรือรายงานสถานะออนไลน์ปลอมหากเซนเซอร์ไม่ได้เชื่อมต่อจริง
 - **Don't** ใช้ฟอนต์ Serif หรือฟอนต์ลายมือที่ทำให้อ่านรหัสนักศึกษาและตารางเรียนยาก

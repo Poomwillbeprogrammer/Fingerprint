@@ -3,77 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ตารางเรียน & เช็คชื่อ - Fingerprint Admin</title>
+  <title>ตารางเรียน & เช็คชื่อ - Fingerprint Admin (RMUTL)</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <script src="/socket.io/socket.io.js"></script>
 </head>
-<body class="min-h-screen bg-slate-950 text-slate-100 flex flex-col md:flex-row">
+<body class="min-h-screen bg-stone-950 text-stone-100 flex flex-col md:flex-row">
 
   <!-- Mobile Top Bar (แสดงเฉพาะจอมือถือ < md) -->
-  <div class="flex md:hidden items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-30">
+  <div class="flex md:hidden items-center justify-between px-4 py-3 bg-stone-900 border-b border-stone-800 sticky top-0 z-30">
     <div class="flex items-center gap-2.5">
-      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white text-sm shadow-md">
+      <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-700 via-amber-600 to-yellow-500 flex items-center justify-center text-white text-sm shadow-md">
         <i class="fa-solid fa-fingerprint"></i>
       </div>
       <div>
         <span class="font-bold text-white tracking-wide text-xs">FINGERPRINT</span>
-        <span class="text-[10px] text-cyan-400 font-mono block leading-none">UNO Q IoT</span>
+        <span class="text-[10px] text-amber-400 font-mono block leading-none">UNO Q IoT (RMUTL)</span>
       </div>
     </div>
-    <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">
+    <button id="mobileMenuBtn" aria-label="Toggle Menu" class="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 transition">
       <i class="fa-solid fa-bars"></i>
     </button>
   </div>
 
   <!-- Sidebar -->
-  <aside id="sidebarMenu" class="hidden md:flex w-full md:w-64 glass border-r border-slate-800 p-5 flex-col justify-between shrink-0">
+  <aside id="sidebarMenu" class="hidden md:flex w-full md:w-64 glass border-r border-stone-800 p-5 flex-col justify-between shrink-0">
     <div>
       <!-- Brand -->
       <div class="flex items-center gap-3 px-2 py-3 mb-6">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-400 flex items-center justify-center text-white shadow-md shadow-cyan-500/20">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-700 via-amber-600 to-yellow-500 flex items-center justify-center text-white shadow-md shadow-amber-500/20">
           <i class="fa-solid fa-fingerprint text-xl"></i>
         </div>
         <div>
           <h2 class="font-bold text-white tracking-wide text-sm">FINGERPRINT</h2>
-          <p class="text-xs text-cyan-400 font-mono">UNO Q IoT System</p>
+          <p class="text-xs text-amber-400 font-mono">UNO Q IoT System</p>
         </div>
       </div>
 
       <!-- Navigation -->
       <nav class="space-y-1.5">
-        <a href="/index.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium text-sm transition">
+        <a href="/index.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800/50 font-medium text-sm transition">
           <i class="fa-solid fa-chart-line w-4 text-center"></i>
           <span>แดชบอร์ดสด</span>
         </a>
-        <a href="/schedules.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 font-medium border border-cyan-500/20 text-sm transition">
+        <a href="/schedules.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl bg-amber-500/15 text-amber-400 font-medium border border-amber-500/30 text-sm transition">
           <i class="fa-solid fa-calendar-days w-4 text-center"></i>
           <span>ตารางเรียน & เช็คชื่อ</span>
         </a>
-        <a href="/users.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 font-medium text-sm transition">
+        <a href="/users.html" class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-stone-400 hover:text-white hover:bg-stone-800/50 font-medium text-sm transition">
           <i class="fa-solid fa-users w-4 text-center"></i>
           <span>จัดการผู้ใช้งาน</span>
         </a>
       </nav>
       <!-- Hardware Connection Status -->
-      <div class="mt-4 pt-3 border-t border-slate-800/80 px-2">
-        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
+      <div class="mt-4 pt-3 border-t border-stone-800/80 px-2">
+        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs">
           <div class="flex items-center gap-2">
             <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"></span>
-            <span id="serialStatusText" class="text-[11px] text-slate-400">กำลังตรวจสอบ...</span>
+            <span id="serialStatusText" class="text-[11px] text-stone-400">กำลังตรวจสอบ...</span>
           </div>
-          <i class="fa-solid fa-microchip text-slate-500 text-xs"></i>
+          <i class="fa-solid fa-microchip text-stone-500 text-xs"></i>
         </div>
       </div>
     </div>
 
     <!-- User / Logout -->
-    <div class="pt-4 border-t border-slate-800/80">
+    <div class="pt-4 border-t border-stone-800/80">
       <div class="flex items-center justify-between px-2 py-2">
         <div class="flex items-center gap-2.5">
-          <div class="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 text-xs">
+          <div class="w-8 h-8 rounded-full bg-stone-800 border border-stone-700 flex items-center justify-center text-stone-300 text-xs">
             <i class="fa-solid fa-user-shield"></i>
           </div>
           <div>
@@ -84,10 +84,10 @@
           </div>
         </div>
         <div class="flex items-center gap-1">
-          <button id="openChangePasswordBtn" title="เปลี่ยนรหัสผ่าน" class="text-slate-400 hover:text-cyan-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+          <button id="openChangePasswordBtn" title="เปลี่ยนรหัสผ่าน" class="text-stone-400 hover:text-amber-400 transition p-1.5 rounded-lg hover:bg-stone-800">
             <i class="fa-solid fa-key text-sm"></i>
           </button>
-          <button id="logoutBtn" title="ออกจากระบบ" class="text-slate-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-slate-800">
+          <button id="logoutBtn" title="ออกจากระบบ" class="text-stone-400 hover:text-rose-400 transition p-1.5 rounded-lg hover:bg-stone-800">
             <i class="fa-solid fa-arrow-right-from-bracket text-sm"></i>
           </button>
         </div>
@@ -102,26 +102,26 @@
     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
       <div>
         <h1 class="text-2xl md:text-3xl font-bold text-white flex items-center gap-2.5">
-          <i class="fa-solid fa-calendar-check text-cyan-400"></i>
-          <span>ตารางเรียน & บันทึกเวลาเข้าห้อง (<span id="displayRoomTitle" class="text-cyan-400">...</span>)</span>
+          <i class="fa-solid fa-calendar-check text-amber-400"></i>
+          <span>ตารางเรียน & บันทึกเวลาเข้าห้อง (<span id="displayRoomTitle" class="text-amber-400">...</span>)</span>
         </h1>
-        <p class="text-sm text-slate-400 mt-1">
+        <p class="text-sm text-stone-400 mt-1">
           ห้อง <span id="displayRoomName" class="text-white font-medium">-</span> 
-          (<span id="displayBuildingName" class="text-slate-300">-</span>) | ตรวจสอบการเข้าเรียนแยกตามคาบ และส่งออกไฟล์ Excel
+          (<span id="displayBuildingName" class="text-stone-300">-</span>) | ตรวจสอบการเข้าเรียนแยกตามคาบ และส่งออกไฟล์ Excel
         </p>
       </div>
       <div class="flex items-center gap-3">
         <button id="openImportBtn" class="px-3.5 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition">
           <i class="fa-solid fa-file-excel"></i> นำเข้าตารางใหม่ (.xlsx)
         </button>
-        <button id="refreshBtn" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 rounded-xl text-xs font-medium flex items-center gap-2 transition">
+        <button id="refreshBtn" class="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 rounded-xl text-xs font-medium flex items-center gap-2 transition">
           <i class="fa-solid fa-rotate-right"></i> รีเฟรช
         </button>
       </div>
     </div>
 
     <!-- Room Selection & Device Assignment Bar -->
-    <div class="mb-6 bg-slate-900/60 p-3 rounded-2xl border border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+    <div class="mb-6 bg-stone-900/60 p-3 rounded-2xl border border-stone-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
       <div class="flex items-center gap-2 overflow-x-auto pb-1 lg:pb-0 scrollbar-thin" id="roomTabsContainer">
         <!-- Injected via JavaScript: Room Tabs -->
       </div>
@@ -137,14 +137,14 @@
 
     <!-- Day Filter Tabs -->
     <div class="flex items-center gap-2 overflow-x-auto pb-3 mb-6 scrollbar-thin">
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-cyan-500 text-slate-950 font-semibold shadow-md shadow-cyan-500/20" data-day="all">ทั้งหมด (22 คาบ)</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="1">จันทร์</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="2">อังคาร</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="3">พุธ</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="4">พฤหัสบดี</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="5">ศุกร์</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="6">เสาร์</button>
-      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition" data-day="7">อาทิตย์</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-amber-500 text-stone-950 font-semibold shadow-md shadow-amber-500/20" data-day="all">ทั้งหมด (22 คาบ)</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="1">จันทร์</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="2">อังคาร</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="3">พุธ</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="4">พฤหัสบดี</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="5">ศุกร์</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="6">เสาร์</button>
+      <button class="day-tab px-4 py-2 rounded-xl text-xs font-medium bg-stone-900 border border-stone-800 text-stone-400 hover:text-white hover:bg-stone-800 transition" data-day="7">อาทิตย์</button>
     </div>
 
     <!-- Schedules Grid -->
@@ -155,33 +155,33 @@
   </main>
 
   <!-- Attendance Sheet Modal -->
-  <div id="attendanceModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div id="attendanceModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
     <div class="glass-card rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
       
       <!-- Modal Header -->
-      <div class="p-6 border-b border-slate-800 flex items-start justify-between">
+      <div class="p-6 border-b border-stone-800 flex items-start justify-between">
         <div>
           <div class="flex items-center gap-2 mb-1.5">
             <span id="modalTypeBadge" class="px-2.5 py-0.5 rounded-full text-xs font-semibold"></span>
-            <span id="modalSubjectCode" class="text-xs font-mono text-cyan-400 font-bold"></span>
-            <span id="modalDayTime" class="text-xs text-slate-400"></span>
+            <span id="modalSubjectCode" class="text-xs font-mono text-amber-400 font-bold"></span>
+            <span id="modalDayTime" class="text-xs text-stone-400"></span>
           </div>
           <h2 id="modalSubjectName" class="text-xl font-bold text-white"></h2>
-          <p id="modalInstructorGroup" class="text-xs text-slate-400 mt-1"></p>
+          <p id="modalInstructorGroup" class="text-xs text-stone-400 mt-1"></p>
         </div>
-        <button id="closeModalBtn" class="text-slate-400 hover:text-white p-2 rounded-xl hover:bg-slate-800 transition">
+        <button id="closeModalBtn" class="text-stone-400 hover:text-white p-2 rounded-xl hover:bg-stone-800 transition">
           <i class="fa-solid fa-xmark text-lg"></i>
         </button>
       </div>
 
       <!-- Controls & Metrics (Strictly Option 1: Only Scanned Attendees) -->
-      <div class="p-6 border-b border-slate-800/80">
+      <div class="p-6 border-b border-stone-800/80">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-5">
           <div class="flex items-center gap-2">
-            <label for="filterDate" class="text-xs font-medium text-slate-300 flex items-center gap-1.5">
+            <label for="filterDate" class="text-xs font-medium text-stone-300 flex items-center gap-1.5">
               <i class="fa-regular fa-calendar"></i> วันที่:
             </label>
-            <input type="date" id="filterDate" class="px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-cyan-500">
+            <input type="date" id="filterDate" class="px-3 py-1.5 bg-stone-900 border border-stone-800 rounded-xl text-xs text-stone-200 focus:outline-none focus:border-amber-500">
           </div>
           <button id="exportExcelBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition">
             <i class="fa-solid fa-file-arrow-down"></i> ส่งออก Excel (.xlsx)
@@ -189,10 +189,10 @@
         </div>
 
         <!-- 3 Metric Counter Boxes (Option 1 Selected) -->
-        <div class="grid grid-cols-3 gap-2 sm:gap-4 divide-x divide-slate-800/80 py-3">
+        <div class="grid grid-cols-3 gap-2 sm:gap-4 divide-x divide-stone-800/80 py-3">
           <div class="text-center px-2">
-            <p class="text-[11px] text-slate-400 font-medium">มาเรียนทั้งหมด</p>
-            <p id="metricTotal" class="text-2xl font-bold text-cyan-400 font-mono mt-1">0</p>
+            <p class="text-[11px] text-stone-400 font-medium">มาเรียนทั้งหมด</p>
+            <p id="metricTotal" class="text-2xl font-bold text-amber-400 font-mono mt-1">0</p>
           </div>
           <div class="text-center px-2">
             <p class="text-[11px] text-emerald-400 font-medium">เข้าเรียนทันเวลา</p>
@@ -210,7 +210,7 @@
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="border-b border-slate-800 text-[11px] text-slate-400 uppercase tracking-wider">
+              <tr class="border-b border-stone-800 text-[11px] text-stone-400 uppercase tracking-wider">
                 <th class="pb-3 font-semibold w-12 text-center">ลำดับ</th>
                 <th class="pb-3 font-semibold">รหัสนักศึกษา</th>
                 <th class="pb-3 font-semibold">ชื่อ-นามสกุล</th>
@@ -219,17 +219,17 @@
                 <th class="pb-3 font-semibold text-right">Score</th>
               </tr>
             </thead>
-            <tbody id="attendeesTableBody" class="divide-y divide-slate-800/50 text-xs">
+            <tbody id="attendeesTableBody" class="divide-y divide-stone-800/50 text-xs">
               <!-- Injected via JavaScript -->
             </tbody>
           </table>
         </div>
         <div id="emptyAttendeesState" class="py-12 text-center hidden">
-          <div class="w-12 h-12 rounded-full bg-slate-800/60 flex items-center justify-center text-slate-500 mx-auto mb-3">
+          <div class="w-12 h-12 rounded-full bg-stone-800/60 flex items-center justify-center text-stone-500 mx-auto mb-3">
             <i class="fa-solid fa-user-clock text-lg"></i>
           </div>
-          <p class="text-sm font-medium text-slate-300">ยังไม่มีผู้ลงเวลาในคาบนี้</p>
-          <p class="text-xs text-slate-500 mt-1">เมื่อนักศึกษาวางนิ้วบนเซนเซอร์ R307 รายชื่อจะปรากฏที่นี่ทันที</p>
+          <p class="text-sm font-medium text-stone-300">ยังไม่มีผู้ลงเวลาในคาบนี้</p>
+          <p class="text-xs text-stone-500 mt-1">เมื่อนักศึกษาวางนิ้วบนเซนเซอร์ R307 รายชื่อจะปรากฏที่นี่ทันที</p>
         </div>
       </div>
 
@@ -237,28 +237,28 @@
   </div>
 
   <!-- Excel Import Modal (2-Step Preview & Confirm) -->
-  <div id="importModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div id="importModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
     <div class="glass-card rounded-2xl w-full max-w-lg p-6 shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
       <div class="flex items-center justify-between mb-4 shrink-0">
         <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-file-excel text-emerald-400"></i>
           <span>นำเข้าตารางเรียนใหม่</span>
         </h2>
-        <button id="closeImportModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg">
+        <button id="closeImportModalBtn" class="text-stone-400 hover:text-white p-1 rounded-lg">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
       
-      <p class="text-xs text-slate-400 mb-4 leading-relaxed shrink-0">
-        เลือกไฟล์ Excel (<code class="text-cyan-400">.xlsx</code>) ตารางการใช้ห้องเรียน มทร.ล้านนา ระบบจะตรวจสอบห้องอัตโนมัติ หากเป็นห้องเดิมจะแทนที่ตารางเดิม หากเป็นห้องใหม่จะสร้าง Dashboard แยกห้องให้ทันที
+      <p class="text-xs text-stone-400 mb-4 leading-relaxed shrink-0">
+        เลือกไฟล์ Excel (<code class="text-amber-400">.xlsx</code>) ตารางการใช้ห้องเรียน มทร.ล้านนา ระบบจะตรวจสอบห้องอัตโนมัติ หากเป็นห้องเดิมจะแทนที่ตารางเดิม หากเป็นห้องใหม่จะสร้าง Dashboard แยกห้องให้ทันที
       </p>
 
       <form id="importForm" class="space-y-4 flex-1 overflow-y-auto pr-1">
         <!-- Step 1: Dropzone -->
-        <label for="excelFileInput" id="uploadDropzone" class="block border-2 border-dashed border-slate-700 hover:border-cyan-500 rounded-xl p-5 text-center transition cursor-pointer">
-          <i class="fa-solid fa-cloud-arrow-up text-3xl text-cyan-400 mb-2"></i>
-          <span id="uploadLabel" class="block text-xs text-slate-300 font-medium">คลิกเพื่อเลือกไฟล์ .xlsx หรือลากไฟล์มาวางที่นี่</span>
-          <span class="block text-[11px] text-slate-500 mt-1">รองรับไฟล์ตารางเรียน เช่น 101.xlsx, 102.xlsx</span>
+        <label for="excelFileInput" id="uploadDropzone" class="block border-2 border-dashed border-stone-700 hover:border-amber-500 rounded-xl p-5 text-center transition cursor-pointer">
+          <i class="fa-solid fa-cloud-arrow-up text-3xl text-amber-400 mb-2"></i>
+          <span id="uploadLabel" class="block text-xs text-stone-300 font-medium">คลิกเพื่อเลือกไฟล์ .xlsx หรือลากไฟล์มาวางที่นี่</span>
+          <span class="block text-[11px] text-stone-500 mt-1">รองรับไฟล์ตารางเรียน เช่น 101.xlsx, 102.xlsx</span>
           <input type="file" id="excelFileInput" accept=".xlsx" class="hidden">
         </label>
 
@@ -270,22 +270,22 @@
           <!-- Room Name & Building Inputs -->
           <div class="grid grid-cols-2 gap-3 py-1">
             <div>
-              <label class="block text-[11px] font-medium text-slate-300 mb-1">ชื่อห้องเรียน (Room)</label>
-              <input type="text" id="importRoomName" required class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-500 font-semibold font-mono">
+              <label class="block text-[11px] font-medium text-stone-300 mb-1">ชื่อห้องเรียน (Room)</label>
+              <input type="text" id="importRoomName" required class="w-full px-3 py-1.5 bg-stone-900 border border-stone-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500 font-semibold font-mono">
             </div>
             <div>
-              <label class="block text-[11px] font-medium text-slate-300 mb-1">อาคาร (Building)</label>
-              <input type="text" id="importBuilding" class="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-500">
+              <label class="block text-[11px] font-medium text-stone-300 mb-1">อาคาร (Building)</label>
+              <input type="text" id="importBuilding" class="w-full px-3 py-1.5 bg-stone-900 border border-stone-700 rounded-lg text-xs text-white focus:outline-none focus:border-amber-500">
             </div>
           </div>
 
           <!-- Quick Preview Items -->
-          <div class="pt-2 border-t border-slate-800/80">
+          <div class="pt-2 border-t border-stone-800/80">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-xs font-semibold text-slate-300">ตัวอย่างคาบเรียนที่ตรวจพบ</span>
-              <span id="previewCountBadge" class="text-[11px] text-cyan-400 font-mono font-medium"></span>
+              <span class="text-xs font-semibold text-stone-300">ตัวอย่างคาบเรียนที่ตรวจพบ</span>
+              <span id="previewCountBadge" class="text-[11px] text-amber-400 font-mono font-medium"></span>
             </div>
-            <div id="previewItemsContainer" class="space-y-1.5 max-h-32 overflow-y-auto pr-1 text-[11px] text-slate-400 font-mono">
+            <div id="previewItemsContainer" class="space-y-1.5 max-h-32 overflow-y-auto pr-1 text-[11px] text-stone-400 font-mono">
               <!-- Injected by JS -->
             </div>
           </div>
@@ -294,7 +294,7 @@
         <div id="importError" class="px-3.5 py-2.5 bg-rose-500/10 text-rose-400 rounded-lg text-xs hidden"></div>
 
         <div class="flex items-center justify-end gap-2 pt-2 shrink-0">
-          <button type="button" id="cancelImportBtn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition">ยกเลิก</button>
+          <button type="button" id="cancelImportBtn" class="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-medium transition">ยกเลิก</button>
           <button type="submit" id="submitImportBtn" class="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white rounded-xl text-xs font-semibold shadow-lg shadow-emerald-500/20 transition disabled:opacity-50" disabled>
             <i class="fa-solid fa-upload"></i> อัปโหลดและบันทึก
           </button>
@@ -304,33 +304,33 @@
   </div>
 
   <!-- Change Password Modal -->
-  <div id="changePasswordModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+  <div id="changePasswordModal" class="fixed inset-0 bg-stone-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
     <div class="glass-card rounded-2xl w-full max-w-md p-6 shadow-2xl">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-lg md:text-xl font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-key text-cyan-400"></i> เปลี่ยนรหัสผ่าน Admin
+          <i class="fa-solid fa-key text-amber-400"></i> เปลี่ยนรหัสผ่าน Admin
         </h2>
-        <button id="closePasswordModalBtn" class="text-slate-400 hover:text-white p-1 rounded-lg">
+        <button id="closePasswordModalBtn" class="text-stone-400 hover:text-white p-1 rounded-lg">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
       <form id="changePasswordForm" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">รหัสผ่านปัจจุบัน</label>
-          <input type="password" id="currentPassword" required class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-cyan-500">
+          <label class="block text-xs font-medium text-stone-300 mb-1.5">รหัสผ่านปัจจุบัน</label>
+          <input type="password" id="currentPassword" required class="w-full px-3.5 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)</label>
-          <input type="password" id="newPassword" required minlength="6" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-cyan-500">
+          <label class="block text-xs font-medium text-stone-300 mb-1.5">รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)</label>
+          <input type="password" id="newPassword" required minlength="6" class="w-full px-3.5 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
         <div>
-          <label class="block text-xs font-medium text-slate-300 mb-1.5">ยืนยันรหัสผ่านใหม่</label>
-          <input type="password" id="confirmPassword" required minlength="6" class="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-cyan-500">
+          <label class="block text-xs font-medium text-stone-300 mb-1.5">ยืนยันรหัสผ่านใหม่</label>
+          <input type="password" id="confirmPassword" required minlength="6" class="w-full px-3.5 py-2.5 bg-stone-950 border border-stone-800 rounded-xl text-sm text-white focus:outline-none focus:border-amber-500">
         </div>
         <div id="passwordError" class="px-3.5 py-2.5 bg-rose-500/10 text-rose-400 rounded-lg text-xs hidden"></div>
         <div class="flex items-center justify-end gap-2 pt-2">
-          <button type="button" id="cancelPasswordBtn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-medium transition">ยกเลิก</button>
-          <button type="submit" class="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-semibold rounded-xl text-xs transition">บันทึกรหัสผ่านใหม่</button>
+          <button type="button" id="cancelPasswordBtn" class="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-medium transition">ยกเลิก</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold rounded-xl text-xs transition">บันทึกรหัสผ่านใหม่</button>
         </div>
       </form>
     </div>
