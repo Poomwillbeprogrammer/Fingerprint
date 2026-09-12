@@ -67,7 +67,7 @@ socket.on('serial_status', (data) => {
     text.innerText = `R307 Not Found (${data.port})`;
     text.className = 'text-[11px] text-amber-400 font-medium';
   } else {
-    dot.className = 'w-2 h-2 rounded-full bg-rose-400 animate-pulse';
+    dot.className = 'w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]';
     text.innerText = `Offline (${data.port || 'Disconnected'})`;
     text.className = 'text-[11px] text-rose-400 font-medium';
   }

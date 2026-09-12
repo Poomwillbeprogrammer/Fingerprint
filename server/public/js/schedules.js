@@ -92,7 +92,7 @@ function renderRoomTabs() {
     }
 
     const deviceIndicator = isDeviceRoom
-      ? `<span class="w-2 h-2 rounded-full ${isSelected ? 'bg-slate-950' : 'bg-emerald-400'} animate-pulse" title="เครื่องสแกน Uno Q ประจำห้องนี้"></span>`
+      ? `<span class="w-2 h-2 rounded-full ${isSelected ? 'bg-slate-950' : 'bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)]'} inline-block" title="เครื่องสแกน Uno Q ประจำห้องนี้"></span>`
       : '';
 
     const badgeClass = isSelected ? 'bg-slate-950/20 text-slate-950' : 'bg-slate-800 text-slate-400';
@@ -111,7 +111,7 @@ function renderRoomTabs() {
     const isCurrentActiveDevice = currentRoom === activeDeviceRoom;
     const activeBadgeOrButton = isCurrentActiveDevice
       ? `<span class="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-sm">
-           <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+           <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(16,185,129,0.6)] inline-block"></span>
            เครื่องสแกนประจำห้องนี้
          </span>`
       : `<button onclick="handleSetActiveRoom('${currentRoom}')" class="px-3 py-1.5 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition">
@@ -749,15 +749,15 @@ socket.on('serial_status', (data) => {
     const isR307 = Boolean(data && data.connected && data.r307_connected);
 
     if (isBridge && isR307) {
-      dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-sm shadow-emerald-500/50';
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.8)]';
       text.textContent = 'R307 Online';
       text.className = 'text-[11px] text-emerald-400 font-medium';
     } else if (isBridge && !isR307) {
-      dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-sm shadow-amber-500/50 animate-pulse';
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-pulse';
       text.textContent = 'R307 Not Found';
       text.className = 'text-[11px] text-amber-400 font-medium';
     } else {
-      dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+      dot.className = 'w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]';
       text.textContent = 'Offline';
       text.className = 'text-[11px] text-rose-400 font-medium';
     }

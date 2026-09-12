@@ -1,13 +1,56 @@
 @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
-body {
-  font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #0f172a;
-  color: #f8fafc;
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
 }
 
-.font-mono {
+body {
+  font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #020617;
+  color: #f8fafc;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.5;
+}
+
+/* Typography Hierarchy matching DESIGN.md */
+h1 {
+  font-size: 1.875rem; /* 30px */
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.25rem; /* 20px */
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.125rem; /* 18px */
+  line-height: 1.35;
+  font-weight: 600;
+}
+
+/* Browser Surfaces Theming */
+::selection {
+  background: rgba(6, 182, 212, 0.3);
+  color: #ffffff;
+}
+
+input, textarea {
+  caret-color: #06b6d4;
+}
+
+:focus-visible {
+  outline: 2px solid #06b6d4;
+  outline-offset: 2px;
+}
+
+.font-mono, td, th, .tabular-nums {
   font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Glassmorphism Effect */
@@ -16,12 +59,16 @@ body {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem;
 }
 
 .glass-card {
   background: rgba(30, 41, 59, 0.85);
   backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+  border-radius: 1rem;
 }
 
 /* New Log Row Flash Animation */
@@ -40,7 +87,12 @@ body {
   animation: rowFlash 1.5s ease-out;
 }
 
-/* Custom Scrollbar */
+/* Custom Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #334155 #0f172a;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
