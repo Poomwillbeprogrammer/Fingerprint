@@ -780,59 +780,56 @@ function exportAttendanceMatrixExcel(scheduleId, allUsers = []) {
     const yr = parseInt(parts[0]);
     headerRow.push(`W${wn} (${getWeekRangeText(yr, wn)})`);
   });
-  headerRow.push('รวมมาเรียน (ครั้ง)', 'รวมมาสาย (ครั้ง)', 'รวมขาด (ครั้ง)', 'คิดเป็น % การเข้าเรียน');
+  headerRow.push('รวมมาตรงเวลา (ครั้ง)', 'รวมมาสาย (ครั้ง)', 'รวมเข้าเรียนทั้งหมด (ครั้ง)');
   rows.push(headerRow);
 
-  // Collect students: either allUsers from DB, or unique students from attendance records
-  let students = [];
-  if (Array.isArray(allUsers) && allUsers.length > 0) {
-    students = allUsers;
-  } else {
-    const userMap = new Map();
-    schedRecords.forEach(r => {
-      if (r.user_id && !userMap.has(r.user_id)) {
-        userMap.set(r.user_id, {
-          id: r.user_id,
-          student_id: r.student_id,
-          name: r.user_name
-        });
-      }
-    });
-    students = Array.from(userMap.values());
-  }
+  // Collect students: only students who actually attended this specific subject (schedRecords)
+  const userMap = new Map();
+  schedRecords.forEach(r => {
+    if (r.user_id && !userMap.has(r.user_id)) {
+      userMap.set(r.user_id, {
+        id: r.user_id,
+        student_id: r.student_id || '',
+        name: r.user_name || ''
+      });
+    }
+  });
+  const students = Array.from(userMap.values()).sort((a, b) => {
+    return (a.student_id || '').localeCompare(b.student_id || '', undefined, { numeric: true });
+  });
 
   // Populate row for each student
-  students.forEach((u, idx) => {
-    const row = [idx + 1, u.student_id || '-', u.name || '-'];
-    let presentCount = 0;
-    let lateCount = 0;
+  if (students.length === 0) {
+    rows.push(['-', '-', 'ยังไม่มีข้อมูลการเข้าเรียนในวิชานี้']);
+  } else {
+    students.forEach((u, idx) => {
+      const row = [idx + 1, u.student_id || '-', u.name || '-'];
+      let presentCount = 0;
+      let lateCount = 0;
 
-    sortedWeeks.forEach(yw => {
-      const match = schedRecords.find(r => r.user_id === u.id && (r.year_week === yw || (!r.year_week && r.date && getIsoWeekDetails(r.date).yearWeek === yw)));
-      if (match) {
-        if (match.attendance_status === 'ON_TIME') {
-          row.push('✓');
-          presentCount++;
-        } else if (match.attendance_status === 'LATE') {
-          row.push('สาย');
-          lateCount++;
+      sortedWeeks.forEach(yw => {
+        const match = schedRecords.find(r => r.user_id === u.id && (r.year_week === yw || (!r.year_week && r.date && getIsoWeekDetails(r.date).yearWeek === yw)));
+        if (match) {
+          if (match.attendance_status === 'ON_TIME') {
+            row.push('✓');
+            presentCount++;
+          } else if (match.attendance_status === 'LATE') {
+            row.push('สาย');
+            lateCount++;
+          } else {
+            row.push('✓');
+            presentCount++;
+          }
         } else {
-          row.push('✓');
-          presentCount++;
+          row.push('-');
         }
-      } else {
-        row.push('-');
-      }
+      });
+
+      const totalAttended = presentCount + lateCount;
+      row.push(presentCount, lateCount, totalAttended);
+      rows.push(row);
     });
-
-    const totalHeld = sortedWeeks.length;
-    const totalAttended = presentCount + lateCount;
-    const absentCount = Math.max(0, totalHeld - totalAttended);
-    const percent = totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
-
-    row.push(presentCount, lateCount, absentCount, `${percent}%`);
-    rows.push(row);
-  });
+  }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
 
@@ -845,7 +842,7 @@ function exportAttendanceMatrixExcel(scheduleId, allUsers = []) {
   sortedWeeks.forEach(() => {
     colWidths.push({ wch: 18 });
   });
-  colWidths.push({ wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 20 });
+  colWidths.push({ wch: 22 }, { wch: 18 }, { wch: 24 });
   ws['!cols'] = colWidths;
 
   const wb = XLSX.utils.book_new();

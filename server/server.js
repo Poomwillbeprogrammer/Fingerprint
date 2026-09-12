@@ -1118,20 +1118,14 @@ app.get('/api/schedules/:id/export-excel', authRequired, (req, res) => {
   }
 });
 
-// ส่งออกตารางสรุปภาพรวมทุกสัปดาห์ (Academic Matrix)
-app.get('/api/schedules/:id/export-matrix', authRequired, async (req, res) => {
+// ส่งออกตารางสรุปภาพรวมทุกสัปดาห์ (Academic Matrix - เฉพาะนักศึกษาที่ลงเวลาในวิชานี้)
+app.get('/api/schedules/:id/export-matrix', authRequired, (req, res) => {
   try {
     const { id } = req.params;
-    let allUsers = [];
-    try {
-      allUsers = await dbAsync.all('SELECT id, student_id, name FROM users ORDER BY student_id ASC, id ASC');
-    } catch (e) {
-      console.warn('Could not fetch all users for matrix, falling back to attendees:', e);
-    }
-    const excelBuffer = schedulesManager.exportAttendanceMatrixExcel(id, allUsers);
+    const excelBuffer = schedulesManager.exportAttendanceMatrixExcel(id);
     const sched = schedulesManager.getAllSchedules().find(s => s.id === parseInt(id));
     const schedCode = sched ? sched.subject_code : id;
-    const filename = `Attendance_Matrix_${schedCode}_FullSemester.xlsx`;
+    const filename = `Attendance_Matrix_${schedCode}_Summary.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
     res.send(excelBuffer);
