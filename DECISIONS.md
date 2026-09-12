@@ -73,3 +73,10 @@
   - **Socket.IO Role-Based Access Control:** ติดตั้ง Middleware `io.use` ตรวจสอบ Token ตอน Handshake แยกสิทธิ์ชัดเจนระหว่าง Web Admin (JWT) และ Hardware Bridge (`BRIDGE_TOKEN`) เพื่อป้องกันการสวมรอยเตะบอร์ดจริงหลุดหรือปลอมแปลงผลสแกนลายนิ้วมือ
   - **Login Protection:** ลบคำใบ้รหัสเริ่มต้นออกจากหน้าเว็บ, ติดตั้ง `express-rate-limit` (สูงสุด 5 ครั้ง/นาที/IP) และกำหนดคุกกี้ `httpOnly`, `sameSite: 'strict'`, `secure`
   - **Reliability & UX:** Export ฟังก์ชัน `loadAttendanceRecords` ใน `schedules_manager.js` แก้บั๊กตาราง Dashboard หมุนค้าง, เพิ่ม Error State และปุ่ม Retry บนหน้าเว็บ, ปรับ Mobile Responsive Sidebar ให้ยุบเป็น Hamburger Menu เมื่อจอกว้าง < 768px และเพิ่ม Favicon ของระบบ
+* **ADR-017:** การตรวจสอบและแยกแยะสถานะฮาร์ดแวร์เซนเซอร์ลายนิ้วมือ R307 ออกจาก Cloud Bridge (Hardware Sensor Health Detection & Fail-Fast Enrollment):
+  - **ที่มาและปัญหา:** โค้ดเดิมอิงสถานะ `serial_status` จากการเชื่อมต่อของสคริปต์ Socket.IO บริดจ์บนบอร์ด Uno Q เท่านั้น ทำให้เมื่อบอร์ดต่อเน็ตได้ หน้าเว็บจะรายงานเป็น `R307 Online (Cloud Bridge (Active))` ทันที แม้ไม่ได้เสียบสายเซนเซอร์ R307 เข้ากับบอร์ด ส่งผลให้ผู้ใช้เข้าใจผิดและเมื่อกดลงทะเบียนจะค้างรอ Timeout 20 วินาที
+  - **การแก้ปัญหาเชิงสถาปัตยกรรม:**
+    1. เพิ่มคำสั่ง `CHECK_R307` ใน Command Loop ของเฟิร์มแวร์ C++ (`sketch.ino`) เพื่อให้สอบถามสถานะจริงของ R307 ผ่าน `finger.verifyPassword()` ได้ตลอดเวลา
+    2. ใน `unoq_bridge.py` ตั้งค่าเริ่มต้น `r307_connected = False` (ไม่เหมาว่าพร้อมใช้งานจนกว่าจะได้รับยืนยัน), ดักจับ `STATUS:R307_READY` และ `STATUS:R307_NOT_FOUND`, ส่งสถานะขึ้น Cloud ผ่านอีเวนต์ `bridge_sensor_status`, และเพิ่ม Background Watchdog Thread คอยตรวจเช็คทุก 30 วินาที
+    3. ฝั่ง Server (`server.js`) กระจายสถานะ `r307_connected` ไปยังหน้าเว็บ และมีระบบ Fail-Fast สกัดกั้นคำสั่ง `start_enroll` ทันทีพร้อมแจ้งเตือนแอดมิน หากเซนเซอร์ไม่ได้เชื่อมต่อ
+    4. หน้าเว็บแสดงป้ายสถานะแยกชัดเจน 3 ระดับ: 🟢 `R307 Online`, 🟠 `R307 Not Found` (ไฟสีส้มกระพริบเตือนเมื่อบอร์ดต่อเน็ตได้แต่ไม่พบเซนเซอร์), และ 🔴 `Offline`

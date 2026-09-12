@@ -45,6 +45,10 @@
   * การเชื่อมต่อ Socket.IO มีระบบตรวจสอบสิทธิ์ตอน Handshake แยกสิทธิ์ระหว่าง Admin และ Hardware Bridge (`BRIDGE_TOKEN`)
   * ป้องกัน Brute-force บนหน้าล็อกอินด้วย Rate Limiter และตั้งค่าคุกกี้ `httpOnly`, `sameSite: 'strict'`, `secure`
   * บังคับใช้ Secrets ผ่าน Environment Variables บน Cloud ทั้งหมด ปราศจาก Hardcoded Secret ในโค้ด
+* **🎯 Accurate R307 Hardware Health Monitoring & Fail-Fast Guard:**
+  * แยกสถานะการเชื่อมต่อระหว่าง **ตัวบอร์ด (Cloud Bridge)** กับ **เซนเซอร์ลายนิ้วมือ R307** ออกจากกันอย่างแท้จริง
+  * หน้าเว็บ Dashboard แสดงสถานะ 3 รูปแบบ: 🟢 `R307 Online`, 🟠 `R307 Not Found` (ไฟสีส้มกระพริบเตือนเมื่อบอร์ดออนไลน์แต่ไม่ได้เสียบเซนเซอร์), และ 🔴 `Offline`
+  * ระบบ Fail-Fast สกัดการลงทะเบียนลายนิ้วมือล่วงหน้าทันทีทั้งฝั่งหน้าเว็บและเซิร์ฟเวอร์ หากเซนเซอร์ R307 ไม่ได้เชื่อมต่อ ช่วยป้องกันปัญหาเครื่องค้างรอ Timeout 20 วินาที
 
 ---
 
@@ -126,7 +130,9 @@ flowchart TD
 | `DELETE <slot>` | Server $\rightarrow$ MCU | ลบลายนิ้วมือออกจากเซนเซอร์ R307 |
 | `BACKUP <slot>` | Server $\rightarrow$ MCU | ดึงข้อมูล Template (512 ไบต์) ออกมาสำรองลง Cloud |
 | `RESTORE <slot> <data>` | Server $\rightarrow$ MCU | กู้คืน Template จาก Cloud เขียนกลับลงหน่วยความจำเซนเซอร์ |
+| `CHECK_R307` | Server/Linux $\rightarrow$ MCU | ตรวจสอบสถานะการเชื่อมต่อของเซนเซอร์ R307 แบบเรียลไทม์ |
 | `STATUS:R307_READY` | MCU $\rightarrow$ Server | เซนเซอร์ R307 เชื่อมต่อสำเร็จและพร้อมทำงาน |
+| `STATUS:R307_NOT_FOUND` | MCU $\rightarrow$ Server | ไม่พบเซนเซอร์ R307 หรือการเชื่อมต่อ Pin 0/1 ขัดข้อง |
 | `EVENT:IDLE` | MCU $\rightarrow$ Server | แจ้งว่า MCU อยู่ในสถานะสแตนด์บาย รอนิ้วสแกน |
 | `EVENT:NO_MATCH` | MCU $\rightarrow$ Server | ตรวจพบลายนิ้วมือที่ไม่ตรงกับฐานข้อมูลในเซนเซอร์ |
 | `EVENT:CONFIRMED ID=<slot> SCORE=<val>` | MCU $\rightarrow$ Server | ผู้ใช้กดปุ่มฟ้า D2 ยืนยัน $\rightarrow$ บันทึกเวลาลงฐานข้อมูล |
