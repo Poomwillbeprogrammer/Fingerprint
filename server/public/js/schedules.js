@@ -379,21 +379,13 @@ function renderSchedulesGrid() {
   }).join('');
 }
 
-// 6. หน้าต่างใบเช็คชื่อประจำคาบ (Attendance Sheet Modal)
+let currentSelectedWeek = null;
+
+// 6. หน้าต่างใบเช็คชื่อประจำคาบ (Attendance Sheet Modal - ระบบรายสัปดาห์)
 async function openAttendanceModal(scheduleId) {
   currentViewingScheduleId = scheduleId;
   const schedule = allSchedules.find(s => s.id === parseInt(scheduleId));
   if (!schedule) return;
-
-  // ตั้งค่าวันที่เริ่มต้นเป็นวันนี้ (UTC+7 Bangkok)
-  const nowUtc = new Date().getTime() + new Date().getTimezoneOffset() * 60000;
-  const thaiNow = new Date(nowUtc + 7 * 3600000);
-  const todayStr = thaiNow.toISOString().split('T')[0];
-
-  const filterDateInput = document.getElementById('filterDate');
-  if (filterDateInput && !filterDateInput.value) {
-    filterDateInput.value = todayStr;
-  }
 
   // Header ข้อมูลวิชา
   document.getElementById('modalSubjectCode').textContent = schedule.subject_code;
@@ -411,18 +403,31 @@ async function openAttendanceModal(scheduleId) {
   }
 
   document.getElementById('attendanceModal').classList.remove('hidden');
-  await loadAttendanceSheetData(scheduleId, filterDateInput.value);
+  await loadAttendanceSheetData(scheduleId);
 }
 
-// โหลดข้อมูลนักศึกษาที่สแกนเข้าเรียนในคาบนี้
-async function loadAttendanceSheetData(scheduleId, dateStr) {
+// โหลดข้อมูลนักศึกษาที่สแกนเข้าเรียนในคาบนี้ (รองรับการกรองตามสัปดาห์)
+async function loadAttendanceSheetData(scheduleId, weekVal) {
   try {
-    const url = `/api/schedules/${scheduleId}/attendance${dateStr ? '?date=' + dateStr : ''}`;
+    const url = `/api/schedules/${scheduleId}/attendance${weekVal ? '?week=' + encodeURIComponent(weekVal) : ''}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('Failed to fetch attendance');
     const data = await res.json();
 
-    // 3 Metric Counters (Option 1: Only Scanned Attendees)
+    currentSelectedWeek = data.selectedWeek || data.currentWeek;
+
+    // อัปเดต Dropdown รายการสัปดาห์ (Week Selector)
+    const filterWeekSelect = document.getElementById('filterWeek');
+    if (filterWeekSelect && data.availableWeeks) {
+      filterWeekSelect.innerHTML = data.availableWeeks.map(w => {
+        const selected = (w.yearWeek === currentSelectedWeek) ? 'selected' : '';
+        const currentTag = w.isCurrent ? ' [สัปดาห์ปัจจุบัน]' : '';
+        const countTag = w.totalAttendees > 0 ? ` (${w.totalAttendees} คน)` : '';
+        return `<option value="${w.yearWeek}" ${selected}>${w.label}${currentTag}${countTag}</option>`;
+      }).join('');
+    }
+
+    // 3 Metric Counters สำหรับสัปดาห์ที่เลือก
     document.getElementById('metricTotal').textContent = data.totalAttendees || 0;
     document.getElementById('metricOnTime').textContent = data.onTimeCount || 0;
     document.getElementById('metricLate').textContent = data.lateCount || 0;
@@ -440,7 +445,7 @@ async function loadAttendanceSheetData(scheduleId, dateStr) {
     tbody.innerHTML = data.attendees.map((att, idx) => {
       const isOnTime = att.attendance_status === 'ON_TIME';
       const statusBadge = isOnTime
-        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-check"></i> ทันเวลา</span>'
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><i class="fa-solid fa-check"></i> ตรงเวลา</span>'
         : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20"><i class="fa-solid fa-clock"></i> มาสาย</span>';
 
       return `
@@ -448,6 +453,7 @@ async function loadAttendanceSheetData(scheduleId, dateStr) {
           <td class="py-3 text-center text-stone-400 font-mono">${idx + 1}</td>
           <td class="py-3 text-amber-400 font-mono font-medium">${att.student_id || '-'}</td>
           <td class="py-3 font-medium text-white">${att.user_name || '-'}</td>
+          <td class="py-3 text-stone-400 font-mono">${att.date || '-'}</td>
           <td class="py-3 text-stone-300 font-mono">${att.time || '-'}</td>
           <td class="py-3">${statusBadge}</td>
           <td class="py-3 text-right text-stone-400 font-mono">${att.score || 0}</td>
@@ -490,20 +496,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     currentViewingScheduleId = null;
   });
 
-  // Date Change in Modal
-  document.getElementById('filterDate').addEventListener('change', (e) => {
-    if (currentViewingScheduleId) {
-      loadAttendanceSheetData(currentViewingScheduleId, e.target.value);
-    }
-  });
+  // Week Change in Modal
+  const filterWeekEl = document.getElementById('filterWeek');
+  if (filterWeekEl) {
+    filterWeekEl.addEventListener('change', (e) => {
+      if (currentViewingScheduleId) {
+        currentSelectedWeek = e.target.value;
+        loadAttendanceSheetData(currentViewingScheduleId, e.target.value);
+      }
+    });
+  }
 
-  // Export Excel in Modal
-  document.getElementById('exportExcelBtn').addEventListener('click', () => {
-    if (currentViewingScheduleId) {
-      const dateVal = document.getElementById('filterDate').value;
-      window.location.href = `/api/schedules/${currentViewingScheduleId}/export-excel${dateVal ? '?date=' + dateVal : ''}`;
-    }
-  });
+  // Export Selected Week Excel in Modal
+  const exportExcelBtn = document.getElementById('exportExcelBtn');
+  if (exportExcelBtn) {
+    exportExcelBtn.addEventListener('click', () => {
+      if (currentViewingScheduleId) {
+        const weekVal = currentSelectedWeek || (document.getElementById('filterWeek') ? document.getElementById('filterWeek').value : '');
+        window.location.href = `/api/schedules/${currentViewingScheduleId}/export-excel${weekVal ? '?week=' + encodeURIComponent(weekVal) : ''}`;
+      }
+    });
+  }
+
+  // Export Matrix Excel (All Weeks) in Modal
+  const exportMatrixBtn = document.getElementById('exportMatrixBtn');
+  if (exportMatrixBtn) {
+    exportMatrixBtn.addEventListener('click', () => {
+      if (currentViewingScheduleId) {
+        window.location.href = `/api/schedules/${currentViewingScheduleId}/export-matrix`;
+      }
+    });
+  }
 
   // Refresh Button
   document.getElementById('refreshBtn').addEventListener('click', async () => {
@@ -795,18 +818,18 @@ socket.on('session_attendance_update', (record) => {
   
   // ถ้ากำลังเปิด Modal ของคาบนี้อยู่ ให้รีเฟรชข้อมูลในตารางทันที
   if (currentViewingScheduleId && parseInt(currentViewingScheduleId) === record.schedule_id) {
-    const filterDateInput = document.getElementById('filterDate');
-    loadAttendanceSheetData(currentViewingScheduleId, filterDateInput ? filterDateInput.value : '');
+    const filterWeekSelect = document.getElementById('filterWeek');
+    loadAttendanceSheetData(currentViewingScheduleId, filterWeekSelect ? filterWeekSelect.value : currentSelectedWeek);
   }
 
   // แสดง Toast แจ้งเตือนสั้นๆ มุมขวาล่าง
   showToast(`${record.user_name} ลงเวลาคาบ ${record.short_name || record.subject_code} [${record.attendance_status === 'ON_TIME' ? 'ทันเวลา' : 'มาสาย'}]`, 'success');
 });
 
-// เมื่อตรวจพบว่าผู้ใช้ลงเวลาคาบนี้ไปแล้ว (Duplicate Warning)
+// เมื่อตรวจพบว่าผู้ใช้ลงเวลาคาบนี้ไปแล้วในสัปดาห์นี้ (Duplicate Warning)
 socket.on('already_checked_in', (data) => {
   console.warn('⚠️ [Duplicate Warning]', data);
-  showToast(`${data.user_name} ได้ลงเวลาในคาบ "${data.schedule.short_name || data.schedule.subject_name}" ไปแล้ว (ไม่บันทึกซ้ำ)`, 'warning');
+  showToast(`${data.user_name} ได้ลงเวลาในคาบ "${data.schedule.short_name || data.schedule.subject_name}" ในสัปดาห์นี้ไปแล้ว (ไม่บันทึกซ้ำ)`, 'warning');
 });
 
 // Toast notification helper

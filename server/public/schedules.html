@@ -174,28 +174,35 @@
         </button>
       </div>
 
-      <!-- Controls & Metrics (Strictly Option 1: Only Scanned Attendees) -->
+      <!-- Controls & Metrics (Weekly Attendance System) -->
       <div class="p-6 border-b border-stone-800/80">
         <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-5">
-          <div class="flex items-center gap-2">
-            <label for="filterDate" class="text-xs font-medium text-stone-300 flex items-center gap-1.5">
-              <i class="fa-regular fa-calendar"></i> วันที่:
+          <div class="flex flex-wrap items-center gap-2">
+            <label for="filterWeek" class="text-xs font-medium text-stone-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-calendar-week text-amber-400"></i> เลือกสัปดาห์:
             </label>
-            <input type="date" id="filterDate" class="px-3 py-1.5 bg-stone-900 border border-stone-800 rounded-xl text-xs text-stone-200 focus:outline-none focus:border-amber-500">
+            <select id="filterWeek" class="px-3 py-2 bg-stone-900 border border-stone-700 rounded-xl text-xs text-white focus:outline-none focus:border-amber-500 font-medium">
+              <!-- Dynamically populated with available weeks via JS -->
+            </select>
           </div>
-          <button id="exportExcelBtn" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium flex items-center gap-2 shadow-lg shadow-emerald-500/20 transition">
-            <i class="fa-solid fa-file-arrow-down"></i> ส่งออก Excel (.xlsx)
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="exportExcelBtn" class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-medium flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 transition">
+              <i class="fa-solid fa-file-arrow-down"></i> ส่งออกสัปดาห์นี้ (.xlsx)
+            </button>
+            <button id="exportMatrixBtn" class="px-3.5 py-2 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition">
+              <i class="fa-solid fa-table-cells"></i> สรุปทุกสัปดาห์ (Matrix .xlsx)
+            </button>
+          </div>
         </div>
 
-        <!-- 3 Metric Counter Boxes (Option 1 Selected) -->
+        <!-- 3 Metric Counter Boxes -->
         <div class="grid grid-cols-3 gap-2 sm:gap-4 divide-x divide-stone-800/80 py-3">
           <div class="text-center px-2">
-            <p class="text-[11px] text-stone-400 font-medium">มาเรียนทั้งหมด</p>
+            <p class="text-[11px] text-stone-400 font-medium">มาเรียนทั้งหมด (สัปดาห์นี้)</p>
             <p id="metricTotal" class="text-2xl font-bold text-amber-400 font-mono mt-1">0</p>
           </div>
           <div class="text-center px-2">
-            <p class="text-[11px] text-emerald-400 font-medium">เข้าเรียนทันเวลา</p>
+            <p class="text-[11px] text-emerald-400 font-medium">เข้าเรียนตรงเวลา</p>
             <p id="metricOnTime" class="text-2xl font-bold text-emerald-400 font-mono mt-1">0</p>
           </div>
           <div class="text-center px-2">
@@ -214,6 +221,7 @@
                 <th class="pb-3 font-semibold w-12 text-center">ลำดับ</th>
                 <th class="pb-3 font-semibold">รหัสนักศึกษา</th>
                 <th class="pb-3 font-semibold">ชื่อ-นามสกุล</th>
+                <th class="pb-3 font-semibold">วันที่</th>
                 <th class="pb-3 font-semibold">เวลาที่สแกน</th>
                 <th class="pb-3 font-semibold">สถานะการเข้าเรียน</th>
                 <th class="pb-3 font-semibold text-right">Score</th>

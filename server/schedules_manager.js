@@ -509,36 +509,163 @@ function loadAttendanceRecords() {
   return [];
 }
 
-// Check if user already checked in to this schedule today
-function checkAlreadyCheckedIn(userId, scheduleId, dateStr) {
-  if (!scheduleId) return false;
-  const records = loadAttendanceRecords();
-  return records.some(r => r.user_id === userId && r.schedule_id === scheduleId && r.date === dateStr);
+// ISO Week Calculation (ปฏิทินสากล ISO-8601 Week 1-52)
+function getIsoWeekDetails(d = new Date()) {
+  let date;
+  if (typeof d === 'string') {
+    date = new Date(d.includes('T') ? d : d + 'T12:00:00+07:00');
+  } else {
+    date = new Date(d.getTime());
+  }
+
+  // Adjust for Bangkok UTC+7
+  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((utc - yearStart) / 86400000) + 1) / 7);
+  const year = utc.getUTCFullYear();
+  const yearWeek = `${year}-W${String(weekNo).padStart(2, '0')}`;
+  return { weekNo, year, yearWeek };
 }
 
-// Record a session attendance log
+// Get Thai string representing the week date range (เช่น "7 - 13 ก.ย. 2569")
+function getWeekRangeText(year, weekNo) {
+  const simple = new Date(Date.UTC(year, 0, 1 + (weekNo - 1) * 7));
+  const dayOfWeek = simple.getUTCDay() || 7;
+  const monday = new Date(simple);
+  if (dayOfWeek <= 4) {
+    monday.setUTCDate(simple.getUTCDate() - dayOfWeek + 1);
+  } else {
+    monday.setUTCDate(simple.getUTCDate() + 8 - dayOfWeek);
+  }
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const monthsTh = ['', 'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  const mDay = monday.getUTCDate();
+  const mMonth = monthsTh[monday.getUTCMonth() + 1];
+  const sDay = sunday.getUTCDate();
+  const sMonth = monthsTh[sunday.getUTCMonth() + 1];
+  const yearTh = sunday.getUTCFullYear() + 543;
+
+  return `${mDay} ${mMonth === sMonth ? '' : mMonth + ' '}- ${sDay} ${sMonth} ${yearTh}`;
+}
+
+// Check if user already checked in to this schedule in this week (1 ครั้งต่อสัปดาห์ต่อวิชา)
+function checkAlreadyCheckedIn(userId, scheduleId, yearWeek, dateStr) {
+  if (!scheduleId || !userId) return false;
+  const records = loadAttendanceRecords();
+  return records.some(r => {
+    if (r.user_id !== userId || r.schedule_id !== parseInt(scheduleId)) return false;
+    if (yearWeek && r.year_week) {
+      return r.year_week === yearWeek;
+    }
+    if (dateStr && r.date) {
+      return r.date === dateStr;
+    }
+    return false;
+  });
+}
+
+// Record a session attendance log with weekly metadata
 function recordSessionAttendance(record) {
   const records = loadAttendanceRecords();
   record.id = records.length + 1;
+
+  if (!record.year_week || !record.week_number) {
+    const d = record.date ? new Date(record.date + 'T12:00:00+07:00') : new Date();
+    const iso = getIsoWeekDetails(d);
+    record.week_number = iso.weekNo;
+    record.year = iso.year;
+    record.year_week = iso.yearWeek;
+  }
+
   records.push(record);
   fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(records, null, 2), 'utf8');
   return record;
 }
 
-// Get session attendance summary for a schedule on a date
-function getSessionAttendance(scheduleId, dateStr) {
+// Get session attendance summary for a schedule, grouped or filtered by week
+function getSessionAttendance(scheduleId, options = {}) {
   const current = getStore();
   const schedule = current.schedules.find(s => s.id === parseInt(scheduleId));
   const records = loadAttendanceRecords();
+  const schedRecords = records.filter(r => r.schedule_id === parseInt(scheduleId));
 
-  const filtered = records.filter(r => r.schedule_id === parseInt(scheduleId) && (!dateStr || r.date === dateStr));
+  // Current Week
+  const nowThai = new Date(Date.now() + 7 * 3600000);
+  const currentIso = getIsoWeekDetails(nowThai);
+
+  // Parse filter options
+  let targetWeek = null;
+  let targetDate = null;
+  if (typeof options === 'string') {
+    if (options.includes('-W')) {
+      targetWeek = options;
+    } else if (options.includes('-')) {
+      targetDate = options;
+    }
+  } else if (typeof options === 'object' && options !== null) {
+    targetWeek = options.week || null;
+    targetDate = options.date || null;
+  }
+
+  // If no week or date is specified, default to the current week
+  if (!targetWeek && !targetDate) {
+    targetWeek = currentIso.yearWeek;
+  }
+
+  // Find all distinct weeks that exist for this schedule
+  const weekMap = new Map();
+  // Always include current week
+  weekMap.set(currentIso.yearWeek, {
+    yearWeek: currentIso.yearWeek,
+    weekNo: currentIso.weekNo,
+    year: currentIso.year,
+    label: `สัปดาห์ที่ ${currentIso.weekNo} (${getWeekRangeText(currentIso.year, currentIso.weekNo)})`,
+    isCurrent: true,
+    totalAttendees: 0
+  });
+
+  schedRecords.forEach(r => {
+    const yw = r.year_week || (r.date ? getIsoWeekDetails(r.date).yearWeek : currentIso.yearWeek);
+    const wn = r.week_number || (r.date ? getIsoWeekDetails(r.date).weekNo : currentIso.weekNo);
+    const yr = r.year || (r.date ? getIsoWeekDetails(r.date).year : currentIso.year);
+    if (!weekMap.has(yw)) {
+      weekMap.set(yw, {
+        yearWeek: yw,
+        weekNo: wn,
+        year: yr,
+        label: `สัปดาห์ที่ ${wn} (${getWeekRangeText(yr, wn)})`,
+        isCurrent: (yw === currentIso.yearWeek),
+        totalAttendees: 0
+      });
+    }
+    const item = weekMap.get(yw);
+    item.totalAttendees += 1;
+  });
+
+  // Sort available weeks descending (latest first)
+  const availableWeeks = Array.from(weekMap.values()).sort((a, b) => b.yearWeek.localeCompare(a.yearWeek));
+
+  // Filter records for the requested week / date
+  let filtered = schedRecords;
+  if (targetWeek) {
+    filtered = filtered.filter(r => (r.year_week === targetWeek || (!r.year_week && r.date && getIsoWeekDetails(r.date).yearWeek === targetWeek)));
+  } else if (targetDate) {
+    filtered = filtered.filter(r => r.date === targetDate);
+  }
 
   const onTimeCount = filtered.filter(r => r.attendance_status === 'ON_TIME').length;
   const lateCount = filtered.filter(r => r.attendance_status === 'LATE').length;
 
   return {
     schedule: schedule || null,
-    date: dateStr,
+    selectedWeek: targetWeek,
+    selectedDate: targetDate,
+    currentWeek: currentIso.yearWeek,
+    availableWeeks,
     totalAttendees: filtered.length,
     onTimeCount,
     lateCount,
@@ -546,53 +673,183 @@ function getSessionAttendance(scheduleId, dateStr) {
   };
 }
 
-// Export attendance report as Excel Buffer
-function exportAttendanceExcel(scheduleId, dateStr) {
-  const { schedule, attendees, totalAttendees, onTimeCount, lateCount } = getSessionAttendance(scheduleId, dateStr);
+// Export attendance report as Excel Buffer (Single Week / Date)
+function exportAttendanceExcel(scheduleId, options = {}) {
+  const { schedule, attendees, totalAttendees, onTimeCount, lateCount, selectedWeek, selectedDate } = getSessionAttendance(scheduleId, options);
 
   const title = schedule 
     ? `ใบเช็คชื่อวิชา ${schedule.subject_code} ${schedule.subject_name} [${schedule.class_type}]` 
     : 'ใบเช็คชื่อการเข้าใช้ห้องเรียน';
 
   const roomLabel = schedule ? `ห้อง ${schedule.room_name} อาคาร${schedule.building}` : 'ห้อง ทค.1-101 อาคารเทคนิคคอมพิวเตอร์';
+  let periodLabel = 'ทุกสัปดาห์';
+  if (selectedWeek) {
+    const parts = selectedWeek.split('-W');
+    const yr = parseInt(parts[0]);
+    const wn = parseInt(parts[1]);
+    periodLabel = `สัปดาห์ที่ ${wn} (${getWeekRangeText(yr, wn)})`;
+  } else if (selectedDate) {
+    periodLabel = `วันที่: ${selectedDate}`;
+  }
 
   const rows = [
-    ['ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT Biometric Attendance System)'],
+    ['ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT Biometric Attendance System - RMUTL)'],
     [roomLabel],
     [title],
-    [`วันที่: ${dateStr || 'ทุกวัน'}, เวลาคาบ: ${schedule ? schedule.time_display : '-'}`],
-    [`อาจารย์ผู้สอน: ${schedule ? schedule.instructor : '-'}, แผนก/ชั้นปี: ${schedule ? schedule.section_group : '-'}`],
-    [`สรุปยอด: มาเรียนทั้งหมด ${totalAttendees} คน | ทันเวลา ${onTimeCount} คน | มาสาย ${lateCount} คน`],
+    [`รอบเวลา: ${periodLabel}, เวลาคาบเรียน: ${schedule ? schedule.time_display : '-'}`],
+    [`อาจารย์ผู้สอน: ${schedule ? schedule.instructor : '-'}, แผนก/กลุ่มเรียน: ${schedule ? schedule.section_group : '-'}`],
+    [`สรุปยอด: มาเรียนทั้งหมด ${totalAttendees} คน | ตรงเวลา ${onTimeCount} คน | มาสาย ${lateCount} คน`],
     [],
-    ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'เวลาที่สแกน', 'สถานะการเข้าเรียน', 'ความแม่นยำ (Score)']
+    ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล', 'วันที่สแกน', 'เวลาที่สแกน', 'สัปดาห์', 'สถานะการเข้าเรียน', 'ความแม่นยำ (Score)']
   ];
 
   attendees.forEach((att, idx) => {
-    const statusText = att.attendance_status === 'ON_TIME' ? 'ทันเวลา' : (att.attendance_status === 'LATE' ? 'มาสาย' : 'นอกเวลาเรียน');
+    const statusText = att.attendance_status === 'ON_TIME' ? 'ตรงเวลา' : (att.attendance_status === 'LATE' ? 'มาสาย' : 'นอกเวลาเรียน');
     rows.push([
       idx + 1,
       att.student_id || '-',
       att.user_name || '-',
-      att.time || att.timestamp || '-',
+      att.date || '-',
+      att.time || '-',
+      att.week_number ? `W${att.week_number}` : '-',
       statusText,
       att.score || 0
     ]);
   });
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
-
   ws['!cols'] = [
     { wch: 8 },
     { wch: 18 },
     { wch: 30 },
-    { wch: 16 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 10 },
     { wch: 18 },
     { wch: 18 }
   ];
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Attendance Sheet');
+  XLSX.utils.book_append_sheet(wb, ws, 'Weekly Attendance');
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
 
+// Export attendance Matrix Excel (ภาพรวมทุกสัปดาห์ทั้งภาคการศึกษา)
+function exportAttendanceMatrixExcel(scheduleId, allUsers = []) {
+  const current = getStore();
+  const schedule = current.schedules.find(s => s.id === parseInt(scheduleId));
+  const records = loadAttendanceRecords();
+  const schedRecords = records.filter(r => r.schedule_id === parseInt(scheduleId));
+
+  // Current ISO week
+  const nowThai = new Date(Date.now() + 7 * 3600000);
+  const currentIso = getIsoWeekDetails(nowThai);
+
+  // Collect all distinct weeks that exist
+  const weekSet = new Set();
+  schedRecords.forEach(r => {
+    const yw = r.year_week || (r.date ? getIsoWeekDetails(r.date).yearWeek : currentIso.yearWeek);
+    weekSet.add(yw);
+  });
+  // Always include current week
+  weekSet.add(currentIso.yearWeek);
+
+  // Sort weeks chronologically ascending
+  const sortedWeeks = Array.from(weekSet).sort();
+
+  // Header rows
+  const title = schedule 
+    ? `ใบสรุปการเข้าเรียนภาพรวมรายสัปดาห์ (Academic Matrix) - วิชา ${schedule.subject_code} ${schedule.subject_name} [${schedule.class_type}]` 
+    : 'ใบสรุปการเข้าเรียนภาพรวมรายสัปดาห์';
+  const roomLabel = schedule ? `ห้อง ${schedule.room_name} อาคาร${schedule.building}` : 'ห้อง ทค.1-101 อาคารเทคนิคคอมพิวเตอร์';
+
+  const rows = [
+    ['ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT Biometric Attendance System - RMUTL)'],
+    [title],
+    [roomLabel],
+    [`อาจารย์ผู้สอน: ${schedule ? schedule.instructor : '-'}, แผนก/กลุ่มเรียน: ${schedule ? schedule.section_group : '-'}, เวลาคาบเรียน: ${schedule ? schedule.time_display : '-'}`],
+    [`จำนวนสัปดาห์ที่มีการบันทึก: ${sortedWeeks.length} สัปดาห์ | ข้อมูล ณ วันที่: ${nowThai.toISOString().split('T')[0]}`],
+    []
+  ];
+
+  // Table header
+  const headerRow = ['ลำดับ', 'รหัสนักศึกษา', 'ชื่อ-นามสกุล'];
+  sortedWeeks.forEach(yw => {
+    const parts = yw.split('-W');
+    const wn = parseInt(parts[1]);
+    const yr = parseInt(parts[0]);
+    headerRow.push(`W${wn} (${getWeekRangeText(yr, wn)})`);
+  });
+  headerRow.push('รวมมาเรียน (ครั้ง)', 'รวมมาสาย (ครั้ง)', 'รวมขาด (ครั้ง)', 'คิดเป็น % การเข้าเรียน');
+  rows.push(headerRow);
+
+  // Collect students: either allUsers from DB, or unique students from attendance records
+  let students = [];
+  if (Array.isArray(allUsers) && allUsers.length > 0) {
+    students = allUsers;
+  } else {
+    const userMap = new Map();
+    schedRecords.forEach(r => {
+      if (r.user_id && !userMap.has(r.user_id)) {
+        userMap.set(r.user_id, {
+          id: r.user_id,
+          student_id: r.student_id,
+          name: r.user_name
+        });
+      }
+    });
+    students = Array.from(userMap.values());
+  }
+
+  // Populate row for each student
+  students.forEach((u, idx) => {
+    const row = [idx + 1, u.student_id || '-', u.name || '-'];
+    let presentCount = 0;
+    let lateCount = 0;
+
+    sortedWeeks.forEach(yw => {
+      const match = schedRecords.find(r => r.user_id === u.id && (r.year_week === yw || (!r.year_week && r.date && getIsoWeekDetails(r.date).yearWeek === yw)));
+      if (match) {
+        if (match.attendance_status === 'ON_TIME') {
+          row.push('✓');
+          presentCount++;
+        } else if (match.attendance_status === 'LATE') {
+          row.push('สาย');
+          lateCount++;
+        } else {
+          row.push('✓');
+          presentCount++;
+        }
+      } else {
+        row.push('-');
+      }
+    });
+
+    const totalHeld = sortedWeeks.length;
+    const totalAttended = presentCount + lateCount;
+    const absentCount = Math.max(0, totalHeld - totalAttended);
+    const percent = totalHeld > 0 ? Math.round((totalAttended / totalHeld) * 100) : 0;
+
+    row.push(presentCount, lateCount, absentCount, `${percent}%`);
+    rows.push(row);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Calculate column widths
+  const colWidths = [
+    { wch: 8 },
+    { wch: 18 },
+    { wch: 28 }
+  ];
+  sortedWeeks.forEach(() => {
+    colWidths.push({ wch: 18 });
+  });
+  colWidths.push({ wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 20 });
+  ws['!cols'] = colWidths;
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Attendance Matrix');
   return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
 }
 
@@ -615,5 +872,8 @@ module.exports = {
   loadAttendanceRecords,
   getSessionAttendance,
   exportAttendanceExcel,
+  exportAttendanceMatrixExcel,
+  getIsoWeekDetails,
+  getWeekRangeText,
   generateShortName
 };

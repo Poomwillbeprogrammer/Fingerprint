@@ -380,24 +380,27 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
     const thaiDateNow = new Date(Date.now() + 7 * 3600000);
     const todayStr = thaiDateNow.toISOString().split('T')[0];
     const timeStr = `${String(thaiDateNow.getHours()).padStart(2, '0')}:${String(thaiDateNow.getMinutes()).padStart(2, '0')}:${String(thaiDateNow.getSeconds()).padStart(2, '0')}`;
+    const isoWeek = schedulesManager.getIsoWeekDetails(thaiDateNow);
 
     if (isGranted && currentSchedule && userId) {
-      // ตรวจสอบว่าเคยสแกนในคาบนี้ของวันนี้แล้วหรือไม่ (ป้องกันลงเวลาซ้ำ)
-      const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, currentSchedule.id, todayStr);
+      // ตรวจสอบว่าเคยสแกนในคาบนี้ของสัปดาห์นี้แล้วหรือไม่ (1 ครั้งต่อสัปดาห์ต่อวิชา)
+      const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, currentSchedule.id, isoWeek.yearWeek);
       if (alreadyCheckedIn) {
-        console.log(`⚠️ [Room Schedule] ${userName} [${studentId}] ได้ลงเวลาในคาบ "${currentSchedule.subject_name}" (ห้อง ${activeDeviceRoom}) แล้วในวันนี้`);
+        console.log(`⚠️ [Room Schedule] ${userName} [${studentId}] ได้ลงเวลาในคาบ "${currentSchedule.subject_name}" (สัปดาห์ที่ ${isoWeek.weekNo}) แล้ว`);
         io.emit('already_checked_in', {
           user_id: userId,
           user_name: userName,
           student_id: studentId,
           room_name: activeDeviceRoom,
           schedule: currentSchedule,
-          message: 'คุณได้ลงเวลาคาบนี้แล้ว'
+          week_number: isoWeek.weekNo,
+          year_week: isoWeek.yearWeek,
+          message: `คุณได้ลงเวลาคาบนี้ในสัปดาห์ที่ ${isoWeek.weekNo} เรียบร้อยแล้ว`
         });
         return; // ไม่บันทึกซ้ำ รักษาเวลาเดิมที่ลงไว้
       }
 
-      // บันทึกลงระบบบันทึกเวลาเรียนประจำคาบ
+      // บันทึกลงระบบบันทึกเวลาเรียนประจำคาบ พร้อมข้อมูลสัปดาห์
       const sessionRecord = schedulesManager.recordSessionAttendance({
         schedule_id: currentSchedule.id,
         room_name: activeDeviceRoom,
@@ -412,6 +415,9 @@ async function processScanEvent(fingerprint_id, score, status, tier = 'Tier 1') 
         date: todayStr,
         time: timeStr,
         timestamp: `${todayStr} ${timeStr}`,
+        week_number: isoWeek.weekNo,
+        year: isoWeek.year,
+        year_week: isoWeek.yearWeek,
         attendance_status: attendanceStatus,
         score: score || 0
       });
@@ -1086,8 +1092,8 @@ app.get('/api/schedules/current', authRequired, (req, res) => {
 app.get('/api/schedules/:id/attendance', authRequired, (req, res) => {
   try {
     const { id } = req.params;
-    const { date } = req.query;
-    const summary = schedulesManager.getSessionAttendance(id, date);
+    const { date, week } = req.query;
+    const summary = schedulesManager.getSessionAttendance(id, { date, week });
     res.json(summary);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1097,14 +1103,40 @@ app.get('/api/schedules/:id/attendance', authRequired, (req, res) => {
 app.get('/api/schedules/:id/export-excel', authRequired, (req, res) => {
   try {
     const { id } = req.params;
-    const { date } = req.query;
-    const excelBuffer = schedulesManager.exportAttendanceExcel(id, date);
-    const filename = `attendance_schedule_${id}_${date || 'all'}.xlsx`;
+    const { date, week } = req.query;
+    const excelBuffer = schedulesManager.exportAttendanceExcel(id, { date, week });
+    const sched = schedulesManager.getAllSchedules().find(s => s.id === parseInt(id));
+    const schedCode = sched ? sched.subject_code : id;
+    const period = week || date || 'all';
+    const filename = `Attendance_${schedCode}_${period}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
     res.send(excelBuffer);
   } catch (err) {
     console.error('Error exporting excel:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ส่งออกตารางสรุปภาพรวมทุกสัปดาห์ (Academic Matrix)
+app.get('/api/schedules/:id/export-matrix', authRequired, async (req, res) => {
+  try {
+    const { id } = req.params;
+    let allUsers = [];
+    try {
+      allUsers = await dbAsync.all('SELECT id, student_id, name FROM users ORDER BY student_id ASC, id ASC');
+    } catch (e) {
+      console.warn('Could not fetch all users for matrix, falling back to attendees:', e);
+    }
+    const excelBuffer = schedulesManager.exportAttendanceMatrixExcel(id, allUsers);
+    const sched = schedulesManager.getAllSchedules().find(s => s.id === parseInt(id));
+    const schedCode = sched ? sched.subject_code : id;
+    const filename = `Attendance_Matrix_${schedCode}_FullSemester.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.send(excelBuffer);
+  } catch (err) {
+    console.error('Error exporting matrix excel:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -1576,7 +1608,8 @@ io.on('connection', (socket) => {
           const schedules = schedulesManager.getAllSchedules();
           schedObj = schedules.find(s => s.id === schedId);
 
-          const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, schedId, thaiDateStr);
+          const offlineIso = schedulesManager.getIsoWeekDetails(thaiDateStr);
+          const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, schedId, offlineIso.yearWeek, thaiDateStr);
           if (!alreadyCheckedIn && schedObj) {
             const sessionRecord = schedulesManager.recordSessionAttendance({
               schedule_id: schedId,
@@ -1592,6 +1625,9 @@ io.on('connection', (socket) => {
               date: thaiDateStr,
               time: timePart,
               timestamp: dbTimestamp,
+              week_number: offlineIso.weekNo,
+              year: offlineIso.year,
+              year_week: offlineIso.yearWeek,
               attendance_status: attendanceStatus,
               score: score,
               is_offline: true
