@@ -92,3 +92,10 @@
     - `PROJECT_STATE.md`: อัปเดตสิ่งที่ทำเสร็จแล้ว โครงสร้างไฟล์ และสิ่งที่ต้องทำต่อไป
     - `DECISIONS.md`: บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR) หรือข้อห้ามที่เคยล้มเหลว
     - `README.md` / `PRODUCT.md` / `DESIGN.md`: อัปเดตขอบเขตผลิตภัณฑ์หรือคู่มือการใช้งานหากมีการเปลี่ยนแปลงสัญญาการทำงาน
+* **ADR-021:** การขจัดโค้ดและแพ็กเกจส่วนเกินที่ไม่ใช้งาน (Codebase Complexity Purge & Dependency De-bloat):
+  - ลบโค้ดตารางฟอนต์ไทยบิตแมปและฟังก์ชันวาดตัวอักษรที่ไม่ได้ใช้งานออกจากเฟิร์มแวร์ C++ (`sketch/sketch.ino` และ `sketch/thai_font.h`) เพื่อคืนหน่วยความจำ Flash/RAM ให้ STM32
+  - ลบไฟล์โปรโตไทป์เก่าที่ไม่เกี่ยวข้อง (`python/main.py` โค้ด MicroPython ยุคก่อน Linux SoC)
+  - ลบ `server/card_renderer.js` ที่ตกค้างจาก ADR-002 เพื่อลดขนาดและตัดการพึ่งพาไลบรารี `@napi-rs/canvas`
+  - ลบแพ็กเกจขยะใน `server/package.json` ที่ไม่ได้ถูกนำมาใช้จริง (`@napi-rs/canvas`, `sqlite3`, `@tailwindcss/vite`, `tailwindcss`) ช่วยให้การ Build และ Deploy บน Render ทำงานได้รวดเร็วขึ้นโดยไม่ต้องดาวน์โหลดและคอมไพล์ไบนารีส่วนเกิน
+  - ปรับปรุงฟังก์ชัน `readExcelBuffer` ใน `server/schedules_manager.js` ให้ใช้ `fs.readFileSync` ของ Node.js Standard Library แทนการจัดการ file descriptor และ buffer ด้วยตนเอง
+

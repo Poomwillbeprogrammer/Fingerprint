@@ -1,6 +1,5 @@
 #include <Arduino.h>
 #include <Adafruit_Fingerprint.h>
-#include "thai_font.h"
 
 // ==========================================
 // 1. กำหนดขาเชื่อมต่อ Hardware
@@ -284,89 +283,6 @@ public:
 
   void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
     for (int16_t i = 0; i < h; i++) drawHLine(x, y + i, w, color);
-  }
-
-  // ตรวจสอบประเภทอักขระไทย (สระบน/ล่าง/วรรณยุกต์)
-  bool isUpperDiacritic(uint16_t u) {
-    return (u >= 0x0E31 && u <= 0x0E37) || (u >= 0x0E47 && u <= 0x0E4C);
-  }
-  bool isLowerDiacritic(uint16_t u) {
-    return (u == 0x0E38 || u == 0x0E39 || u == 0x0E3A);
-  }
-
-  void drawThaiGlyph(int16_t x, int16_t y, uint16_t u, uint8_t color = 1) {
-    if (u < 0x0E01 || u > 0x0E4C) return;
-    int idx = u - 0x0E01;
-    for (int r = 0; r < 12; r++) {
-      uint8_t rowByte = THAI_FONT[idx][r];
-      for (int c = 0; c < 8; c++) {
-        if (rowByte & (1 << (7 - c))) {
-          drawPixel(x + c, y + r, color);
-        }
-      }
-    }
-  }
-
-  void drawStringUTF8(int16_t x, int16_t y, const char* str, uint8_t color = 1) {
-    int curX = x;
-    int curY = y;
-    int len = strlen(str);
-    int lastCharX = x;
-    bool prevHasUpper = false;
-
-    for (int i = 0; i < len; i++) {
-      uint8_t b1 = (uint8_t)str[i];
-      if (b1 < 128) {
-        // Standard ASCII (0-9, A-Z, space, dash)
-        if (b1 == ' ') {
-          curX += 4;
-          continue;
-        }
-        drawChar(curX, curY + 2, (char)b1, color);
-        lastCharX = curX;
-        curX += 6;
-        prevHasUpper = false;
-      } else if (b1 == 0xE0 && i + 2 < len) {
-        // Thai UTF-8 (3 bytes)
-        uint8_t b2 = (uint8_t)str[i + 1];
-        uint8_t b3 = (uint8_t)str[i + 2];
-        i += 2;
-        uint16_t u = ((uint16_t)(b2 & 0x0F) << 6) | (b3 & 0x3F);
-        u |= 0x0E00;
-
-        bool isUpperVowel = (u >= 0x0E31 && u <= 0x0E37) || (u == 0x0E47);
-        bool isTone = (u >= 0x0E48 && u <= 0x0E4C);
-        bool isLower = (u == 0x0E38 || u == 0x0E39);
-
-        if (isUpperVowel) {
-          drawThaiGlyph(lastCharX, curY - 2, u, color);
-          prevHasUpper = true;
-        } else if (isTone) {
-          int yOff = prevHasUpper ? (curY - 4) : (curY - 2);
-          drawThaiGlyph(lastCharX, yOff, u, color);
-        } else if (isLower) {
-          drawThaiGlyph(lastCharX, curY + 2, u, color);
-        } else {
-          drawThaiGlyph(curX, curY, u, color);
-          lastCharX = curX;
-          curX += 7;
-          prevHasUpper = false;
-        }
-      }
-    }
-  }
-
-  void loadBitmapChunk(uint8_t part, const char* hexData) {
-    if (part > 3) return;
-    int offset = part * 256;
-    int hexLen = strlen(hexData);
-    for (int i = 0; i < hexLen && i < 512; i += 2) {
-      char c1 = hexData[i];
-      char c2 = hexData[i + 1];
-      uint8_t b1 = (c1 >= '0' && c1 <= '9') ? (c1 - '0') : ((c1 >= 'A' && c1 <= 'F') ? (c1 - 'A' + 10) : ((c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : 0));
-      uint8_t b2 = (c2 >= '0' && c2 <= '9') ? (c2 - '0') : ((c2 >= 'A' && c2 <= 'F') ? (c2 - 'A' + 10) : ((c2 >= 'a' && c2 <= 'f') ? (c2 - 'a' + 10) : 0));
-      buffer[offset + (i / 2)] = (b1 << 4) | b2;
-    }
   }
 
   void clearBuffer() {

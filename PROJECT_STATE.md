@@ -39,6 +39,12 @@
 - **Interactive Attendance Modal:** มี Week Selector เลือกดูประวัติย้อนหลังทีละสัปดาห์, แสดง 3 Metric Counters ประจำสัปดาห์แบบไดนามิก และตารางแสดงวันที่ เวลา สถานะ คะแนน แบบเรียลไทม์
 - **UX Resilience:** มี Error State, ปุ่ม Retry เมื่อโหลดข้อมูลไม่สำเร็จ, ป้ายสถานะ `[ซิงก์ออฟไลน์]` และระบบแจ้งเตือน Toast Message
 
+### 1.4 การปรับปรุงโค้ดและขจัดความซับซ้อนส่วนเกิน (Codebase Streamlining & De-bloat)
+- ขจัดโค้ดตารางฟอนต์บิตแมปและฟังก์ชันวาดตัวอักษรไทยที่ไม่ได้ใช้งานออกจากเฟิร์มแวร์ C++ (`sketch/sketch.ino` และ `sketch/thai_font.h`) คืนทรัพยากร Flash/RAM บน STM32
+- ลบไฟล์โปรโตไทป์เก่า `python/main.py` (MicroPython ยุคก่อน Linux SoC)
+- ลบ `server/card_renderer.js` และตัด 4 แพ็กเกจขยะใน `server/package.json` (`@napi-rs/canvas`, `sqlite3`, `@tailwindcss/vite`, `tailwindcss`) ทำให้ขั้นตอน build/deploy บน Render รวดเร็วและปราศจากปัญหา native build
+- ใช้ `fs.readFileSync` มาตรฐานใน `schedules_manager.js` แทนการจัดการ file descriptor ด้วยตนเอง
+
 ---
 
 ## 2. ไฟล์หลักๆ และโครงสร้างโปรเจกต์ (Core Files & Architecture)
@@ -53,12 +59,11 @@ Fingerprint/
 │                              # - ตรวจเช็คสุขภาพฮาร์ดแวร์ R307 (Watchdog)
 │
 ├── sketch/
-│   ├── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
-│   │                          # - ขับเซนเซอร์ R307 และจอ OLED 128x64 (I2C)
-│   │                          # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
-│   │                          # - รับคำสั่งภาพแบบ 16-Byte Chunking ทาง Serial
-│   │                          # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
-│   └── thai_font.h            # ตารางฟอนต์เดิม (เก็บไว้อ้างอิง - ปัจจุบันเรนเดอร์ผ่าน Python)
+│   └── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
+│                              # - ขับเซนเซอร์ R307 และจอ OLED 128x64 (I2C)
+│                              # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
+│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking ทาง Serial
+│                              # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
 │
 ├── server/
 │   ├── server.js              # เมนเซิร์ฟเวอร์ Node.js + Express + Socket.IO

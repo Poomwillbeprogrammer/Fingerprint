@@ -47,17 +47,10 @@ function generateShortName(fullName) {
   return trimmed.length > 16 ? trimmed.substring(0, 16) : trimmed;
 }
 
-// Read Excel file with support for files currently open in Excel
+// Read Excel file (accepts file path or memory Buffer)
 function readExcelBuffer(filePathOrBuffer) {
-  if (Buffer.isBuffer(filePathOrBuffer)) {
-    return XLSX.read(filePathOrBuffer, { type: 'buffer' });
-  }
-  const fd = fs.openSync(filePathOrBuffer, 'r');
-  const stats = fs.fstatSync(fd);
-  const buffer = Buffer.alloc(stats.size);
-  fs.readSync(fd, buffer, 0, stats.size, 0);
-  fs.closeSync(fd);
-  return XLSX.read(buffer, { type: 'buffer' });
+  const buf = Buffer.isBuffer(filePathOrBuffer) ? filePathOrBuffer : fs.readFileSync(filePathOrBuffer);
+  return XLSX.read(buf, { type: 'buffer' });
 }
 
 // Parse Excel sheet to array of schedule objects
