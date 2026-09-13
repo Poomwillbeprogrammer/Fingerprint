@@ -1105,7 +1105,7 @@ app.get('/api/schedules/:id/export-excel', authRequired, (req, res) => {
     const { id } = req.params;
     const { date, week } = req.query;
     const excelBuffer = schedulesManager.exportAttendanceExcel(id, { date, week });
-    const sched = schedulesManager.getAllSchedules().find(s => s.id === parseInt(id));
+    const sched = schedulesManager.getScheduleById(id);
     const schedCode = sched ? sched.subject_code : id;
     const period = week || date || 'all';
     const filename = `Attendance_${schedCode}_${period}.xlsx`;
@@ -1123,7 +1123,7 @@ app.get('/api/schedules/:id/export-matrix', authRequired, (req, res) => {
   try {
     const { id } = req.params;
     const excelBuffer = schedulesManager.exportAttendanceMatrixExcel(id);
-    const sched = schedulesManager.getAllSchedules().find(s => s.id === parseInt(id));
+    const sched = schedulesManager.getScheduleById(id);
     const schedCode = sched ? sched.subject_code : id;
     const filename = `Attendance_Matrix_${schedCode}_Summary.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -1599,8 +1599,7 @@ io.on('connection', (socket) => {
 
         let schedObj = null;
         if (schedId && userId) {
-          const schedules = schedulesManager.getAllSchedules();
-          schedObj = schedules.find(s => s.id === schedId);
+          schedObj = schedulesManager.getScheduleById(schedId);
 
           const offlineIso = schedulesManager.getIsoWeekDetails(thaiDateStr);
           const alreadyCheckedIn = schedulesManager.checkAlreadyCheckedIn(userId, schedId, offlineIso.yearWeek, thaiDateStr);

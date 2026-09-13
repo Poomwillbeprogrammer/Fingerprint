@@ -10,8 +10,7 @@ build/
 
 # Database files
 *.db
-data/*.db
-data/
+server/data/*.db
 
 # Environment files
 .env

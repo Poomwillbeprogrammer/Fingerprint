@@ -138,6 +138,20 @@ function parseExcelData(filePathOrBuffer, customRoomName = '', customBuilding = 
   return schedules;
 }
 
+// Persist store to runtime storage and sync to seed file
+function persistStore(current) {
+  try {
+    fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error writing schedules file:', e.message);
+  }
+  try {
+    fs.writeFileSync(SEED_FILE, JSON.stringify(current, null, 2), 'utf8');
+  } catch (e) {
+    // SEED_FILE may be read-only in some environments
+  }
+}
+
 // Ingest from storage or seed file with backward compatibility
 function initStore() {
   if (fs.existsSync(SCHEDULES_FILE)) {
@@ -166,7 +180,7 @@ function initStore() {
           active_device_room: roomsList[0].room_name,
           schedules: raw
         };
-        fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(store, null, 2), 'utf8');
+        persistStore(store);
         return store;
       } else if (raw && Array.isArray(raw.rooms) && Array.isArray(raw.schedules)) {
         return raw;
@@ -180,6 +194,12 @@ function initStore() {
   if (fs.existsSync(SEED_FILE)) {
     try {
       const seedRaw = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
+      if (seedRaw && Array.isArray(seedRaw.rooms) && Array.isArray(seedRaw.schedules)) {
+        try {
+          fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(seedRaw, null, 2), 'utf8');
+        } catch (e) {}
+        return seedRaw;
+      }
       const seedSchedules = Array.isArray(seedRaw) ? seedRaw : (seedRaw.schedules || []);
       const defaultRoom = (seedSchedules[0] && seedSchedules[0].room_name) || 'ทค.1-101';
       const store = {
@@ -187,7 +207,7 @@ function initStore() {
         active_device_room: defaultRoom,
         schedules: seedSchedules
       };
-      fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(store, null, 2), 'utf8');
+      persistStore(store);
       return store;
     } catch (e) {}
   }
@@ -202,7 +222,7 @@ function initStore() {
         active_device_room: defaultRoom,
         schedules: parsed
       };
-      fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(store, null, 2), 'utf8');
+      persistStore(store);
       return store;
     } catch (e) {}
   }
@@ -253,7 +273,7 @@ function setActiveDeviceRoom(roomName) {
     throw new Error(`ไม่พบห้อง "${roomName}" ในระบบ`);
   }
   current.active_device_room = roomName;
-  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
+  persistStore(current);
   console.log(`📍 [Device Room] สลับห้องประจำเครื่อง Uno Q เป็น: "${roomName}"`);
   return current.active_device_room;
 }
@@ -268,6 +288,13 @@ function getSchedulesByRoom(roomName) {
 // Compatibility getter
 function getAllSchedules(roomName) {
   return getSchedulesByRoom(roomName);
+}
+
+// Find schedule by ID across all rooms
+function getScheduleById(id) {
+  const current = getStore();
+  const numId = parseInt(id, 10);
+  return current.schedules.find(s => s.id === numId) || null;
 }
 
 // Preview parsed Excel data without saving
@@ -357,7 +384,7 @@ function saveRoomSchedules(parsedSchedules, roomName, building) {
   }
 
   // Persist
-  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
+  persistStore(current);
 
   return {
     success: true,
@@ -394,7 +421,7 @@ function deleteRoom(roomName) {
     current.active_device_room = current.rooms[0] ? current.rooms[0].room_name : null;
   }
 
-  fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
+  persistStore(current);
 
   // 4. Full Purge: remove session attendance records matching this room
   try {
@@ -853,6 +880,8 @@ module.exports = {
   setActiveDeviceRoom,
   getSchedulesByRoom,
   getAllSchedules,
+  getScheduleById,
+  persistStore,
   previewExcelData,
   saveRoomSchedules,
   deleteRoom,
