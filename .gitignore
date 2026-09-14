@@ -26,3 +26,4 @@ server/data/*.db
 .vscode/
 *.pyc
 __pycache__/
+.impeccable/live/
