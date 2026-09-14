@@ -98,6 +98,7 @@
   - ลบ `server/card_renderer.js` ที่ตกค้างจาก ADR-002 เพื่อลดขนาดและตัดการพึ่งพาไลบรารี `@napi-rs/canvas`
   - ลบแพ็กเกจขยะใน `server/package.json` ที่ไม่ได้ถูกนำมาใช้จริง (`@napi-rs/canvas`, `sqlite3`, `@tailwindcss/vite`, `tailwindcss`) ช่วยให้การ Build และ Deploy บน Render ทำงานได้รวดเร็วขึ้นโดยไม่ต้องดาวน์โหลดและคอมไพล์ไบนารีส่วนเกิน
   - ปรับปรุงฟังก์ชัน `readExcelBuffer` ใน `server/schedules_manager.js` ให้ใช้ `fs.readFileSync` ของ Node.js Standard Library แทนการจัดการ file descriptor และ buffer ด้วยตนเอง
+  - ลบไฟล์สคริปต์ทดสอบเก่า `server/seed.js` เพื่อตัดความเสี่ยงด้านความปลอดภัยที่อาจเผลอไปสั่งรันคำสั่งล้างตาราง `access_logs` และรีเซ็ตรหัสผ่านแอดมินกลับเป็นค่าเริ่มต้นบน Production
 * **ADR-022:** การรับประกันความคงอยู่ของตารางเรียนหลายห้องบน Cloud และการแยก Scope วิชา (Multi-Room Persistence & Schedule Scope Isolation):
   - **ที่มาและปัญหา:** ผู้ใช้นำเข้าตารางเรียนห้องใหม่ (เช่น ห้อง ทค.1-301) แล้วข้อมูลหายไปเมื่อ Render เข้าสู่ Sleep Mode หรือ Re-deploy เนื่องจากไฟล์ถูกเขียนลง `server/data/` ที่ติด `.gitignore` และ `initStore()` Fallback กลับไปอ่าน `room_schedules.seed.json` ที่มีเฉพาะห้อง ทค.1-101 พร้อมทั้งมีบั๊ก Hardcode ตัดห้องเหลือเพียงห้องแรก นอกจากนี้ `server.js` เรียก `getAllSchedules().find` ซึ่งกรองเฉพาะห้อง Active ทำให้การ Export และ Offline Sync ของห้องอื่นได้ค่า `undefined`
   - **การแก้ปัญหา:**
