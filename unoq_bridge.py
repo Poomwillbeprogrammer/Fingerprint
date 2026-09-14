@@ -885,15 +885,16 @@ def on_bridge_command(cmd):
             print(f'❌ [Error sending to MCU] {e}')
 
 def r307_monitor_thread():
-    """ตรวจสอบสถานะเซนเซอร์ R307 เป็นระยะ ทุก 30 วินาที"""
+    """ตรวจสอบสถานะเซนเซอร์ R307 ทันทีหลังบู๊ต และตรวจเช็คเป็นระยะทุก 15 วินาที"""
     global mcu_sock
+    time.sleep(2.0)
     while True:
-        time.sleep(30)
         if mcu_sock:
             try:
                 mcu_sock.sendall(b'CHECK_R307\n')
             except Exception as e:
                 pass
+        time.sleep(15)
 
 if __name__ == '__main__':
     print('====================================================')
