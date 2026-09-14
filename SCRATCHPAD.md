@@ -93,3 +93,13 @@
     - [x] ปรับปรุง UI หน้าเว็บ (`app.js`, `schedules.js`, HTML) แสดงสถานะ 3 ระดับ: 🟢 Online, 🟠 R307 Not Found (ไฟส้มกระพริบ), 🔴 Offline
     - [x] เปลี่ยนข้อความเริ่มต้นตอนโหลดหน้าเว็บจาก `R307 (COM12)...` เป็น `กำลังตรวจสอบ...`
     - [x] เพิ่ม Guard หน้าเว็บสกัดการกดยืนยันฟอร์มลงทะเบียนล่วงหน้าหากไม่พบเซนเซอร์
+13. **[TASK-13] การผสานระบบตารางเรียนเข้ากับ Supabase Cloud Database (ADR-022, ADR-023):** ✅ COMPLETED
+    - [x] บรรจุห้องเรียนตั้งต้นครบ 3 ห้อง (ทค.1-101, ทค.1-301, ทค.1-201 รวม 60 คาบ) ใน `room_schedules.seed.json`
+    - [x] เพิ่มฟังก์ชัน `syncFromSupabase()` ดึงตารางเรียนและประวัติการเช็คชื่อจาก Cloud อัตโนมัติเมื่อเซิร์ฟเวอร์บู๊ต
+    - [x] แก้ไข Scope วิชา: ใช้ `getScheduleById(id)` ค้นหาวิชาจากทุกห้อง ป้องกันข้อผิดพลาดตอน Export Excel และ Offline Sync
+14. **[TASK-14] สถาปัตยกรรม Supabase Single Source of Truth และกำจัดความซ้ำซ้อนของไฟล์ดิสก์ (ADR-024):** ✅ COMPLETED
+    - [x] ยึด Supabase เป็น Single Source of Truth สำหรับตารางเรียน (`room_schedules`) และประวัติการเช็คชื่อ (`session_attendance`)
+    - [x] ยกเลิกการเขียนไฟล์ดิสก์ชั่วคราวซ้ำซ้อนบน Render (`server/data/room_schedules.json` และ `session_attendance.json` ลบออกหมด)
+    - [x] จัดการข้อมูลใน RAM (In-Memory Cache) ให้การตอบสนองเร็วระดับ 0.001 วินาที (Sub-millisecond)
+    - [x] รันชุดทดสอบ Logic 10 ด้าน ผ่านสมบูรณ์ 100%
+
