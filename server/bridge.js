@@ -3,8 +3,8 @@ const { io } = require('socket.io-client');
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 
-// URL ของ Render (ส่งผ่าน argument ได้ เช่น: node bridge.js https://my-app.onrender.com)
-const RENDER_URL = process.argv[2] || process.env.CLOUD_URL || 'http://localhost:3000';
+// URL ของ Render (ส่งผ่าน argument ได้ เช่น: node bridge.js https://fingerprint-hrkp.onrender.com)
+const RENDER_URL = process.argv[2] || process.env.CLOUD_URL || 'https://fingerprint-hrkp.onrender.com';
 const COM_PORT = process.env.SERIAL_PORT || 'COM12';
 const BAUD_RATE = 115200;
 
@@ -18,6 +18,10 @@ const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || 'fingerprint_unoq_bridge_secure
 
 const socket = io(RENDER_URL, {
   auth: { token: BRIDGE_TOKEN },
+  extraHeaders: {
+    Authorization: `Bearer ${BRIDGE_TOKEN}`,
+    'x-bridge-token': BRIDGE_TOKEN
+  },
   reconnection: true,
   reconnectionDelay: 2000
 });

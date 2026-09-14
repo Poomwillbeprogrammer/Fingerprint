@@ -1323,7 +1323,9 @@ io.use((socket, next) => {
   try {
     const authHeader = socket.handshake.headers?.authorization;
     const bearerToken = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-    const authToken = socket.handshake.auth?.token || bearerToken;
+    const customHeaderToken = socket.handshake.headers?.['x-bridge-token'];
+    const queryToken = socket.handshake.query?.token;
+    const authToken = socket.handshake.auth?.token || bearerToken || customHeaderToken || queryToken;
     
     let cookieToken = null;
     if (socket.handshake.headers?.cookie) {

@@ -122,16 +122,35 @@ def is_already_checked_in(user_id, sched_id, date_str):
     return (int(user_id), int(sched_id), str(date_str)) in checked_in_records
 
 # 1. โหลดฟอนต์ภาษาไทยแท้
-try:
-    font_title = ImageFont.truetype(FONT_PATH, 10)
-    font_id    = ImageFont.truetype(FONT_PATH, 10)
-    font_name  = ImageFont.truetype(FONT_PATH, 11)
-    font_name_sm = ImageFont.truetype(FONT_PATH, 9)
-    font_body  = ImageFont.truetype(FONT_PATH, 11)
-    font_small = ImageFont.truetype(FONT_PATH, 9)
-    print(f'✅ [Font] โหลดฟอนต์ {FONT_PATH} สำเร็จ')
-except Exception as e:
-    print(f'⚠️ [Font] โหลดฟอนต์ไม่ได้: {e}')
+FONT_CANDIDATES = [
+    FONT_PATH,
+    os.path.join(os.path.dirname(__file__), 'server', 'fonts', 'tahoma.ttf'),
+    os.path.join(os.path.dirname(__file__), 'fonts', 'tahoma.ttf'),
+    os.path.join(os.path.dirname(__file__), 'tahoma.ttf'),
+    '/home/arduino/tahoma.ttf'
+]
+
+actual_font_path = None
+for fp in FONT_CANDIDATES:
+    if os.path.exists(fp):
+        actual_font_path = fp
+        break
+
+if actual_font_path:
+    try:
+        font_title = ImageFont.truetype(actual_font_path, 10)
+        font_id    = ImageFont.truetype(actual_font_path, 10)
+        font_name  = ImageFont.truetype(actual_font_path, 11)
+        font_name_sm = ImageFont.truetype(actual_font_path, 9)
+        font_body  = ImageFont.truetype(actual_font_path, 11)
+        font_small = ImageFont.truetype(actual_font_path, 9)
+        print(f'✅ [Font] โหลดฟอนต์ {actual_font_path} สำเร็จ คมชัด 100%')
+    except Exception as e:
+        print(f'⚠️ [Font] โหลดฟอนต์ {actual_font_path} ล้มเหลว: {e}')
+        actual_font_path = None
+
+if not actual_font_path:
+    print('⚠️ [Font] ไม่พบไฟล์ฟอนต์ TrueType กำลังใช้ฟอนต์เริ่มต้น (อาจแสดงผลภาษาไทยไม่สมบูรณ์)')
     font_title = font_id = font_name = font_name_sm = font_body = font_small = ImageFont.load_default()
 
 # 2. ฟังก์ชันแปลงภาพ Pillow (128x64) เป็น 1024-byte SH1106 Buffer
@@ -159,19 +178,19 @@ def render_idle_screen(room_name=None):
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 15), (125, 15)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
     body = 'กรุณาวางนิ้วเพื่อสแกน'
     bb = d.textbbox((0, 0), body, font=font_body)
     bw = bb[2] - bb[0]
-    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
+    d.text(((128 - bw) // 2, 24), body, font=font_body, fill=1)
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     footer = f'[ {r_name} ] พร้อมใช้งาน'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
+    d.text(((128 - fw) // 2, 48), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -186,19 +205,19 @@ def render_denied_screen(is_offline=False):
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 15), (125, 15)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
     body = 'ไม่พบลายนิ้วมือในระบบ'
     bb = d.textbbox((0, 0), body, font=font_body)
     bw = bb[2] - bb[0]
-    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
+    d.text(((128 - bw) // 2, 24), body, font=font_body, fill=1)
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     footer = 'ไม่พบข้อมูล (โหมดออฟไลน์)' if is_offline else 'ไม่มีสิทธิ์เข้าถึง (DENIED)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
+    d.text(((128 - fw) // 2, 48), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -240,12 +259,12 @@ def render_user_card(student_id, name, sched_info=None):
         d.text((5, 28), "นอกเวลาเรียน (General)", font=font_small, fill=1)
         d.text((5, 38), "สถานะ: [บันทึกทั่วไป]", font=font_small, fill=1)
 
-    d.line([(2, 49), (125, 49)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     prompt = '[ ปุ่มฟ้า:ยืนยัน | ปุ่มแดง:สแกน ]'
     bb = d.textbbox((0, 0), prompt, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((128 - sw) // 2, 51), prompt, font=font_small, fill=1)
+    d.text(((128 - sw) // 2, 48), prompt, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -278,12 +297,12 @@ def render_confirm_success(student_id, name, sched_info=None, is_offline=False):
     else:
         d.text((5, 28), "นอกเวลาเรียน (General)", font=font_small, fill=1)
 
-    d.line([(2, 49), (125, 49)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     status = 'บันทึกออฟไลน์ (รอเน็ต)' if is_offline else 'บันทึกเวลาสำเร็จ (OK)'
     bb = d.textbbox((0, 0), status, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((128 - sw) // 2, 51), status, font=font_small, fill=1)
+    d.text(((128 - sw) // 2, 48), status, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -312,12 +331,12 @@ def render_already_checked_in(name, subject_str):
     w2 = bb[2] - bb[0]
     d.text(((128 - w2) // 2, 31), subj, font=font_small, fill=1)
 
-    d.line([(2, 49), (125, 49)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     footer = '(ไม่บันทึกเวลาซ้ำ)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((128 - fw) // 2, 51), footer, font=font_small, fill=1)
+    d.text(((128 - fw) // 2, 48), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -332,19 +351,19 @@ def render_cancelled_screen():
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 15), (125, 15)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
     body = 'กรุณาวางนิ้วสแกนใหม่'
     bb = d.textbbox((0, 0), body, font=font_body)
     bw = bb[2] - bb[0]
-    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
+    d.text(((128 - bw) // 2, 24), body, font=font_body, fill=1)
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     footer = 'สถานะ: ยกเลิกแล้ว (ปุ่มแดง)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
+    d.text(((128 - fw) // 2, 48), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -359,19 +378,19 @@ def render_timeout_screen():
     tw = bb[2] - bb[0]
     d.text(((128 - tw) // 2, 2), title, font=font_title, fill=1)
 
-    d.line([(2, 15), (125, 15)], fill=1)
+    d.line([(2, 14), (125, 14)], fill=1)
 
     body = 'ยกเลิกอัตโนมัติ (10 วินาที)'
     bb = d.textbbox((0, 0), body, font=font_body)
     bw = bb[2] - bb[0]
-    d.text(((128 - bw) // 2, 25), body, font=font_body, fill=1)
+    d.text(((128 - bw) // 2, 24), body, font=font_body, fill=1)
 
-    d.line([(2, 47), (125, 47)], fill=1)
+    d.line([(2, 46), (125, 46)], fill=1)
 
     footer = 'สถานะ: ไม่ได้บันทึกข้อมูล'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((128 - fw) // 2, 49), footer, font=font_small, fill=1)
+    d.text(((128 - fw) // 2, 48), footer, font=font_small, fill=1)
 
     return img_to_oled_buf(img)
 
@@ -908,7 +927,13 @@ if __name__ == '__main__':
     # 4. เชื่อมต่อ Render Cloud ในลูปหลัก
     while True:
         try:
-            sio.connect(RENDER_URL, auth={'token': BRIDGE_TOKEN}, wait_timeout=15)
+            sio.connect(
+                RENDER_URL,
+                headers={'Authorization': f'Bearer {BRIDGE_TOKEN}', 'x-bridge-token': BRIDGE_TOKEN},
+                auth={'token': BRIDGE_TOKEN},
+                transports=['websocket', 'polling'],
+                wait_timeout=15
+            )
             sio.wait()
         except Exception as e:
             print(f'⚠️ [Cloud Connection Error] {e}')

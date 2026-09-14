@@ -128,4 +128,10 @@
     1. ปรับปรุง `server/public/js/app.js` ให้ส่ง URL Query `?room=${encodeURIComponent(currentActiveRoom)}` และ `?room=${encodeURIComponent(s.room_name)}` ไปยังหน้าตารางเรียน
     2. ปรับปรุง `server/public/js/schedules.js` ให้ตรวจสอบ URL Query ผ่าน `URLSearchParams(window.location.search)` ก่อน หากพบชื่อห้องที่ถูกต้องให้เปิดห้องนั้นทันที หากไม่พบจึง Fallback ไปใช้ห้องประจำเครื่อง Uno Q (`activeDeviceRoom`)
     3. เพิ่มการซิงก์ Address Bar แบบไร้รอยต่อใน `switchRoom(roomName)` ด้วย `window.history.replaceState` เพื่อให้ URL ตรงกับห้องที่เลือกอยู่เสมอโดยไม่ต้องรีโหลดหน้าเว็บ
+* **ADR-026:** การแก้ไขปัญหาการแสดงผล OLED ไม่ชัด/เลื่อนลง และการเชื่อมต่อสถานะ Cloud Bridge (OLED Sharpness Optimization, Zero Display Offset, and Resilient Bridge Authentication):
+  - **ที่มาและปัญหา:** หน้าจอ OLED แสดงผลไม่คมชัดและภาพมีอาการเลื่อนลงมาเล็กน้อย (Shifted downwards) และในหน้าเว็บแดชบอร์ดไม่แสดงสถานะ Online
+  - **การแก้ปัญหา:**
+    1. **แก้ไขอาการภาพเลื่อนลงและไม่คมชัดในฮาร์ดแวร์ (`sketch.ino`):** เพิ่มฟังก์ชัน `sendCommand2(cmd, arg)` ให้ส่งคำสั่งและพารามิเตอร์ต่อเนื่องใน I2C Transaction เดียวด้วยคอนโทรลไบต์ `0x00` เพื่อบังคับ Display Offset ให้เป็น `0x00` อย่างถูกต้อง 100% พร้อมปรับเพิ่ม Contrast เป็น `0xCF`, จูน Pre-charge `0xD9, 0xF1` และ VCOM `0xDB, 0x40` เพื่อให้พิกเซล OLED สว่าง คมชัด และไร้เงา Ghosting
+    2. **ปรับระยะขอบในสคริปต์เรนเดอร์ (`unoq_bridge.py`):** ปรับตำแหน่งเส้นแบ่งล่างจาก `y = 47-49` เป็น `y = 46` และขยับข้อความ Footer/ปุ่มกดเป็น `y = 48` ให้มีระยะเว้นจากเส้นกรอบล่าง (`y = 63`) สวยงาม ไม่ชนขอบ และเพิ่มเส้นทางค้นหาฟอนต์ Tahoma หลากหลายพาธเพื่อรับประกันการโหลดฟอนต์แท้ 100%
+    3. **ยกระดับความยืดหยุ่นในการเชื่อมต่อ Cloud Bridge:** ปรับ URL เริ่มต้นใน `server/bridge.js` ให้ชี้ไปยัง Render Cloud โดยตรง (`https://fingerprint-hrkp.onrender.com`) และปรับปรุง `unoq_bridge.py` กับ `server.js` ให้รองรับการส่ง Token ผ่านทั้ง Header (`Authorization`, `x-bridge-token`) และ Query Parameter รองรับทั้งการเชื่อมต่อแบบ WebSocket และ HTTP Polling ทำให้ระบบแสดงสถานะ `R307 Online` บนแดชบอร์ดได้อย่างเสถียร
 

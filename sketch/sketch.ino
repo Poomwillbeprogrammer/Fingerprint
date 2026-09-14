@@ -196,6 +196,15 @@ private:
     _i2c.stop();
   }
 
+  void sendCommand2(uint8_t cmd, uint8_t arg) {
+    _i2c.start();
+    _i2c.writeByte(_addr << 1);
+    _i2c.writeByte(0x00); // Co = 0, D/C# = 0: stream of commands/parameters
+    _i2c.writeByte(cmd);
+    _i2c.writeByte(arg);
+    _i2c.stop();
+  }
+
 public:
   SH1106_Display(uint8_t sda, uint8_t scl, uint8_t addr = 0x3C)
     : _i2c(sda, scl), _addr(addr) {}
@@ -204,26 +213,23 @@ public:
     _i2c.begin();
     delay(50);
 
-    // ลำดับ Init Command สำหรับ SH1106
+    // ลำดับ Init Command สำหรับ SH1106 (คมชัดระดับสูงสุด + ไร้ปัญหาเลื่อนบรรทัด)
     sendCommand(0xAE); // Display OFF
-    sendCommand(0x02); // Column Offset = 2
+    sendCommand(0x02); // Column Offset = 2 (สำหรับ SH1106 132x64)
     sendCommand(0x10);
     sendCommand(0x40); // Start line 0
     sendCommand(0xB0); // Page 0
-    sendCommand(0x81); // Contrast
-    sendCommand(0x80);
+    sendCommand2(0x81, 0xCF); // Contrast สูง คมชัดสว่างเต็มที่
     sendCommand(0xA1); // Segment Re-map
     sendCommand(0xC8); // COM Scan Direction
     sendCommand(0xA6); // Normal Display
-    sendCommand(0xA8); // Multiplex
-    sendCommand(0x3F); // 1/64 duty
-    sendCommand(0xAD); // DC-DC Mode
-    sendCommand(0x8B); // DC-DC ON
-    sendCommand(0xD3); sendCommand(0x00);
-    sendCommand(0xD5); sendCommand(0x80);
-    sendCommand(0xD9); sendCommand(0x22);
-    sendCommand(0xDA); sendCommand(0x12);
-    sendCommand(0xDB); sendCommand(0x35);
+    sendCommand2(0xA8, 0x3F); // Multiplex 1/64 duty
+    sendCommand2(0xAD, 0x8B); // DC-DC Mode ON (SH1106 Charge Pump)
+    sendCommand2(0xD3, 0x00); // Display Offset = 0 (แก้ไขปัญหาภาพเลื่อนลงมา)
+    sendCommand2(0xD5, 0x80); // Display Clock Divide
+    sendCommand2(0xD9, 0xF1); // Pre-charge Period คมชัดไม่มีเงา Ghosting
+    sendCommand2(0xDA, 0x12); // COM Pins Hardware Configuration
+    sendCommand2(0xDB, 0x40); // VCOM Deselect Level สูงสุด
     sendCommand(0xAF); // Display ON
 
     clear();
@@ -231,8 +237,8 @@ public:
   }
 
   void keepAlive() {
-    sendCommand(0xAD); sendCommand(0x8B); // Force DC-DC Charge Pump ON
-    sendCommand(0xAF); // Force Display ON (Wake up if browned out)
+    sendCommand2(0xAD, 0x8B); // Force DC-DC Charge Pump ON ในคำสั่งเดียว
+    sendCommand(0xAF);        // Force Display ON
   }
 
   void clear() {

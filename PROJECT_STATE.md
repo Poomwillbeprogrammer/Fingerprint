@@ -13,6 +13,7 @@
 - **3-Finger Biometric Redundancy:** ผู้ใช้ 1 คน ผูก 3 ลายนิ้วมือในเซนเซอร์ R307 รองรับกรณีลายนิ้วมือเปียก/ถลอก พร้อมระบบ Pre-enroll duplicate check ป้องกันการบันทึกนิ้วซ้ำ และ Auto-Rollback ลบข้อมูลทันทีหากการลงทะเบียนถูกยกเลิก
 - **Hardware Sensor Health Detection:** แยกสถานะการเชื่อมต่อระหว่าง Cloud Bridge กับเซนเซอร์ R307 ออกจากกันอย่างแท้จริง ผ่านคำสั่ง `CHECK_R307` / `verifyPassword()` พร้อมระบบ Fail-Fast สกัดการลงทะเบียนล่วงหน้าหากไม่พบเซนเซอร์
 - **Store-and-Forward Offline Attendance:** สามารถสแกนและบันทึกเวลาเรียนได้ทันทีแม้ห้องเรียนไม่มีเน็ต (<1ms) ผ่าน Local Cache (`users_cache.json`, `attendance_cache.json`, `offline_queue.json`) และระบบจะทำการ Background Auto-Sync ข้อมูลขึ้น Cloud ทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ
+- **OLED Sharpness Optimization & Zero-Offset Alignment:** ปรับปรุงไดรเวอร์ SH1106 ในเฟิร์มแวร์ STM32 ด้วยคำสั่งควบคุมแบบต่อเนื่องในทรานแซกชันเดียว (`sendCommand2`) บังคับค่า Display Offset เป็น 0x00 แก้ปัญหาภาพเลื่อนลง พร้อมปรับเพิ่ม Contrast เป็น 0xCF, ปรับแต่ง Pre-charge และ VCOM ให้ภาพสว่างคมชัดสมบูรณ์แบบ ควบคู่กับการปรับระยะ Margin ล่างใน `unoq_bridge.py` ป้องกันข้อความชนขอบจอ
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย
