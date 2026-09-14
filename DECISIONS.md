@@ -122,4 +122,10 @@
     3. ยกเลิกการเขียนไฟล์ลงดิสก์ชั่วคราวของ Render ทั้งหมด และลบ `server/data/room_schedules.json` ออกจาก Git
     4. จำกัดบทบาทของ `room_schedules.seed.json` ให้เป็น Initial Bootstrap Template เพียงอย่างเดียว (จะถูกนำมาใช้เฉพาะกรณีที่ตารางบน Supabase ยังว่างเปล่าในครั้งแรกสุดเท่านั้น)
     5. ตัด Fallback เก่า (`101.xlsx`) และโค้ดที่ไม่จำเป็นออกทั้งหมด ทำให้ระบบมีความเรียบง่าย คลีน และมีประสิทธิภาพสูงสุด
+* **ADR-025:** การเชื่อมโยงห้องเรียนแบบไดนามิกจากหน้าแดชบอร์ดสดไปยังหน้าตารางเรียน (Dynamic Room Query Navigation between Live Dashboard and Schedules):
+  - **ที่มาและปัญหา:** ในหน้าแดชบอร์ดสด (`index.html`) ปุ่ม "ตารางเรียนห้องนี้" และ "ดูใบเช็คชื่อคาบนี้" เดิมลิงก์ไปยัง `/schedules.html` โดยไม่มี URL Query ทำให้เมื่อผู้ใช้เปลี่ยนห้องประจำเครื่อง Uno Q เป็นห้องอื่น (เช่น ทค.2-101 หรือ ทค.1-201) แล้วกดปุ่ม ระบบจะเด้งกลับไปแสดงห้อง ทค.1-101 เสมอ เนื่องจาก `schedules.js` มีการ Hardcode ค่าเริ่มต้น `let currentRoom = 'ทค.1-101'` ไว้
+  - **การแก้ปัญหา:**
+    1. ปรับปรุง `server/public/js/app.js` ให้ส่ง URL Query `?room=${encodeURIComponent(currentActiveRoom)}` และ `?room=${encodeURIComponent(s.room_name)}` ไปยังหน้าตารางเรียน
+    2. ปรับปรุง `server/public/js/schedules.js` ให้ตรวจสอบ URL Query ผ่าน `URLSearchParams(window.location.search)` ก่อน หากพบชื่อห้องที่ถูกต้องให้เปิดห้องนั้นทันที หากไม่พบจึง Fallback ไปใช้ห้องประจำเครื่อง Uno Q (`activeDeviceRoom`)
+    3. เพิ่มการซิงก์ Address Bar แบบไร้รอยต่อใน `switchRoom(roomName)` ด้วย `window.history.replaceState` เพื่อให้ URL ตรงกับห้องที่เลือกอยู่เสมอโดยไม่ต้องรีโหลดหน้าเว็บ
 

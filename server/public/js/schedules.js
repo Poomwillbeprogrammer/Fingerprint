@@ -18,7 +18,7 @@ let selectedDayFilter = 'all';
 
 let roomsList = [];
 let activeDeviceRoom = 'ทค.1-101';
-let currentRoom = 'ทค.1-101';
+let currentRoom = null;
 let pendingImportFile = null;
 let previewData = null;
 
@@ -52,10 +52,15 @@ async function loadRooms() {
     roomsList = data.rooms || [];
     activeDeviceRoom = data.active_device_room || (roomsList[0] ? roomsList[0].name : 'ทค.1-101');
     
-    // หาก currentRoom ยังไม่ได้เลือก หรือห้องที่เลือกถูกลบไปแล้ว ให้ตั้งเป็น activeDeviceRoom หรือห้องแรก
-    const roomExists = roomsList.some(r => r.name === currentRoom);
-    if (!currentRoom || !roomExists) {
-      currentRoom = activeDeviceRoom || (roomsList[0] ? roomsList[0].name : '');
+    // ตรวจสอบห้องที่ส่งมาผ่าน URL Query (เช่น ?room=ทค.2-101 หรือ ?room=ทค.1-201)
+    const urlParams = new URLSearchParams(window.location.search);
+    const roomFromUrl = urlParams.get('room');
+
+    if (roomFromUrl && roomsList.some(r => r.name === roomFromUrl)) {
+      currentRoom = roomFromUrl;
+    } else if (!currentRoom || !roomsList.some(r => r.name === currentRoom)) {
+      // หากไม่มีการระบุห้องมา ให้เลือกห้องประจำเครื่อง Uno Q (activeDeviceRoom) เป็นค่าเริ่มต้น
+      currentRoom = activeDeviceRoom || (roomsList[0] ? roomsList[0].name : 'ทค.1-101');
     }
 
     renderRoomTabs();
@@ -139,6 +144,8 @@ function renderRoomTabs() {
 async function switchRoom(roomName) {
   if (currentRoom === roomName) return;
   currentRoom = roomName;
+  const newUrl = `${window.location.pathname}?room=${encodeURIComponent(roomName)}`;
+  window.history.replaceState(null, '', newUrl);
   renderRoomTabs();
   updateHeaderInfo();
   await loadSchedules();

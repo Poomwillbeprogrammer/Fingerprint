@@ -287,7 +287,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
                 </div>
               </div>
               <div class="flex items-center gap-2.5 shrink-0">
-                <a href="/schedules.html" class="px-4 py-2.5 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
+                <a href="/schedules.html?room=${encodeURIComponent(s.room_name)}" class="px-4 py-2.5 bg-gradient-to-r from-amber-700 via-amber-600 to-yellow-500 hover:from-amber-600 hover:to-yellow-400 text-white font-bold rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
                   <i class="fa-solid fa-clipboard-check"></i> ดูใบเช็คชื่อคาบนี้
                 </a>
               </div>
@@ -322,7 +322,7 @@ if (window.location.pathname.endsWith('index.html') || window.location.pathname 
               </div>
             </div>
             <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-              <a href="/schedules.html" class="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 rounded-xl text-xs font-medium flex items-center gap-2 transition">
+              <a href="/schedules.html?room=${encodeURIComponent(currentActiveRoom)}" class="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-200 rounded-xl text-xs font-medium flex items-center gap-2 transition">
                 <i class="fa-regular fa-calendar text-amber-400"></i> ตารางเรียนห้องนี้
               </a>
             </div>

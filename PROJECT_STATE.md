@@ -43,7 +43,7 @@
 - **RMUTL Golden Brown Dark Theme:** ปรับโทนสีทั้งระบบเป็นสีน้ำตาลทองและสีเอสเพรสโซ่อบอุ่น (Warm Espresso & Golden Bronze) ตามอัตลักษณ์ มทร.ล้านนา
 - **Typography & Responsive Layout:** ใช้แบบอักษร Prompt สำหรับข้อความภาษาไทย และ JetBrains Mono สำหรับตัวเลข รหัส และข้อมูลเทคนิค พร้อมรองรับการใช้งานบนมือถือ (Mobile Drawer & Responsive Sidebar)
 - **Interactive Attendance Modal:** มี Week Selector เลือกดูประวัติย้อนหลังทีละสัปดาห์, แสดง 3 Metric Counters ประจำสัปดาห์แบบไดนามิก และตารางแสดงวันที่ เวลา สถานะ คะแนน แบบเรียลไทม์
-- **UX Resilience:** มี Error State, ปุ่ม Retry เมื่อโหลดข้อมูลไม่สำเร็จ, ป้ายสถานะ `[ซิงก์ออฟไลน์]` และระบบแจ้งเตือน Toast Message
+- **UX Resilience & Dynamic Room Query:** มี Error State, ปุ่ม Retry เมื่อโหลดข้อมูลไม่สำเร็จ, ป้ายสถานะ `[ซิงก์ออฟไลน์]`, ระบบแจ้งเตือน Toast Message และระบบเชื่อมโยงห้องเรียนแบบไดนามิก (`/schedules.html?room=...`) นำทางจาก Live Dashboard ตรงสู่ห้องปัจจุบันทันทีโดยไม่เด้งกลับห้องเดิม
 
 ### 1.4 การปรับปรุงโค้ดและขจัดความซับซ้อนส่วนเกิน (Codebase Streamlining & De-bloat)
 - ขจัดโค้ดตารางฟอนต์บิตแมปและฟังก์ชันวาดตัวอักษรไทยที่ไม่ได้ใช้งานออกจากเฟิร์มแวร์ C++ (`sketch/sketch.ino` และ `sketch/thai_font.h`) คืนทรัพยากร Flash/RAM บน STM32
