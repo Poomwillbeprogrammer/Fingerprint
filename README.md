@@ -159,7 +159,7 @@ flowchart TD
      2. รันคำสั่ง `DELETE FROM users WHERE id = ?` ใน Supabase
      3. ส่งสัญญาณ Socket.IO ให้หน้าเว็บรีเฟรชตารางรายชื่อทันที
 4. **ระบบ Multi-Room Schedule & Attendance Verification:**
-   * บันทึกการลงเวลาจะตรวจสอบคาบเรียนของห้องที่อุปกรณ์ประจำการอยู่แบบอัตโนมัติ คำนวณสถานะ เข้าเรียน (On-time), มาสาย (Late), หรือขาดเรียน (Absent) ตามเวลาที่กำหนดในตารางเรียน
+   * บันทึกการลงเวลาจะตรวจสอบคาบเรียนของห้องที่อุปกรณ์ประจำการอยู่แบบอัตโนมัติ คำนวณสถานะ เข้าเรียนตรงเวลา (On-time) หรือ มาสาย (Late) ตามเกณฑ์เวลาที่กำหนด โดยจัดเก็บแบบนับเฉพาะข้อมูลจริง (Non-Punitive Metric: มาตรงเวลา, มาสาย, รวมเข้าเรียน) และจำแนกตามสัปดาห์สากล ISO-8601 อย่างเป็นระบบ
 
 ---
 
@@ -195,23 +195,25 @@ npm start
 
 ```text
 Fingerprint/
+├── unoq_bridge.py             # Graphic & Offline Cache Engine สำหรับ Uno Q Linux SoC
 ├── sketch/
 │   └── sketch.ino             # เฟิร์มแวร์ C++ สำหรับ STM32 (R307, OLED, D2/D3, Serial Protocol)
-├── unoq_bridge.py             # Graphic & Offline Cache Engine สำหรับ Uno Q Linux SoC
 ├── server/
 │   ├── server.js              # Express API Server, Socket.IO Real-time Controller
+│   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียน Multi-Room & สถิติสัปดาห์ (Single Source of Truth)
+│   ├── room_schedules.seed.json # ข้อมูลตารางเรียนตั้งต้น 3 ห้อง (101, 201, 301 รวม 60 คาบ) สำหรับ Bootstrap
 │   ├── database.js            # เชื่อมต่อ Supabase PostgreSQL Cloud Database
-│   ├── public/
-│   │   ├── index.html         # หน้า Dashboard แสดงสถานะและบันทึกเวลาสแกนนิ้วเรียลไทม์
-│   │   ├── users.html         # หน้าระบบจัดการผู้ใช้งาน และลงทะเบียนลายนิ้วมือ 3 นิ้ว
-│   │   ├── schedules.html     # หน้าระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)
-│   │   ├── login.html         # หน้าระบบล็อกอินสำหรับผู้ดูแลระบบ (Admin)
-│   │   ├── js/
-│   │   │   ├── app.js         # สคริปต์ Frontend Web Interface
-│   │   │   └── schedules.js   # สคริปต์จัดการตารางสอนและนำเข้าไฟล์ Excel
-│   │   └── css/               # ไฟล์สไตล์ Tailwind CSS
-├── DECISIONS.md               # บันทึกการตัดสินใจทางสถาปัตยกรรม (Architecture Decision Records)
-├── SCRATCHPAD.md              # บันทึกสถานะการพัฒนาปัจจุบัน (Development Context)
+│   └── public/
+│       ├── index.html / app.js       # หน้า Dashboard แสดงสถานะและบันทึกเวลาสแกนนิ้วเรียลไทม์
+│       ├── schedules.html / schedules.js # หน้าระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)
+│       ├── users.html / users.js     # หน้าระบบจัดการผู้ใช้งาน และลงทะเบียนลายนิ้วมือ 3 นิ้ว
+│       ├── login.html                # หน้าระบบล็อกอินสำหรับผู้ดูแลระบบ (Admin)
+│       └── css/style.css             # ธีมสีน้ำตาลทอง RMUTL และเอฟเฟกต์ Glassmorphism
+├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
+├── DECISIONS.md               # บันทึกการตัดสินใจทางสถาปัตยกรรม (ADR-001 ถึง ADR-024)
+├── PROJECT_STATE.md           # บันทึกสถานะการพัฒนาและสถาปัตยกรรมปัจจุบันฉบับสมบูรณ์
+├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
+├── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 └── README.md                  # เอกสารคู่มือโครงการฉบับสมบูรณ์
 ```
 
