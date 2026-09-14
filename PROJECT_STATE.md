@@ -14,6 +14,7 @@
 - **Hardware Sensor Health Detection:** แยกสถานะการเชื่อมต่อระหว่าง Cloud Bridge กับเซนเซอร์ R307 ออกจากกันอย่างแท้จริง ผ่านคำสั่ง `CHECK_R307` / `verifyPassword()` พร้อมระบบ Fail-Fast สกัดการลงทะเบียนล่วงหน้าหากไม่พบเซนเซอร์
 - **Store-and-Forward Offline Attendance:** สามารถสแกนและบันทึกเวลาเรียนได้ทันทีแม้ห้องเรียนไม่มีเน็ต (<1ms) ผ่าน Local Cache (`users_cache.json`, `attendance_cache.json`, `offline_queue.json`) และระบบจะทำการ Background Auto-Sync ข้อมูลขึ้น Cloud ทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ
 - **OLED Sharpness Optimization & Zero-Offset Alignment:** ปรับปรุงไดรเวอร์ SH1106 ในเฟิร์มแวร์ STM32 ด้วยคำสั่งควบคุมแบบต่อเนื่องในทรานแซกชันเดียว (`sendCommand2`) บังคับค่า Display Offset เป็น 0x00 แก้ปัญหาภาพเลื่อนลง พร้อมปรับเพิ่ม Contrast เป็น 0xCF, ปรับแต่ง Pre-charge และ VCOM ให้ภาพสว่างคมชัดสมบูรณ์แบบ ควบคู่กับการปรับระยะ Margin ล่างใน `unoq_bridge.py` ป้องกันข้อความชนขอบจอ
+- **3-Tier Independent Hardware Health Monitoring (ADR-027):** แยกรายงานสถานะฮาร์ดแวร์ 3 องค์ประกอบอิสระ (Cloud Bridge, เซนเซอร์ R307, จอ OLED SH1106) พร้อมระบบ I2C Bus Detection ตรวจจับการต่อจออัตโนมัติ และรองรับโหมดไม่มีจอ (Headless Operation) โดยไม่บล็อกหรือหน่วงการทำงานของระบบ
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย
@@ -42,6 +43,7 @@
 
 ### 1.3 หน้าเว็บแดชบอร์ดและประสบการณ์ผู้ใช้ (Web UI & Experience)
 - **RMUTL Golden Brown Dark Theme:** ปรับโทนสีทั้งระบบเป็นสีน้ำตาลทองและสีเอสเพรสโซ่อบอุ่น (Warm Espresso & Golden Bronze) ตามอัตลักษณ์ มทร.ล้านนา
+- **3-Tier Hardware Status Sidebar Card:** ปรับปรุงแถบสถานะด้านซ้าย แยกรายงานสถานะ 3 บรรทัดชัดเจน: Cloud Bridge, เซนเซอร์ R307, และ จอ OLED พร้อมระบุสถานะ "ไม่มีจอ / ปิด" อย่างเป็นกลาง ไม่รบกวนผู้ใช้ในโหมด Headless
 - **Typography & Responsive Layout:** ใช้แบบอักษร Prompt สำหรับข้อความภาษาไทย และ JetBrains Mono สำหรับตัวเลข รหัส และข้อมูลเทคนิค พร้อมรองรับการใช้งานบนมือถือ (Mobile Drawer & Responsive Sidebar)
 - **Interactive Attendance Modal:** มี Week Selector เลือกดูประวัติย้อนหลังทีละสัปดาห์, แสดง 3 Metric Counters ประจำสัปดาห์แบบไดนามิก และตารางแสดงวันที่ เวลา สถานะ คะแนน แบบเรียลไทม์
 - **UX Resilience & Dynamic Room Query:** มี Error State, ปุ่ม Retry เมื่อโหลดข้อมูลไม่สำเร็จ, ป้ายสถานะ `[ซิงก์ออฟไลน์]`, ระบบแจ้งเตือน Toast Message และระบบเชื่อมโยงห้องเรียนแบบไดนามิก (`/schedules.html?room=...`) นำทางจาก Live Dashboard ตรงสู่ห้องปัจจุบันทันทีโดยไม่เด้งกลับห้องเดิม

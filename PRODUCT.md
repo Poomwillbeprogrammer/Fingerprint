@@ -32,7 +32,7 @@ web
 * **Timetable Import & Export:** นำเข้าตารางเรียนจากไฟล์ Excel พร้อมระบบวิเคราะห์ห้องเรียนอัจฉริยะ (Smart Room Detection) และส่งออกรายงานสรุปผลการเข้าเรียนรายวิชาเป็นไฟล์ Excel (.xlsx) ที่จัดรูปแบบเรียบร้อย
 * **Dynamic Device Room Sync:** สลับห้องประจำการของอุปกรณ์ Uno Q ได้จาก Dashboard แบบเรียลไทม์ และส่งชื่อห้องลงจอ OLED อัตโนมัติ
 * **3-Finger Biometric Redundancy:** ผู้ใช้ 1 คนลงทะเบียนได้ 3 นิ้วเพื่อความแม่นยำสูงสุด พร้อมระบบตรวจสอบนิ้วซ้ำระดับฮาร์ดแวร์ (Hardware Duplicate Check) และระบบ Auto-Rollback ล้างข้อมูลขยะหากยกเลิกกลางคัน
-* **Accurate Hardware Health Monitoring:** รายงานสถานะการเชื่อมต่อแยกอิสระระหว่าง Cloud Bridge กับเซนเซอร์ R307 พร้อมระบบ Fail-Fast สกัดการลงทะเบียนหากไม่พบเซนเซอร์
+* **Accurate 3-Tier Hardware Health Monitoring:** รายงานสถานะการเชื่อมต่อแยกอิสระ 3 องค์ประกอบ (Cloud Bridge, เซนเซอร์ R307, จอ OLED) พร้อมระบบ I2C Bus Probe ตรวจจับจออัตโนมัติ และระบบ Fail-Fast สกัดการลงทะเบียนหากไม่พบเซนเซอร์ R307 รองรับการทำงานในโหมด Headless ได้อย่างไร้รอยต่อ
 
 ### Constraints
 * **Physical Hardware Limits:** เซนเซอร์ R307 รองรับสูงสุด 1,000 โมเดล (ผู้ใช้ 333 คนในระบบ 3 นิ้วต่อคน), บัฟเฟอร์ UART RX FIFO ของ Zephyr บน STM32 มีขนาด 64 ไบต์

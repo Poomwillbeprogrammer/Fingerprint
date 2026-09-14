@@ -45,6 +45,7 @@ checked_in_records = set()
 offline_queue = []
 current_room_name = 'ทค.1-101'
 r307_connected = False
+oled_connected = False
 
 def load_offline_queue():
     global offline_queue
@@ -723,31 +724,42 @@ def mcu_reader_thread():
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
+                # ฉ.0) เมื่อ MCU รายงานสถานะฮาร์ดแวร์รวม (R307 และ OLED)
+                elif line.startswith('STATUS:HARDWARE'):
+                    r307_connected = ('R307=READY' in line)
+                    oled_connected = ('OLED=READY' in line)
+                    print(f'⚡ [Local Engine] สถานะฮาร์ดแวร์: R307={"พร้อม" if r307_connected else "ไม่พบ"}, จอ OLED={"พร้อม" if oled_connected else "ไม่มีจอ/ปิด"}')
+                    if sio.connected:
+                        sio.emit('bridge_sensor_status', {'r307_connected': r307_connected, 'oled_connected': oled_connected})
+                        sio.emit('bridge_serial_data', line)
+
                 # ฉ.1) เมื่อเซนเซอร์เปิดเครื่องตอนบู๊ต หรือเมื่อตอบกลับ CHECK_R307
                 elif line == 'STATUS:R307_READY':
                     r307_connected = True
                     print('⚡ [Local Engine] เซนเซอร์ R307 พร้อมทำงาน (Ready)')
                     if sio.connected:
-                        sio.emit('bridge_sensor_status', {'r307_connected': True})
+                        sio.emit('bridge_sensor_status', {'r307_connected': True, 'oled_connected': oled_connected})
                         sio.emit('bridge_serial_data', line)
-                    def send_after_boot():
-                        time.sleep(2.0)
-                        print('⚡ [Local Engine] ส่งหน้าจอพร้อมใช้งานภาษาไทยหลัง Boot สมบูรณ์')
-                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30)
-                    threading.Thread(target=send_after_boot, daemon=True).start()
+                    if oled_connected:
+                        def send_after_boot():
+                            time.sleep(2.0)
+                            print('⚡ [Local Engine] ส่งหน้าจอพร้อมใช้งานภาษาไทยหลัง Boot สมบูรณ์')
+                            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30)
+                        threading.Thread(target=send_after_boot, daemon=True).start()
 
                 elif line == 'STATUS:R307_NOT_FOUND':
                     r307_connected = False
                     print('⚠️ [Local Engine] ไม่พบเซนเซอร์ R307 (Not Found)! กรุณาตรวจสอบการต่อสาย Pin 0/1')
                     if sio.connected:
-                        sio.emit('bridge_sensor_status', {'r307_connected': False})
+                        sio.emit('bridge_sensor_status', {'r307_connected': False, 'oled_connected': oled_connected})
                         sio.emit('bridge_serial_data', line)
 
                 # ฉ.2) เมื่อกลับสู่หน้าจอพร้อมใช้งานตามปกติ (หลังสแกนนิ้ว / กดยกเลิก / หมดเวลา)
                 elif line == 'EVENT:IDLE':
                     print('⚡ [Local Engine] กลับสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
-                    time.sleep(0.20)  # หน่วงเวลา 200ms รอให้ STM32 รัน showIdleScreen() เสร็จ
-                    send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
+                    if oled_connected:
+                        time.sleep(0.20)  # หน่วงเวลา 200ms รอให้ STM32 รัน showIdleScreen() เสร็จ
+                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 
@@ -773,7 +785,7 @@ def sync_offline_records_if_any():
 @sio.event
 def connect():
     print(f'☁️ [Cloud] เชื่อมต่อกับ Render สำเร็จ: {RENDER_URL} (SID: {sio.sid})')
-    sio.emit('register_bridge', {'r307_connected': r307_connected})
+    sio.emit('register_bridge', {'r307_connected': r307_connected, 'oled_connected': oled_connected})
     # ขอดึงแคชรายชื่อ ตารางเรียน และประวัติลงเวลาล่าสุดทันที
     sio.emit('get_users_cache')
     sio.emit('get_schedules_cache')

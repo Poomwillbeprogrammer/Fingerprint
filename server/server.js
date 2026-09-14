@@ -96,6 +96,7 @@ let currentEnrollId = null;
 let currentEnrollSession = null;
 let serialConnected = false;
 let r307Connected = false;
+let oledConnected = false;
 let reconnectTimer = null;
 
 function initSerial() {
@@ -126,7 +127,7 @@ function initSerial() {
 
       serialConnected = true;
       console.log(`✅ [Serial] เชื่อมต่อบอร์ด Arduino บน ${TARGET_PORT} สำเร็จ!`);
-      io.emit('serial_status', { connected: true, port: TARGET_PORT, r307_connected: r307Connected });
+      io.emit('serial_status', { connected: true, port: TARGET_PORT, r307_connected: r307Connected, oled_connected: oledConnected });
     });
 
     serialParser.on('data', handleSerialData);
@@ -135,7 +136,8 @@ function initSerial() {
       console.error(`❌ [Serial Error] ${err.message}`);
       serialConnected = false;
       r307Connected = false;
-      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, error: err.message });
+      oledConnected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, oled_connected: false, error: err.message });
       scheduleReconnect();
     });
 
@@ -143,7 +145,8 @@ function initSerial() {
       console.warn(`🔌 [Serial] พอร์ต ${TARGET_PORT} ปิดการเชื่อมต่อ`);
       serialConnected = false;
       r307Connected = false;
-      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false });
+      oledConnected = false;
+      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, oled_connected: false });
       scheduleReconnect();
     });
 
@@ -493,18 +496,25 @@ async function handleSerialData(rawLine) {
   if (!line) return;
   console.log(`📥 [Arduino] ${line}`);
 
-  // ตรวจจับสถานะความพร้อมของฮาร์ดแวร์เซนเซอร์ R307
-  if (line === 'STATUS:R307_READY') {
+  // ตรวจจับสถานะความพร้อมของฮาร์ดแวร์ (R307 และ OLED)
+  if (line.startsWith('STATUS:HARDWARE')) {
+    r307Connected = line.includes('R307=READY');
+    oledConnected = line.includes('OLED=READY');
+    const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
+    console.log(`✅ [Hardware] สถานะ: R307=${r307Connected ? 'Ready' : 'Not Found'}, OLED=${oledConnected ? 'Ready' : 'Not Found'}`);
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
+    return;
+  } else if (line === 'STATUS:R307_READY') {
     r307Connected = true;
     const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
     console.log('✅ [Hardware] เซนเซอร์ R307 พร้อมใช้งาน (Ready)');
-    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: true });
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: true, oled_connected: oledConnected });
     return;
   } else if (line === 'STATUS:R307_NOT_FOUND') {
     r307Connected = false;
     const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
     console.warn('⚠️ [Hardware] ไม่พบเซนเซอร์ R307 (Not Found)! กรุณาตรวจสอบการต่อสาย Pin 0/1');
-    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: false });
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: false, oled_connected: oledConnected });
     return;
   }
 
@@ -1173,7 +1183,8 @@ app.get('/api/device/serial-status', authRequired, (req, res) => {
   res.json({
     connected: serialConnected,
     port: hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT,
-    r307_connected: r307Connected
+    r307_connected: r307Connected,
+    oled_connected: oledConnected
   });
 });
 
@@ -1369,7 +1380,7 @@ io.on('connection', (socket) => {
 
   // แจ้งสถานะ Serial ให้ client ที่เพิ่งเชื่อมต่อ
   const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
-  socket.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected });
+  socket.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
 
   // คำสั่งเริ่มลงทะเบียนจากหน้าเว็บ (ระบบ 3 นิ้วต่อคน) - เฉพาะ Admin
   socket.on('start_enroll', async (data) => {
@@ -1473,11 +1484,12 @@ io.on('connection', (socket) => {
     }
     hardwareBridgeSocket = socket;
     serialConnected = true;
-    if (data && typeof data.r307_connected === 'boolean') {
-      r307Connected = data.r307_connected;
+    if (data) {
+      if (typeof data.r307_connected === 'boolean') r307Connected = data.r307_connected;
+      if (typeof data.oled_connected === 'boolean') oledConnected = data.oled_connected;
     }
-    console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id}, R307: ${r307Connected ? 'Ready' : 'Not Found'})`);
-    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)', r307_connected: r307Connected });
+    console.log(`🔗 [Hardware Bridge] บอร์ด Arduino เชื่อมต่อผ่าน Cloud Bridge สำเร็จ! (ID: ${socket.id}, R307: ${r307Connected ? 'Ready' : 'Not Found'}, OLED: ${oledConnected ? 'Ready' : 'Not Found'})`);
+    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)', r307_connected: r307Connected, oled_connected: oledConnected });
 
     // ส่งแคชรายชื่อนักศึกษา ตารางเรียน และห้องประจำเครื่องให้บอร์ด Uno Q ทันทีที่เชื่อมต่อ
     try {
@@ -1496,23 +1508,29 @@ io.on('connection', (socket) => {
         hardwareBridgeSocket = null;
         serialConnected = false;
         r307Connected = false;
+        oledConnected = false;
         console.warn('🔌 [Hardware Bridge] หลุดการเชื่อมต่อจาก Cloud Bridge');
-        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)', r307_connected: false });
+        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)', r307_connected: false, oled_connected: false });
       }
     });
   });
 
-  // รับการอัปเดตสถานะเซนเซอร์ R307 จาก Bridge
+  // รับการอัปเดตสถานะเซนเซอร์ R307 และ OLED จาก Bridge
   socket.on('bridge_sensor_status', (data) => {
     if (socket.role !== 'bridge') {
       console.warn(`🚨 [Security] Blocked unauthorized bridge_sensor_status from ${socket.id}`);
       return;
     }
-    if (data && typeof data.r307_connected === 'boolean') {
-      r307Connected = data.r307_connected;
+    if (data) {
+      if (typeof data.r307_connected === 'boolean') {
+        r307Connected = data.r307_connected;
+      }
+      if (typeof data.oled_connected === 'boolean') {
+        oledConnected = data.oled_connected;
+      }
       const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
-      console.log(`📡 [Hardware Bridge] สถานะ R307 อัปเดต: ${r307Connected ? 'Online' : 'Not Found'}`);
-      io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected });
+      console.log(`📡 [Hardware Bridge] สถานะอัปเดต: R307=${r307Connected ? 'Online' : 'Not Found'}, OLED=${oledConnected ? 'Online' : 'Not Found'}`);
+      io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
     }
   });
 

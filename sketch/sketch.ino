@@ -187,8 +187,10 @@ private:
   SoftwareI2C _i2c;
   uint8_t _addr;
   uint8_t buffer[1024]; // 128 * 64 / 8 = 1024 Bytes
+  bool _detected;
 
   void sendCommand(uint8_t cmd) {
+    if (!_detected) return;
     _i2c.start();
     _i2c.writeByte(_addr << 1);
     _i2c.writeByte(0x80);
@@ -197,6 +199,7 @@ private:
   }
 
   void sendCommand2(uint8_t cmd, uint8_t arg) {
+    if (!_detected) return;
     _i2c.start();
     _i2c.writeByte(_addr << 1);
     _i2c.writeByte(0x00); // Co = 0, D/C# = 0: stream of commands/parameters
@@ -207,11 +210,31 @@ private:
 
 public:
   SH1106_Display(uint8_t sda, uint8_t scl, uint8_t addr = 0x3C)
-    : _i2c(sda, scl), _addr(addr) {}
+    : _i2c(sda, scl), _addr(addr), _detected(false) {}
+
+  bool isConnected() {
+    _i2c.start();
+    bool ack = _i2c.writeByte((_addr << 1) | 0x00);
+    _i2c.stop();
+    bool wasDetected = _detected;
+    _detected = ack;
+    if (!wasDetected && ack) {
+      begin();
+    }
+    return ack;
+  }
+
+  bool isDetected() const {
+    return _detected;
+  }
 
   void begin() {
     _i2c.begin();
     delay(50);
+    _detected = isConnected();
+    if (!_detected) {
+      return;
+    }
 
     // ลำดับ Init Command สำหรับ SH1106 (คมชัดระดับสูงสุด + ไร้ปัญหาเลื่อนบรรทัด)
     sendCommand(0xAE); // Display OFF
@@ -237,6 +260,7 @@ public:
   }
 
   void keepAlive() {
+    if (!_detected) return;
     sendCommand2(0xAD, 0x8B); // Force DC-DC Charge Pump ON ในคำสั่งเดียว
     sendCommand(0xAF);        // Force Display ON
   }
@@ -315,6 +339,7 @@ public:
 
   // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
   void display() {
+    if (!_detected) return;
     for (uint8_t page = 0; page < 8; page++) {
       sendCommand(0xB0 + page);
       sendCommand(0x02); // Column Offset = 2
@@ -940,23 +965,42 @@ void setup() {
 
   // เริ่มต้นหน้าจอ OLED SH1106 ผ่าน Software I2C
   oled.begin();
-  showUI("BOOTING...", "Initializing OLED", "SH1106 128x64 OK");
-  delay(1000);
+  bool oledDetected = oled.isDetected();
+  if (oledDetected) {
+    showUI("BOOTING...", "Initializing OLED", "SH1106 128x64 OK");
+    delay(500);
+  }
 
   // เริ่มต้นเซนเซอร์ลายนิ้วมือ R307 (57600 baud)
   finger.begin(57600);
-  if (finger.verifyPassword()) {
-    Serial.println("STATUS:R307_READY");
-    showUI("HARDWARE OK", "R307 Sensor Ready", "OLED SH1106 Ready");
+  bool r307Detected = finger.verifyPassword();
+  if (r307Detected) {
+    if (oledDetected) {
+      showUI("HARDWARE OK", "R307 Sensor Ready", "OLED SH1106 Ready");
+    }
     // เปิดโหมดไฟหายใจ (Breathing LED) นุ่มนวลสวยงาม ไม่กระพริบกวนตา
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
   } else {
-    Serial.println("STATUS:R307_NOT_FOUND");
-    showUI("HARDWARE ERROR", "R307 NOT FOUND!", "Check wiring (Pin 0/1)");
+    if (oledDetected) {
+      showUI("HARDWARE ERROR", "R307 NOT FOUND!", "Check wiring (Pin 0/1)");
+    }
   }
-  delay(1500);
+  delay(1000);
 
-  showIdleScreen();
+  Serial.print("STATUS:HARDWARE R307=");
+  Serial.print(r307Detected ? "READY" : "NOT_FOUND");
+  Serial.print(" OLED=");
+  Serial.println(oledDetected ? "READY" : "NOT_FOUND");
+
+  if (r307Detected) {
+    Serial.println("STATUS:R307_READY");
+  } else {
+    Serial.println("STATUS:R307_NOT_FOUND");
+  }
+
+  if (oledDetected) {
+    showIdleScreen();
+  }
   Serial.println("EVENT:IDLE");
 }
 
@@ -1050,8 +1094,14 @@ void loop() {
       handleFrameReceive();
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
-    } else if (cmd == "CHECK_R307") {
-      if (finger.verifyPassword()) {
+    } else if (cmd == "CHECK_R307" || cmd == "CHECK_HARDWARE") {
+      bool r307Ok = finger.verifyPassword();
+      bool oledOk = oled.isConnected();
+      Serial.print("STATUS:HARDWARE R307=");
+      Serial.print(r307Ok ? "READY" : "NOT_FOUND");
+      Serial.print(" OLED=");
+      Serial.println(oledOk ? "READY" : "NOT_FOUND");
+      if (r307Ok) {
         Serial.println("STATUS:R307_READY");
       } else {
         Serial.println("STATUS:R307_NOT_FOUND");

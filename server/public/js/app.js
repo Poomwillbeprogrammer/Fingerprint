@@ -48,29 +48,89 @@ function playSound(type = 'granted') {
 
 let isR307Online = false;
 let isBridgeConnected = false;
+let isOledOnline = false;
 
-// Hardware Serial Connection Status Listener
-socket.on('serial_status', (data) => {
-  const dot = document.getElementById('serialStatusDot');
-  const text = document.getElementById('serialStatusText');
+// Hardware Serial & Cloud Bridge Connection Status Listener
+function updateHardwareStatus(data) {
   isBridgeConnected = Boolean(data && data.connected);
   isR307Online = Boolean(data && data.connected && data.r307_connected);
+  isOledOnline = Boolean(data && data.connected && data.oled_connected);
 
-  if (!dot || !text) return;
-
-  if (isBridgeConnected && isR307Online) {
-    dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
-    text.innerText = `R307 Online (${data.port})`;
-    text.className = 'text-[11px] text-emerald-400 font-medium';
-  } else if (isBridgeConnected && !isR307Online) {
-    dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse';
-    text.innerText = `R307 Not Found (${data.port})`;
-    text.className = 'text-[11px] text-amber-400 font-medium';
-  } else {
-    dot.className = 'w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]';
-    text.innerText = `Offline (${data.port || 'Disconnected'})`;
-    text.className = 'text-[11px] text-rose-400 font-medium';
+  // 1. Cloud Bridge UI
+  const bridgeDot = document.getElementById('bridgeStatusDot');
+  const bridgeText = document.getElementById('bridgeStatusText');
+  if (bridgeDot && bridgeText) {
+    if (isBridgeConnected) {
+      bridgeDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]';
+      bridgeText.textContent = 'ออนไลน์';
+      bridgeText.className = 'text-[10px] font-medium text-emerald-400';
+    } else {
+      bridgeDot.className = 'w-1.5 h-1.5 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]';
+      bridgeText.textContent = 'ออฟไลน์';
+      bridgeText.className = 'text-[10px] font-medium text-rose-400';
+    }
   }
+
+  // 2. R307 Fingerprint Sensor UI
+  const r307Dot = document.getElementById('r307StatusDot');
+  const r307Text = document.getElementById('r307StatusText');
+  if (r307Dot && r307Text) {
+    if (!isBridgeConnected) {
+      r307Dot.className = 'w-1.5 h-1.5 rounded-full bg-stone-500';
+      r307Text.textContent = 'รอเชื่อมต่อ';
+      r307Text.className = 'text-[10px] font-medium text-stone-400';
+    } else if (isR307Online) {
+      r307Dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]';
+      r307Text.textContent = 'พร้อมใช้งาน';
+      r307Text.className = 'text-[10px] font-medium text-emerald-400';
+    } else {
+      r307Dot.className = 'w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.8)] animate-pulse';
+      r307Text.textContent = 'ไม่พบเซนเซอร์';
+      r307Text.className = 'text-[10px] font-medium text-amber-400';
+    }
+  }
+
+  // 3. OLED Display UI
+  const oledDot = document.getElementById('oledStatusDot');
+  const oledText = document.getElementById('oledStatusText');
+  if (oledDot && oledText) {
+    if (!isBridgeConnected) {
+      oledDot.className = 'w-1.5 h-1.5 rounded-full bg-stone-500';
+      oledText.textContent = 'รอเชื่อมต่อ';
+      oledText.className = 'text-[10px] font-medium text-stone-400';
+    } else if (isOledOnline) {
+      oledDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]';
+      oledText.textContent = 'พร้อมใช้งาน';
+      oledText.className = 'text-[10px] font-medium text-emerald-400';
+    } else {
+      oledDot.className = 'w-1.5 h-1.5 rounded-full bg-stone-400';
+      oledText.textContent = 'ไม่มีจอ / ปิด';
+      oledText.className = 'text-[10px] font-medium text-stone-400';
+    }
+  }
+
+  // Fallback สำหรับ element เดิม (ถ้ามี)
+  const dot = document.getElementById('serialStatusDot');
+  const text = document.getElementById('serialStatusText');
+  if (dot && text) {
+    if (isBridgeConnected && isR307Online) {
+      dot.className = 'w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]';
+      text.innerText = `R307 Online (${data.port || 'Active'})`;
+      text.className = 'text-[11px] text-emerald-400 font-medium';
+    } else if (isBridgeConnected && !isR307Online) {
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] animate-pulse';
+      text.innerText = `R307 Not Found (${data.port || 'Active'})`;
+      text.className = 'text-[11px] text-amber-400 font-medium';
+    } else {
+      dot.className = 'w-2 h-2 rounded-full bg-rose-400 shadow-[0_0_6px_rgba(244,63,94,0.6)]';
+      text.innerText = `Offline (${data.port || 'Disconnected'})`;
+      text.className = 'text-[11px] text-rose-400 font-medium';
+    }
+  }
+}
+
+socket.on('serial_status', (data) => {
+  updateHardwareStatus(data);
 });
 
 // Check Authentication

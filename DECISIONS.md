@@ -128,10 +128,16 @@
     1. ปรับปรุง `server/public/js/app.js` ให้ส่ง URL Query `?room=${encodeURIComponent(currentActiveRoom)}` และ `?room=${encodeURIComponent(s.room_name)}` ไปยังหน้าตารางเรียน
     2. ปรับปรุง `server/public/js/schedules.js` ให้ตรวจสอบ URL Query ผ่าน `URLSearchParams(window.location.search)` ก่อน หากพบชื่อห้องที่ถูกต้องให้เปิดห้องนั้นทันที หากไม่พบจึง Fallback ไปใช้ห้องประจำเครื่อง Uno Q (`activeDeviceRoom`)
     3. เพิ่มการซิงก์ Address Bar แบบไร้รอยต่อใน `switchRoom(roomName)` ด้วย `window.history.replaceState` เพื่อให้ URL ตรงกับห้องที่เลือกอยู่เสมอโดยไม่ต้องรีโหลดหน้าเว็บ
-* **ADR-026:** การแก้ไขปัญหาการแสดงผล OLED ไม่ชัด/เลื่อนลง และการเชื่อมต่อสถานะ Cloud Bridge (OLED Sharpness Optimization, Zero Display Offset, and Resilient Bridge Authentication):
-  - **ที่มาและปัญหา:** หน้าจอ OLED แสดงผลไม่คมชัดและภาพมีอาการเลื่อนลงมาเล็กน้อย (Shifted downwards) และในหน้าเว็บแดชบอร์ดไม่แสดงสถานะ Online
+* **ADR-027:** การแยกแยะและรายงานสถานะฮาร์ดแวร์อิสระ 3 องค์ประกอบ (Cloud Bridge, R307 Sensor, OLED Display) พร้อมระบบ I2C Bus Detection และ Headless Operation Support:
+  - **ที่มาและปัญหา:** เดิมหน้าเว็บมัดรวมสถานะของ Cloud Bridge และเซนเซอร์ R307 เข้าด้วยกันในข้อความเดียว เช่น `R307 Not Found (Cloud Bridge (Active))` ทำให้ผู้ใช้สับสนว่าเกิดจากสาเหตุใด และระบบยังไม่มีการรายงานสถานะของจอ OLED แยกออกมา หากผู้ใช้งานถอดจอออกหรือยังไม่ได้ติดตั้งจอ ระบบเดิมจะไม่มีข้อมูลแจ้งเตือนที่ชัดเจน
   - **การแก้ปัญหา:**
-    1. **แก้ไขอาการภาพเลื่อนลงและไม่คมชัดในฮาร์ดแวร์ (`sketch.ino`):** เพิ่มฟังก์ชัน `sendCommand2(cmd, arg)` ให้ส่งคำสั่งและพารามิเตอร์ต่อเนื่องใน I2C Transaction เดียวด้วยคอนโทรลไบต์ `0x00` เพื่อบังคับ Display Offset ให้เป็น `0x00` อย่างถูกต้อง 100% พร้อมปรับเพิ่ม Contrast เป็น `0xCF`, จูน Pre-charge `0xD9, 0xF1` และ VCOM `0xDB, 0x40` เพื่อให้พิกเซล OLED สว่าง คมชัด และไร้เงา Ghosting
-    2. **ปรับระยะขอบในสคริปต์เรนเดอร์ (`unoq_bridge.py`):** ปรับตำแหน่งเส้นแบ่งล่างจาก `y = 47-49` เป็น `y = 46` และขยับข้อความ Footer/ปุ่มกดเป็น `y = 48` ให้มีระยะเว้นจากเส้นกรอบล่าง (`y = 63`) สวยงาม ไม่ชนขอบ และเพิ่มเส้นทางค้นหาฟอนต์ Tahoma หลากหลายพาธเพื่อรับประกันการโหลดฟอนต์แท้ 100%
-    3. **ยกระดับความยืดหยุ่นในการเชื่อมต่อ Cloud Bridge:** ปรับ URL เริ่มต้นใน `server/bridge.js` ให้ชี้ไปยัง Render Cloud โดยตรง (`https://fingerprint-hrkp.onrender.com`) และปรับปรุง `unoq_bridge.py` กับ `server.js` ให้รองรับการส่ง Token ผ่านทั้ง Header (`Authorization`, `x-bridge-token`) และ Query Parameter รองรับทั้งการเชื่อมต่อแบบ WebSocket และ HTTP Polling ทำให้ระบบแสดงสถานะ `R307 Online` บนแดชบอร์ดได้อย่างเสถียร
+    1. **I2C Bus Probe & Dynamic Re-attachment (`sketch.ino`):** เพิ่มเมธอด `isConnected()` ในคลาส `SH1106_Display` บน STM32 เพื่อยิง ACK Probe ไปยังแอดเดรส `0x3C` บน I2C Bus หากพบจอจะตั้งแฟลก `_detected = true` และเริ่มการทำงานของจอ หากไม่พบจอจะตั้งเป็น `false` และสั่งข้ามการวาดจอ (`display()`) ทันทีเพื่อประหยัดเวลาและทรัพยากร MCU (Non-blocking Headless Support) พร้อมรองรับการเสียบจอในภายหลัง (Hot-plug re-init)
+    2. **โปรโตคอลรายงานสถานะรวม (`STATUS:HARDWARE`):** ขยายคำสั่ง `CHECK_R307` / `CHECK_HARDWARE` และจังหวะบู๊ตระบบ ให้ส่ง `STATUS:HARDWARE R307=<READY|NOT_FOUND> OLED=<READY|NOT_FOUND>` ควบคู่กับอีเวนต์เดิมเพื่อคงความเข้ากันได้ย้อนหลัง 100%
+    3. **การส่งต่อสถานะระดับ Bridge (`unoq_bridge.py` & `bridge.js`):** เพิ่มการติดตามสถานะ `oled_connected` ส่งขึ้น Cloud ผ่าน `bridge_sensor_status` และ `register_bridge`
+    4. **การกระจายสถานะระดับเซิร์ฟเวอร์ (`server.js`):** บรอดแคสต์ `oled_connected` ควบคู่ไปกับ `r307_connected` และ `connected` (Bridge) ในอีเวนต์ `serial_status`
+    5. **การ์ดสถานะฮาร์ดแวร์แบบ 3 องค์ประกอบบนหน้าเว็บ (`index.html`, `schedules.html`, `users.html`, `app.js`, `schedules.js`):** ออกแบบ Hardware Status Card ใหม่ใน Sidebar แยกแสดงสถานะ 3 บรรทัดชัดเจน:
+       - 🌐 **Cloud Bridge:** ออนไลน์ (เขียว) / ออฟไลน์ (แดง)
+       - 👆 **เซนเซอร์ R307:** พร้อมใช้งาน (เขียว) / ไม่พบเซนเซอร์ (ส้มกระพริบ) / รอเชื่อมต่อ (เทา)
+       - 🖥️ **จอ OLED:** พร้อมใช้งาน (เขียว) / ไม่มีจอหรือปิดอยู่ (เทากลาง) / รอเชื่อมต่อ (เทา) ไม่แสดงเป็นสีแดงข้อผิดพลาด ช่วยให้ผู้ใช้เข้าใจว่าระบบสามารถทำงานได้แม้ไม่มีจอต่ออยู่
+
 

@@ -29,6 +29,7 @@ const socket = io(RENDER_URL, {
 let serialPort = null;
 let serialParser = null;
 let r307Ready = false;
+let oledReady = false;
 
 function initSerial() {
   if (serialPort && serialPort.isOpen) return;
@@ -60,12 +61,16 @@ function initSerial() {
     serialParser.on('data', (line) => {
       const trimmed = line.trim();
       if (!trimmed) return;
-      if (trimmed === 'STATUS:R307_READY') {
+      if (trimmed.startsWith('STATUS:HARDWARE')) {
+        r307Ready = trimmed.includes('R307=READY');
+        oledReady = trimmed.includes('OLED=READY');
+        socket.emit('bridge_sensor_status', { r307_connected: r307Ready, oled_connected: oledReady });
+      } else if (trimmed === 'STATUS:R307_READY') {
         r307Ready = true;
-        socket.emit('bridge_sensor_status', { r307_connected: true });
+        socket.emit('bridge_sensor_status', { r307_connected: true, oled_connected: oledReady });
       } else if (trimmed === 'STATUS:R307_NOT_FOUND') {
         r307Ready = false;
-        socket.emit('bridge_sensor_status', { r307_connected: false });
+        socket.emit('bridge_sensor_status', { r307_connected: false, oled_connected: oledReady });
       }
       console.log(`📥 [Arduino -> Cloud] ${trimmed}`);
       socket.emit('bridge_serial_data', trimmed);
@@ -79,7 +84,8 @@ function initSerial() {
     serialPort.on('close', () => {
       console.warn(`🔌 [Serial] สาย USB หลุด กำลังเชื่อมต่อใหม่...`);
       r307Ready = false;
-      socket.emit('bridge_sensor_status', { r307_connected: false });
+      oledReady = false;
+      socket.emit('bridge_sensor_status', { r307_connected: false, oled_connected: false });
       setTimeout(initSerial, 4000);
     });
   } catch (err) {
@@ -88,7 +94,7 @@ function initSerial() {
   }
 }
 
-// ตรวจสอบสถานะ R307 เป็นระยะทุก 15 วินาที
+// ตรวจสอบสถานะ R307 และ Hardware เป็นระยะทุก 15 วินาที
 setInterval(() => {
   if (serialPort && serialPort.isOpen) {
     serialPort.write('CHECK_R307\n');
@@ -98,7 +104,7 @@ setInterval(() => {
 // เมื่อเชื่อมต่อกับ Server สำเร็จ
 socket.on('connect', () => {
   console.log(`☁️ [Cloud] เชื่อมต่อกับ Server สำเร็จ! (Socket ID: ${socket.id})`);
-  socket.emit('register_bridge', { r307_connected: r307Ready });
+  socket.emit('register_bridge', { r307_connected: r307Ready, oled_connected: oledReady });
   if (serialPort && serialPort.isOpen) {
     serialPort.write('CHECK_R307\n');
   }

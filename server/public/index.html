@@ -60,12 +60,47 @@
 
       <!-- Hardware Connection Status -->
       <div class="mt-4 pt-3 border-t border-stone-800/80 px-2">
-        <div id="serialStatusBadge" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs">
-          <div class="flex items-center gap-2">
-            <span id="serialStatusDot" class="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"></span>
-            <span id="serialStatusText" class="text-[11px] text-stone-400">กำลังตรวจสอบ...</span>
+        <div id="hardwareStatusCard" class="p-2.5 rounded-xl bg-stone-900/90 border border-stone-800/80 space-y-2 text-xs shadow-inner">
+          <div class="flex items-center justify-between text-[10px] uppercase font-semibold tracking-wider text-stone-400">
+            <span>สถานะระบบฮาร์ดแวร์</span>
+            <i class="fa-solid fa-microchip text-stone-400"></i>
           </div>
-          <i class="fa-solid fa-microchip text-stone-500 text-xs"></i>
+          
+          <!-- Cloud Bridge -->
+          <div class="flex items-center justify-between pt-1 border-t border-stone-800/60 text-[11px]">
+            <div class="flex items-center gap-1.5 text-stone-300">
+              <i class="fa-solid fa-cloud text-[10px] text-stone-400 w-3.5 text-center"></i>
+              <span>Cloud Bridge</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span id="bridgeStatusDot" class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.5)]"></span>
+              <span id="bridgeStatusText" class="text-[10px] font-medium text-stone-400">รอเชื่อมต่อ...</span>
+            </div>
+          </div>
+
+          <!-- R307 Fingerprint -->
+          <div class="flex items-center justify-between text-[11px]">
+            <div class="flex items-center gap-1.5 text-stone-300">
+              <i class="fa-solid fa-fingerprint text-[10px] text-stone-400 w-3.5 text-center"></i>
+              <span>เซนเซอร์ R307</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span id="r307StatusDot" class="w-1.5 h-1.5 rounded-full bg-stone-500"></span>
+              <span id="r307StatusText" class="text-[10px] font-medium text-stone-400">รอตรวจสอบ...</span>
+            </div>
+          </div>
+
+          <!-- OLED Display -->
+          <div class="flex items-center justify-between text-[11px]">
+            <div class="flex items-center gap-1.5 text-stone-300">
+              <i class="fa-solid fa-tv text-[10px] text-stone-400 w-3.5 text-center"></i>
+              <span>จอ OLED</span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span id="oledStatusDot" class="w-1.5 h-1.5 rounded-full bg-stone-500"></span>
+              <span id="oledStatusText" class="text-[10px] font-medium text-stone-400">รอตรวจสอบ...</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

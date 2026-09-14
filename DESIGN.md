@@ -231,11 +231,18 @@ components:
   - 🟠 **มาสาย (Late):** แคปซูลสีส้มโปร่งแสง `bg-amber-500/15` ขอบ `border-amber-500/30` ข้อความ `text-amber-400 font-mono`
   - 🔴 **ขาดเรียน (Absent):** แคปซูลสีแดงโปร่งแสง `bg-rose-500/15` ขอบ `border-rose-500/30` ข้อความ `text-rose-400 font-mono`
 
-### Hardware Telemetry Badge (Signature Component)
-- **Sidebar Hardware Badge:** กล่องสถานะการเชื่อมต่อบอร์ด Arduino Uno Q และเซนเซอร์ R307
-  - 🟢 **Online State:** จุดไฟสีเขียว `bg-emerald-400` เรืองแสงนิ่ง ข้อความ `R307 Online (Cloud Bridge (Active))`
-  - 🟠 **Warning State:** จุดไฟสีส้ม `bg-amber-400` กระพริบ ข้อความ `R307 Not Found (Cloud Bridge (Active))`
-  - 🔴 **Offline State:** จุดไฟสีแดง `bg-rose-400` ข้อความ `Offline (Cloud Bridge (Offline))`
+### Hardware Status Card (Signature Sidebar Component)
+- **Sidebar Hardware Card:** กล่องการ์ดสถานะฮาร์ดแวร์แบบ 3 องค์ประกอบอิสระ (`#hardwareStatusCard`):
+  - 🌐 **Cloud Bridge:**
+    - 🟢 **Online:** จุดไฟสีเขียว `bg-emerald-400` เรืองแสงนิ่ง ข้อความ `ออนไลน์` (`text-emerald-400`)
+    - 🔴 **Offline:** จุดไฟสีแดง `bg-rose-400` ข้อความ `ออฟไลน์` (`text-rose-400`)
+  - 👆 **เซนเซอร์ R307 (Fingerprint):**
+    - 🟢 **Ready:** จุดไฟสีเขียว `bg-emerald-400` ข้อความ `พร้อมใช้งาน` (`text-emerald-400`)
+    - 🟠 **Not Found:** จุดไฟสีส้ม `bg-amber-400` กระพริบ ข้อความ `ไม่พบเซนเซอร์` (`text-amber-400`)
+    - ⚪ **Waiting:** จุดไฟสีเทา `bg-stone-500` ข้อความ `รอเชื่อมต่อ` (`text-stone-400`)
+  - 🖥️ **จอ OLED (SH1106):**
+    - 🟢 **Ready:** จุดไฟสีเขียว `bg-emerald-400` ข้อความ `พร้อมใช้งาน` (`text-emerald-400`)
+    - ⚪ **Not Attached / Disabled:** จุดไฟสีเทากลาง `bg-stone-400` ข้อความ `ไม่มีจอ / ปิด` (`text-stone-400 font-medium`) เป็นการแจ้งเตือนสถานะที่เป็นกลาง ไม่แสดงเป็นข้อผิดพลาดสีแดง เพื่อรองรับโหมด Headless อย่างสมบูรณ์แบบ
 
 ### Tables
 - หัวตารางสีพื้นเทาเข้ม ตัวอักษรเล็กกึ่งกลางหนา (`text-xs font-semibold text-stone-400`)
