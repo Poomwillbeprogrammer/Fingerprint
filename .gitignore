@@ -8,9 +8,9 @@ resume_chat.bat
 build/
 **/build/
 
-# Database files
+# Database & runtime data
 *.db
-server/data/*.db
+server/data/
 
 # Environment files
 .env

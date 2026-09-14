@@ -7,15 +7,12 @@ try {
   supabase = require('./database').supabase;
 } catch (e) {}
 
-const DATA_DIR = path.join(__dirname, 'data');
-const SCHEDULES_FILE = path.join(DATA_DIR, 'room_schedules.json');
+// Initial Seed Path (read-only for cold-start bootstrap when Supabase is completely empty)
 const SEED_FILE = path.join(__dirname, 'room_schedules.seed.json');
-const ATTENDANCE_FILE = path.join(DATA_DIR, 'session_attendance.json');
-const DEFAULT_EXCEL_PATH = 'C:\\Users\\poomw\\Documents\\101.xlsx';
 
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
+// In-Memory Storage Cache (Sub-millisecond RAM access for Uno Q & Web clients)
+let store = null;
+let attendanceRecords = [];
 
 const DAY_MAP = {
   'จันทร์': 1,
@@ -143,18 +140,9 @@ function parseExcelData(filePathOrBuffer, customRoomName = '', customBuilding = 
   return schedules;
 }
 
-// Persist store to runtime storage, seed file, and Supabase Cloud
+// Persist store to in-memory state and Supabase Cloud (Single Source of Truth)
 function persistStore(current) {
-  try {
-    fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Error writing schedules file:', e.message);
-  }
-  try {
-    fs.writeFileSync(SEED_FILE, JSON.stringify(current, null, 2), 'utf8');
-  } catch (e) {
-    // SEED_FILE may be read-only in some environments
-  }
+  store = current;
 
   // Cloud Sync: อัปเดตขึ้น Supabase Cloud ทันที (Background Safe Async)
   if (supabase) {
@@ -172,11 +160,26 @@ function persistStore(current) {
   }
 }
 
+// โหลดข้อมูลตารางเรียนตั้งต้นจาก Seed File (ใช้เฉพาะกรณีเซิร์ฟเวอร์เปิดครั้งแรกสุดที่ Supabase ยังว่างเปล่า)
+function getInitialSeed() {
+  if (fs.existsSync(SEED_FILE)) {
+    try {
+      const seedRaw = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
+      if (seedRaw && Array.isArray(seedRaw.rooms) && Array.isArray(seedRaw.schedules)) {
+        return seedRaw;
+      }
+    } catch (e) {
+      console.warn('⚠️ [Multi-Room] ไม่สามารถอ่านไฟล์ Seed ได้:', e.message);
+    }
+  }
+  return { rooms: [], active_device_room: null, schedules: [] };
+}
+
 // ซิงก์ข้อมูลตารางเรียนและประวัติการเข้าเรียนจาก Supabase Cloud เมื่อบู๊ตเซิร์ฟเวอร์
 async function syncFromSupabase() {
   if (!supabase) return;
   try {
-    // 1. ซิงก์ตารางเรียน
+    // 1. ซิงก์ตารางเรียนจาก Supabase
     const { data: schedData, error: schedErr } = await supabase
       .from('room_schedules')
       .select('data')
@@ -185,27 +188,43 @@ async function syncFromSupabase() {
 
     if (!schedErr && schedData && schedData.data && Array.isArray(schedData.data.rooms) && schedData.data.rooms.length > 0) {
       store = schedData.data;
-      try {
-        fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(store, null, 2), 'utf8');
-      } catch (e) {}
       console.log(`☁️ [Supabase] โหลดตารางเรียนจาก Cloud สำเร็จ: ${store.rooms.length} ห้อง (${store.schedules.length} คาบ)`);
     } else if (!schedErr && (!schedData || !schedData.data)) {
-      // หากตารางว่างเปล่า ให้บันทึกตารางตั้งต้นขึ้น Cloud ทันที
+      // หากตารางบน Cloud ยังว่างเปล่า ให้หยอดข้อมูลตั้งต้นจาก Seed เข้าไปเป็นค่าเริ่มต้น
+      store = getInitialSeed();
       await supabase.from('room_schedules').upsert({ id: 1, data: store, updated_at: new Date().toISOString() });
       console.log('☁️ [Supabase] เริ่มต้นบันทึกตารางเรียนตั้งต้นขึ้น Cloud สำเร็จ');
     }
 
-    // 2. ซิงก์ประวัติการเช็คชื่อตามคาบเรียน
+    // 2. ซิงก์ประวัติการเช็คชื่อตามคาบเรียนจาก Supabase
     const { data: attData, error: attErr } = await supabase
       .from('session_attendance')
       .select('*')
       .order('id', { ascending: true });
 
     if (!attErr && Array.isArray(attData) && attData.length > 0) {
-      try {
-        fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(attData, null, 2), 'utf8');
-        console.log(`☁️ [Supabase] โหลดประวัติการเข้าเรียนจาก Cloud สำเร็จ: ${attData.length} รายการ`);
-      } catch (e) {}
+      attendanceRecords = attData.map(r => ({
+        id: r.id,
+        schedule_id: r.schedule_id,
+        room_name: r.room_name,
+        subject_code: r.subject_code,
+        subject_name: r.subject_name,
+        short_name: r.short_name,
+        class_type: r.class_type,
+        user_id: r.user_id,
+        student_id: r.student_id,
+        user_name: r.user_name,
+        fingerprint_id: r.fingerprint_id || 0,
+        date: r.date,
+        time: r.time,
+        timestamp: r.timestamp,
+        week_number: r.week_number,
+        year: r.year,
+        year_week: r.year_week,
+        attendance_status: r.attendance_status,
+        score: r.score || 0
+      }));
+      console.log(`☁️ [Supabase] โหลดประวัติการเข้าเรียนจาก Cloud สำเร็จ: ${attendanceRecords.length} รายการ`);
     }
   } catch (err) {
     if (err && err.code !== '42P01') {
@@ -214,85 +233,16 @@ async function syncFromSupabase() {
   }
 }
 
-// Ingest from storage or seed file with backward compatibility
+// Ingest from memory store or seed file with backward compatibility
 function initStore() {
-  if (fs.existsSync(SCHEDULES_FILE)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(SCHEDULES_FILE, 'utf8'));
-      if (Array.isArray(raw)) {
-        // Migrate array to multi-room object
-        const roomsSet = new Set();
-        const roomsList = [];
-        raw.forEach(s => {
-          const rName = s.room_name || 'ทค.1-101';
-          if (!roomsSet.has(rName)) {
-            roomsSet.add(rName);
-            roomsList.push({
-              room_name: rName,
-              building: s.building || 'เทคนิคคอมพิวเตอร์',
-              created_at: new Date().toISOString()
-            });
-          }
-        });
-        if (roomsList.length === 0) {
-          roomsList.push({ room_name: 'ทค.1-101', building: 'เทคนิคคอมพิวเตอร์', created_at: new Date().toISOString() });
-        }
-        const store = {
-          rooms: roomsList,
-          active_device_room: roomsList[0].room_name,
-          schedules: raw
-        };
-        persistStore(store);
-        return store;
-      } else if (raw && Array.isArray(raw.rooms) && Array.isArray(raw.schedules)) {
-        return raw;
-      }
-    } catch (e) {
-      console.warn('⚠️ [Multi-Room] ไฟล์ตารางเรียนเสียหาย กำลังโหลดใหม่...');
-    }
+  if (store && Array.isArray(store.rooms) && Array.isArray(store.schedules)) {
+    return store;
   }
-
-  // Fallback 1: Seed file
-  if (fs.existsSync(SEED_FILE)) {
-    try {
-      const seedRaw = JSON.parse(fs.readFileSync(SEED_FILE, 'utf8'));
-      if (seedRaw && Array.isArray(seedRaw.rooms) && Array.isArray(seedRaw.schedules)) {
-        try {
-          fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(seedRaw, null, 2), 'utf8');
-        } catch (e) {}
-        return seedRaw;
-      }
-      const seedSchedules = Array.isArray(seedRaw) ? seedRaw : (seedRaw.schedules || []);
-      const defaultRoom = (seedSchedules[0] && seedSchedules[0].room_name) || 'ทค.1-101';
-      const store = {
-        rooms: [{ room_name: defaultRoom, building: 'เทคนิคคอมพิวเตอร์', created_at: new Date().toISOString() }],
-        active_device_room: defaultRoom,
-        schedules: seedSchedules
-      };
-      persistStore(store);
-      return store;
-    } catch (e) {}
-  }
-
-  // Fallback 2: Default Excel file
-  if (fs.existsSync(DEFAULT_EXCEL_PATH)) {
-    try {
-      const parsed = parseExcelData(DEFAULT_EXCEL_PATH);
-      const defaultRoom = (parsed[0] && parsed[0].room_name) || 'ทค.1-101';
-      const store = {
-        rooms: [{ room_name: defaultRoom, building: 'เทคนิคคอมพิวเตอร์', created_at: new Date().toISOString() }],
-        active_device_room: defaultRoom,
-        schedules: parsed
-      };
-      persistStore(store);
-      return store;
-    } catch (e) {}
-  }
-
-  return { rooms: [], active_device_room: null, schedules: [] };
+  store = getInitialSeed();
+  return store;
 }
 
-let store = initStore();
+store = initStore();
 
 function getStore() {
   if (!store || !Array.isArray(store.rooms) || !Array.isArray(store.schedules)) {
@@ -485,20 +435,16 @@ function deleteRoom(roomName) {
 
   persistStore(current);
 
-  // 4. Full Purge: remove session attendance records matching this room
-  try {
-    if (fs.existsSync(ATTENDANCE_FILE)) {
-      const records = JSON.parse(fs.readFileSync(ATTENDANCE_FILE, 'utf8'));
-      if (Array.isArray(records)) {
-        const filtered = records.filter(r => !deletedScheduleIds.has(r.schedule_id) && r.room_name !== roomName);
-        fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(filtered, null, 2), 'utf8');
-      }
-    }
-    if (supabase) {
-      supabase.from('session_attendance').delete().eq('room_name', roomName).then(() => {}).catch(() => {});
-    }
-  } catch (e) {
-    console.error('Error purging session attendance on room delete:', e);
+  // 4. Full Purge: remove session attendance records matching this room from RAM and Supabase Cloud
+  attendanceRecords = attendanceRecords.filter(r => !deletedScheduleIds.has(r.schedule_id) && r.room_name !== roomName);
+
+  if (supabase) {
+    supabase
+      .from('session_attendance')
+      .delete()
+      .eq('room_name', roomName)
+      .then(() => {})
+      .catch(() => {});
   }
 
   console.log(`🗑️ [Multi-Room] ลบห้อง "${roomName}" และล้างข้อมูลตาราง/ประวัติการเช็คชื่อเรียบร้อยแล้ว (Full Purge)`);
@@ -581,17 +527,9 @@ function getActiveSchedule(dateObj = new Date(), roomName = null) {
   };
 }
 
-// Load attendance records from persistent file
+// Load attendance records from in-memory cache (synchronized with Supabase Cloud)
 function loadAttendanceRecords() {
-  if (fs.existsSync(ATTENDANCE_FILE)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(ATTENDANCE_FILE, 'utf8'));
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      return [];
-    }
-  }
-  return [];
+  return attendanceRecords;
 }
 
 // ISO Week Calculation (ปฏิทินสากล ISO-8601 Week 1-52)
@@ -655,9 +593,6 @@ function checkAlreadyCheckedIn(userId, scheduleId, yearWeek, dateStr) {
 
 // Record a session attendance log with weekly metadata
 function recordSessionAttendance(record) {
-  const records = loadAttendanceRecords();
-  record.id = records.length + 1;
-
   if (!record.year_week || !record.week_number) {
     const d = record.date ? new Date(record.date + 'T12:00:00+07:00') : new Date();
     const iso = getIsoWeekDetails(d);
@@ -666,8 +601,18 @@ function recordSessionAttendance(record) {
     record.year_week = iso.yearWeek;
   }
 
-  records.push(record);
-  fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(records, null, 2), 'utf8');
+  // ป้องกันการบันทึกซ้ำในแคชความจำ
+  const isDuplicate = attendanceRecords.some(r => 
+    r.user_id === record.user_id && 
+    r.schedule_id === record.schedule_id && 
+    r.year_week === record.year_week
+  );
+  if (isDuplicate) {
+    return record;
+  }
+
+  record.id = attendanceRecords.length + 1;
+  attendanceRecords.push(record);
 
   // Asynchronous cloud sync to Supabase (Background Safe Async)
   if (supabase) {

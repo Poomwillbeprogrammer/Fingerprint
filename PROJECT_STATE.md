@@ -26,11 +26,12 @@
   - นำเข้าตารางเรียนจากไฟล์ Excel (.xlsx) ด้วยระบบ 2-Step Preview & Confirm พร้อมฟังก์ชัน Smart Room Detection วิเคราะห์ห้องเรียนและคาบเรียนอัตโนมัติ
   - สลับห้องประจำการของเครื่องสแกนจาก Dashboard แบบเรียลไทม์ และส่งชื่อห้องไปแสดงบนจอ OLED ทันที
   - คำนวณคาบเรียนปัจจุบันและคาบถัดไป ตรวจสอบเวลาเข้าเรียนตรงเวลา vs มาสาย (>15 นาที) พร้อมคำนวณคะแนน
-  - **Multi-Room Persistence & Cloud Database Architecture (ADR-022, ADR-023):** 
-    - แก้ไขปัญหาตารางเรียนห้องใหม่สูญหายเมื่อ Render เข้าสู่ Sleep Mode / Redeploy ด้วยระบบ Dual-write (`persistStore`) ลงทั้ง Runtime Storage และ Seed File
-    - ยกระดับสู่ Cloud-Native: เชื่อมโยงระบบตารางเรียนและประวัติการเข้าเรียนเข้ากับ Supabase Cloud Database (`syncFromSupabase()`) พร้อมระบบ Safe Real-time Asynchronous Sync
-    - บรรจุห้องเรียนถาวรครบทั้ง 3 ห้อง (ทค.1-101, ทค.1-301, และ ทค.1-201 รวม 60 คาบ) ลงใน Seed File ใน Git
-    - ปรับปรุง `.gitignore` ให้ติดตามไฟล์ตารางเรียนขึ้น Cloud และเพิ่มฟังก์ชัน `getScheduleById(id)` แก้ไข Scope การ Export และ Offline Sync ของทุกห้องเรียน
+  - **Multi-Room Persistence & Supabase Single Source of Truth (ADR-022, ADR-023, ADR-024):** 
+    - ยึดหลัก **Single Source of Truth**: ให้ Supabase Cloud Database (`room_schedules` และ `session_attendance`) เป็นแหล่งข้อมูลถาวรเพียงหนึ่งเดียว
+    - บันทึกและสืบค้นผ่าน In-Memory Storage Cache ใน RAM เพื่อการตอบสนองระดับเศษส่วนมิลลิวินาที (Sub-millisecond) สำหรับ Uno Q และ Socket.IO
+    - ขจัดโค้ดซ้ำซ้อน (Spaghetti Code) และตัดการอ่าน/เขียนไฟล์ดิสก์ชั่วคราวบน Render ทิ้งทั้งหมด
+    - บรรจุห้องเรียนตั้งต้นครบทั้ง 3 ห้อง (ทค.1-101, ทค.1-301, และ ทค.1-201 รวม 60 คาบ) ใน `room_schedules.seed.json` สำหรับใช้เป็น Initial Bootstrap Template เฉพาะกรณีเปิดฐานข้อมูลใหม่
+    - เพิ่มฟังก์ชัน `getScheduleById(id)` ค้นหาวิชาจากทุกห้องในระบบ และปรับปรุง `server.js` (เส้นทาง `/export-excel`, `/export-matrix`, และอีเวนต์ `sync_offline_attendance`) ให้ใช้ `getScheduleById` แทน `getAllSchedules().find` ป้องกันปัญหาชื่อไฟล์และข้อมูลวิชาสูญหาย
 - **ระบบบันทึกเวลาเรียนแบบรายสัปดาห์ (Weekly Attendance Segmentation):**
   - คำนวณสัปดาห์ตามปฏิทินสากล ISO-8601 (`week_number`, `year`, `year_week`) อิงตามเวลาประเทศไทย (UTC+7) อัตโนมัติ พร้อมแสดงช่วงวันภาษาไทย (เช่น `7 - 13 ก.ย. 2569`)
   - **Weekly Duplicate Prevention Rule:** สแกนเข้าเรียนได้สัปดาห์ละ 1 ครั้งต่อวิชา เมื่อขึ้นสัปดาห์ใหม่สามารถสแกนได้ทันทีโดยไม่ติดประวัติเดิม และแจ้งเตือนหากสแกนซ้ำภายในสัปดาห์เดียวกัน
@@ -50,6 +51,7 @@
 - ลบ `server/card_renderer.js` และตัด 4 แพ็กเกจขยะใน `server/package.json` (`@napi-rs/canvas`, `sqlite3`, `@tailwindcss/vite`, `tailwindcss`) ทำให้ขั้นตอน build/deploy บน Render รวดเร็วและปราศจากปัญหา native build
 - ใช้ `fs.readFileSync` มาตรฐานใน `schedules_manager.js` แทนการจัดการ file descriptor ด้วยตนเอง
 - ลบสคริปต์ทดสอบเก่า `server/seed.js` เพื่อกำจัดความเสี่ยงต่อการลบฐานข้อมูล Production และลดความซับซ้อนของโค้ด
+- ขจัดการเขียนไฟล์ดิสก์ชั่วคราวซ้ำซ้อนบน Render และตัดไฟล์ขยะ `server/data/room_schedules.json` ออกจากระบบ
 
 ---
 
@@ -77,25 +79,24 @@ Fingerprint/
 │   │                          # - จัดการ Real-time Events (สแกน, ลงเวลา, ซิงก์แคช, ตรวจสอบซ้ำ)
 │   │                          # - จัดการโหมด Serial (Local) และ Cloud Bridge
 │   │
-│   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียนและการลงเวลา
+│   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียนและการลงเวลา (Single Source of Truth)
+│   │                          # - เชื่อมต่อ Supabase Cloud Database (room_schedules & session_attendance)
 │   │                          # - นำเข้าและแปลงไฟล์ Excel ตารางสอน (.xlsx)
 │   │                          # - คำนวณคาบเรียนปัจจุบัน และสัปดาห์ ISO-8601
 │   │                          # - ตรวจสอบการเช็คชื่อซ้ำรายสัปดาห์ (1 ครั้ง/สัปดาห์/วิชา)
 │   │                          # - สร้างไฟล์ Excel Export ทั้งแบบ Single Week และ Academic Matrix
 │   │
+│   ├── room_schedules.seed.json # ข้อมูลตารางเรียนตั้งต้น 3 ห้อง (101, 201, 301 รวม 60 คาบ) สำหรับ Bootstrap
+│   │
 │   ├── database.js            # ตัวเชื่อมต่อฐานข้อมูล Supabase PostgreSQL (Master Database)
 │   │                          # - จัดการตาราง users, admins, access_logs
 │   │
-│   ├── public/                # ไฟล์หน้าบ้าน Frontend (Vanilla JS + Tailwind CSS)
-│   │   ├── index.html / app.js       # หน้าแดชบอร์ดหลัก ดูสถานะสแกนสด, ฮาร์ดแวร์, สลับห้อง
-│   │   ├── schedules.html / schedules.js # หน้าระบบตารางเรียน, ใบเช็คชื่อรายสัปดาห์, ส่งออก Excel
-│   │   ├── users.html / users.js     # หน้าจัดการผู้ใช้และการลงทะเบียนลายนิ้วมือ 3 นิ้ว
-│   │   ├── login.html                # หน้าเข้าสู่ระบบของผู้ดูแลระบบ
-│   │   └── css/style.css             # ธีมสีน้ำตาลทอง RMUTL และเอฟเฟกต์ Glassmorphism
-│   │
-│   └── data/
-│       ├── room_schedules.json       # ฐานข้อมูลตารางเรียนปัจจุบัน
-│       └── session_attendance.json   # ฐานข้อมูลบันทึกการเช็คชื่อเข้าเรียนประจำคาบ
+│   └── public/                # ไฟล์หน้าบ้าน Frontend (Vanilla JS + Tailwind CSS)
+│       ├── index.html / app.js       # หน้าแดชบอร์ดหลัก ดูสถานะสแกนสด, ฮาร์ดแวร์, สลับห้อง
+│       ├── schedules.html / schedules.js # หน้าระบบตารางเรียน, ใบเช็คชื่อรายสัปดาห์, ส่งออก Excel
+│       ├── users.html / users.js     # หน้าจัดการผู้ใช้และการลงทะเบียนลายนิ้วมือ 3 นิ้ว
+│       ├── login.html                # หน้าเข้าสู่ระบบของผู้ดูแลระบบ
+│       └── css/style.css             # ธีมสีน้ำตาลทอง RMUTL และเอฟเฟกต์ Glassmorphism
 │
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
 ├── handoff.md                 # รายงานการตรวจสอบความปลอดภัยและบั๊กจากสภาพแวดล้อมจริง
