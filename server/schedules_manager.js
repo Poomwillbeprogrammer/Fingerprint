@@ -2,6 +2,11 @@ const fs = require('fs');
 const path = require('path');
 const XLSX = require('xlsx');
 
+let supabase = null;
+try {
+  supabase = require('./database').supabase;
+} catch (e) {}
+
 const DATA_DIR = path.join(__dirname, 'data');
 const SCHEDULES_FILE = path.join(DATA_DIR, 'room_schedules.json');
 const SEED_FILE = path.join(__dirname, 'room_schedules.seed.json');
@@ -138,7 +143,7 @@ function parseExcelData(filePathOrBuffer, customRoomName = '', customBuilding = 
   return schedules;
 }
 
-// Persist store to runtime storage and sync to seed file
+// Persist store to runtime storage, seed file, and Supabase Cloud
 function persistStore(current) {
   try {
     fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(current, null, 2), 'utf8');
@@ -149,6 +154,63 @@ function persistStore(current) {
     fs.writeFileSync(SEED_FILE, JSON.stringify(current, null, 2), 'utf8');
   } catch (e) {
     // SEED_FILE may be read-only in some environments
+  }
+
+  // Cloud Sync: อัปเดตขึ้น Supabase Cloud ทันที (Background Safe Async)
+  if (supabase) {
+    supabase
+      .from('room_schedules')
+      .upsert({ id: 1, data: current, updated_at: new Date().toISOString() })
+      .then(({ error }) => {
+        if (!error) {
+          console.log('☁️ [Supabase] ซิงก์ตารางเรียนขึ้น Cloud สำเร็จ');
+        } else if (error.code !== '42P01') {
+          console.warn('⚠️ [Supabase] ซิงก์ตารางเรียนขึ้น Cloud ไม่สำเร็จ:', error.message);
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+// ซิงก์ข้อมูลตารางเรียนและประวัติการเข้าเรียนจาก Supabase Cloud เมื่อบู๊ตเซิร์ฟเวอร์
+async function syncFromSupabase() {
+  if (!supabase) return;
+  try {
+    // 1. ซิงก์ตารางเรียน
+    const { data: schedData, error: schedErr } = await supabase
+      .from('room_schedules')
+      .select('data')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (!schedErr && schedData && schedData.data && Array.isArray(schedData.data.rooms) && schedData.data.rooms.length > 0) {
+      store = schedData.data;
+      try {
+        fs.writeFileSync(SCHEDULES_FILE, JSON.stringify(store, null, 2), 'utf8');
+      } catch (e) {}
+      console.log(`☁️ [Supabase] โหลดตารางเรียนจาก Cloud สำเร็จ: ${store.rooms.length} ห้อง (${store.schedules.length} คาบ)`);
+    } else if (!schedErr && (!schedData || !schedData.data)) {
+      // หากตารางว่างเปล่า ให้บันทึกตารางตั้งต้นขึ้น Cloud ทันที
+      await supabase.from('room_schedules').upsert({ id: 1, data: store, updated_at: new Date().toISOString() });
+      console.log('☁️ [Supabase] เริ่มต้นบันทึกตารางเรียนตั้งต้นขึ้น Cloud สำเร็จ');
+    }
+
+    // 2. ซิงก์ประวัติการเช็คชื่อตามคาบเรียน
+    const { data: attData, error: attErr } = await supabase
+      .from('session_attendance')
+      .select('*')
+      .order('id', { ascending: true });
+
+    if (!attErr && Array.isArray(attData) && attData.length > 0) {
+      try {
+        fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(attData, null, 2), 'utf8');
+        console.log(`☁️ [Supabase] โหลดประวัติการเข้าเรียนจาก Cloud สำเร็จ: ${attData.length} รายการ`);
+      } catch (e) {}
+    }
+  } catch (err) {
+    if (err && err.code !== '42P01') {
+      console.warn('⚠️ [Supabase] การซิงก์ข้อมูลตารางเรียน/เข้าเรียนจาก Cloud ล้มเหลว:', err.message);
+    }
   }
 }
 
@@ -432,6 +494,9 @@ function deleteRoom(roomName) {
         fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(filtered, null, 2), 'utf8');
       }
     }
+    if (supabase) {
+      supabase.from('session_attendance').delete().eq('room_name', roomName).then(() => {}).catch(() => {});
+    }
   } catch (e) {
     console.error('Error purging session attendance on room delete:', e);
   }
@@ -603,6 +668,40 @@ function recordSessionAttendance(record) {
 
   records.push(record);
   fs.writeFileSync(ATTENDANCE_FILE, JSON.stringify(records, null, 2), 'utf8');
+
+  // Asynchronous cloud sync to Supabase (Background Safe Async)
+  if (supabase) {
+    const row = {
+      schedule_id: record.schedule_id,
+      room_name: record.room_name,
+      subject_code: record.subject_code,
+      subject_name: record.subject_name,
+      short_name: record.short_name,
+      class_type: record.class_type,
+      user_id: record.user_id,
+      student_id: record.student_id,
+      user_name: record.user_name,
+      fingerprint_id: record.fingerprint_id || 0,
+      date: record.date,
+      time: record.time,
+      timestamp: record.timestamp,
+      week_number: record.week_number,
+      year: record.year,
+      year_week: record.year_week,
+      attendance_status: record.attendance_status,
+      score: record.score || 0
+    };
+    supabase
+      .from('session_attendance')
+      .insert(row)
+      .then(({ error }) => {
+        if (error && error.code !== '42P01') {
+          console.warn('⚠️ [Supabase] บันทึกเวลาเข้าเรียนขึ้น Cloud ไม่สำเร็จ:', error.message);
+        }
+      })
+      .catch(() => {});
+  }
+
   return record;
 }
 
@@ -882,6 +981,7 @@ module.exports = {
   getAllSchedules,
   getScheduleById,
   persistStore,
+  syncFromSupabase,
   previewExcelData,
   saveRoomSchedules,
   deleteRoom,

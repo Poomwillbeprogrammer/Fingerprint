@@ -26,7 +26,11 @@
   - นำเข้าตารางเรียนจากไฟล์ Excel (.xlsx) ด้วยระบบ 2-Step Preview & Confirm พร้อมฟังก์ชัน Smart Room Detection วิเคราะห์ห้องเรียนและคาบเรียนอัตโนมัติ
   - สลับห้องประจำการของเครื่องสแกนจาก Dashboard แบบเรียลไทม์ และส่งชื่อห้องไปแสดงบนจอ OLED ทันที
   - คำนวณคาบเรียนปัจจุบันและคาบถัดไป ตรวจสอบเวลาเข้าเรียนตรงเวลา vs มาสาย (>15 นาที) พร้อมคำนวณคะแนน
-  - **Multi-Room Persistence & Dual-Write Architecture (ADR-022):** แก้ไขปัญหาตารางเรียนห้องใหม่สูญหายเมื่อ Render เข้าสู่ Sleep Mode / Redeploy ด้วยระบบ Dual-write (`persistStore`) ลงทั้ง Runtime Storage และ Seed File, บรรจุห้องเรียนถาวรทั้งห้อง ทค.1-101 และ ทค.1-301 ลงใน Seed File, ปรับปรุง `.gitignore` ให้ติดตามไฟล์ตารางเรียนขึ้น Cloud, และเพิ่มฟังก์ชัน `getScheduleById(id)` แก้ไข Scope การ Export และ Offline Sync ของทุกห้องเรียน
+  - **Multi-Room Persistence & Cloud Database Architecture (ADR-022, ADR-023):** 
+    - แก้ไขปัญหาตารางเรียนห้องใหม่สูญหายเมื่อ Render เข้าสู่ Sleep Mode / Redeploy ด้วยระบบ Dual-write (`persistStore`) ลงทั้ง Runtime Storage และ Seed File
+    - ยกระดับสู่ Cloud-Native: เชื่อมโยงระบบตารางเรียนและประวัติการเข้าเรียนเข้ากับ Supabase Cloud Database (`syncFromSupabase()`) พร้อมระบบ Safe Real-time Asynchronous Sync
+    - บรรจุห้องเรียนถาวรครบทั้ง 3 ห้อง (ทค.1-101, ทค.1-301, และ ทค.1-201 รวม 60 คาบ) ลงใน Seed File ใน Git
+    - ปรับปรุง `.gitignore` ให้ติดตามไฟล์ตารางเรียนขึ้น Cloud และเพิ่มฟังก์ชัน `getScheduleById(id)` แก้ไข Scope การ Export และ Offline Sync ของทุกห้องเรียน
 - **ระบบบันทึกเวลาเรียนแบบรายสัปดาห์ (Weekly Attendance Segmentation):**
   - คำนวณสัปดาห์ตามปฏิทินสากล ISO-8601 (`week_number`, `year`, `year_week`) อิงตามเวลาประเทศไทย (UTC+7) อัตโนมัติ พร้อมแสดงช่วงวันภาษาไทย (เช่น `7 - 13 ก.ย. 2569`)
   - **Weekly Duplicate Prevention Rule:** สแกนเข้าเรียนได้สัปดาห์ละ 1 ครั้งต่อวิชา เมื่อขึ้นสัปดาห์ใหม่สามารถสแกนได้ทันทีโดยไม่ติดประวัติเดิม และแจ้งเตือนหากสแกนซ้ำภายในสัปดาห์เดียวกัน

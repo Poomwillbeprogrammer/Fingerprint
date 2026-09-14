@@ -1686,6 +1686,7 @@ io.on('connection', (socket) => {
 // Start Server
 async function start() {
   await initDatabase();
+  await schedulesManager.syncFromSupabase();
   
   if (SERIAL_ENABLED) {
     initSerial();
