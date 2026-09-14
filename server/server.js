@@ -1498,7 +1498,13 @@ io.on('connection', (socket) => {
       socket.emit('sync_users_cache', users || []);
       socket.emit('sync_device_room', { room_name: activeRoom });
       socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
-      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อ (${users.length} คน), ห้องประจำเครื่อง [${activeRoom}], และตารางเรียน (${schedulesManager.getAllSchedules().length} คาบ) ไปยังบอร์ดแล้ว`);
+
+      const thaiDateNow = new Date(Date.now() + 7 * 3600000);
+      const todayStr = thaiDateNow.toISOString().split('T')[0];
+      const todayRecords = schedulesManager.loadAttendanceRecords().filter(r => r.date === todayStr);
+      socket.emit('sync_today_attendance', todayRecords);
+
+      console.log(`📦 [Hardware Bridge] ส่งแคชรายชื่อ (${users.length} คน), ห้องประจำเครื่อง [${activeRoom}], ตารางเรียน (${schedulesManager.getAllSchedules().length} คาบ), และประวัติวันนี้ (${todayRecords.length} รายการ) ไปยังบอร์ดแล้ว`);
     } catch (err) {
       console.error('Error sending users cache to bridge:', err);
     }

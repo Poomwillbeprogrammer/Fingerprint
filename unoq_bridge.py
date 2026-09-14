@@ -580,6 +580,8 @@ def mcu_reader_thread():
 
                 # ก) เมื่อสแกนนิ้วสำเร็จ: แสดงการ์ดนักศึกษา รอการกดยืนยัน D2 หรือยกเลิก D3
                 if line.startswith('EVENT:MATCH '):
+                    global is_awaiting_confirmation
+                    is_awaiting_confirmation = True
                     parts = line.split()
                     slot_id = 0
                     score = 0
@@ -610,6 +612,7 @@ def mcu_reader_thread():
 
                 # ข) เมื่อกดยืนยัน D2: แสดงผลสำเร็จ หรือเตือนหากเคยลงเวลาแล้ว และส่ง Event ขึ้น Cloud
                 elif line.startswith('EVENT:CONFIRMED '):
+                    is_awaiting_confirmation = False
                     parts = line.split()
                     slot_id = 0
                     score = 0
@@ -637,6 +640,8 @@ def mcu_reader_thread():
                         class_type = sched.get('class_type', '')
                         type_suffix = f" [{class_type}]" if class_type else ""
                         resp_buf = render_already_checked_in(name, f"{short_name}{type_suffix}")
+                        if sio.connected:
+                            sio.emit('bridge_serial_data', line)
                     else:
                         is_offline = not sio.connected
                         if is_offline:
@@ -668,11 +673,12 @@ def mcu_reader_thread():
                             resp_buf = render_confirm_success(stu_id, name, sched_info, is_offline=False)
                             sio.emit('bridge_serial_data', line)
 
-                        # ส่ง Frame ให้ STM32 ครั้งเดียวใน ackWait (ห้ามส่งซ้ำระหว่าง delay)
-                        send_bitmap_to_mcu(resp_buf, initial_wait=0.04)
+                    # ส่ง Frame ให้ STM32 ครั้งเดียวใน ackWait (ห้ามส่งซ้ำระหว่าง delay)
+                    send_bitmap_to_mcu(resp_buf, initial_wait=0.04)
 
                 # ค) เมื่อกดยกเลิก/สแกนใหม่ D3
                 elif line.startswith('EVENT:CANCELLED'):
+                    is_awaiting_confirmation = False
                     print('🛑 [Local Engine] กดยกเลิก D3 -> ไม่บันทึกเวลา')
                     send_bitmap_to_mcu(CANCELLED_BITMAP, initial_wait=0.04)
                     if sio.connected:
@@ -680,7 +686,8 @@ def mcu_reader_thread():
 
                 # ง) เมื่อหมดเวลา 5 วินาที (Auto-Cancel ทางเลือก A)
                 elif line == 'EVENT:TIMEOUT':
-                    print('⏰ [Local Engine] หมดเวลา 5 วินาที (Auto-Cancel) -> ไม่บันทึกเวลา')
+                    is_awaiting_confirmation = False
+                    print('⏰ [Local Engine] หมดเวลา (Auto-Cancel) -> ไม่บันทึกเวลา')
                     send_bitmap_to_mcu(TIMEOUT_BITMAP, initial_wait=0.04)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
@@ -851,15 +858,18 @@ def on_session_attendance_update(data):
 
 @sio.on('sync_today_attendance')
 def on_sync_today_attendance(data):
+    global checked_in_records
     if isinstance(data, list):
-        print(f'📋 [Cloud] ได้รับประวัติการลงเวลาเรียนวันนี้: {len(data)} รายการ')
+        print(f'📋 [Cloud] ซิงก์ประวัติการลงเวลาเรียนวันนี้จาก Cloud: {len(data)} รายการ')
+        new_records = set()
         for r in data:
             if isinstance(r, dict):
                 user_id = r.get('user_id')
                 sched_id = r.get('schedule_id')
                 date_str = r.get('date')
                 if user_id and sched_id and date_str:
-                    checked_in_records.add((int(user_id), int(sched_id), str(date_str)))
+                    new_records.add((int(user_id), int(sched_id), str(date_str)))
+        checked_in_records = new_records
         save_attendance_cache()
 
 @sio.on('user_updated')
@@ -896,12 +906,14 @@ def on_bridge_command(cmd):
         except Exception as e:
             print(f'❌ [Error sending to MCU] {e}')
 
+is_awaiting_confirmation = False
+
 def r307_monitor_thread():
-    """ตรวจสอบสถานะเซนเซอร์ R307 ทันทีหลังบู๊ต และตรวจเช็คเป็นระยะทุก 15 วินาที"""
-    global mcu_sock
+    """ตรวจสอบสถานะเซนเซอร์ R307 ทันทีหลังบู๊ต และตรวจเช็คเป็นระยะทุก 15 วินาที (เว้นจังหวะรอกดปุ่มยืนยัน)"""
+    global mcu_sock, is_awaiting_confirmation
     time.sleep(2.0)
     while True:
-        if mcu_sock:
+        if mcu_sock and not is_awaiting_confirmation:
             try:
                 mcu_sock.sendall(b'CHECK_R307\n')
             except Exception as e:

@@ -15,6 +15,7 @@
 - **Store-and-Forward Offline Attendance:** สามารถสแกนและบันทึกเวลาเรียนได้ทันทีแม้ห้องเรียนไม่มีเน็ต (<1ms) ผ่าน Local Cache (`users_cache.json`, `attendance_cache.json`, `offline_queue.json`) และระบบจะทำการ Background Auto-Sync ข้อมูลขึ้น Cloud ทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ
 - **OLED Sharpness Optimization & Zero-Offset Alignment:** ปรับปรุงไดรเวอร์ SH1106 ในเฟิร์มแวร์ STM32 ด้วยคำสั่งควบคุมแบบต่อเนื่องในทรานแซกชันเดียว (`sendCommand2`) บังคับค่า Display Offset เป็น 0x00 แก้ปัญหาภาพเลื่อนลง พร้อมปรับเพิ่ม Contrast เป็น 0xCF, ปรับแต่ง Pre-charge และ VCOM ให้ภาพสว่างคมชัดสมบูรณ์แบบ ควบคู่กับการปรับระยะ Margin ล่างใน `unoq_bridge.py` ป้องกันข้อความชนขอบจอ
 - **3-Tier Independent Hardware Health Monitoring (ADR-027):** แยกรายงานสถานะฮาร์ดแวร์ 3 องค์ประกอบอิสระ (Cloud Bridge, เซนเซอร์ R307, จอ OLED SH1106) พร้อมระบบ I2C Bus Detection ตรวจจับการต่อจออัตโนมัติ และรองรับโหมดไม่มีจอ (Headless Operation) โดยไม่บล็อกหรือหน่วงการทำงานของระบบ
+- **Physical Confirmation & Duplicate Check Resilience (ADR-028):** ปรับปรุงลูปตรวจจับปุ่มกด D2/D3 ใน `sketch.ino` ไม่ให้ถูกขัดจังหวะจากคำสั่งตรวจเช็คฮาร์ดแวร์ `CHECK_R307` พร้อมแก้ไขข้อผิดพลาดการเยื้องโค้ด `send_bitmap_to_mcu` ใน `unoq_bridge.py` ทำให้หน้าจอ OLED แสดงผลการแจ้งเตือนเสมอแม้จะลงเวลาซ้ำ และซิงก์ข้อมูลประวัติการลงเวลาจริงจาก Cloud ทันทีที่เชื่อมต่อ
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย

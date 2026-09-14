@@ -1180,10 +1180,26 @@ void loop() {
     int btnAction = 0; // 0 = Timeout (Auto-Cancel), 1 = Confirm (D2), 2 = Rescan (D3)
 
     while (millis() - btnWaitStart < 10000) {
-      // หากมีคำสั่งใหม่เข้ามาจาก Server เช่น ENROLL หรือ CANCEL ให้หลุดลูปทันทีเพื่อไม่ให้ระบบค้าง
+      // ตรวจสอบคำสั่ง Serial หากเป็นคำสั่งตรวจเช็คฮาร์ดแวร์ให้ตอบกลับทันทีโดยไม่ยกเลิกลูปปุ่มกด
       if (Serial.available()) {
-        btnAction = 3;
-        break;
+        String pendingCmd = Serial.readStringUntil('\n');
+        pendingCmd.trim();
+        if (pendingCmd.startsWith("ENROLL") || pendingCmd == "CANCEL" || pendingCmd == "CANCEL_ENROLL" || pendingCmd == "RESET") {
+          btnAction = 3;
+          break;
+        } else if (pendingCmd == "CHECK_R307" || pendingCmd == "CHECK_HARDWARE") {
+          bool r307Ok = finger.verifyPassword();
+          bool oledOk = oled.isDetected();
+          Serial.print("STATUS:HARDWARE R307=");
+          Serial.print(r307Ok ? "READY" : "NOT_FOUND");
+          Serial.print(" OLED=");
+          Serial.println(oledOk ? "READY" : "NOT_FOUND");
+          if (r307Ok) {
+            Serial.println("STATUS:R307_READY");
+          } else {
+            Serial.println("STATUS:R307_NOT_FOUND");
+          }
+        }
       }
 
       // ตรวจจับปุ่ม D2 (Confirm - Active LOW)
