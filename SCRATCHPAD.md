@@ -4,8 +4,8 @@
 ---
 
 ### 🚀 สรุปสถานะระบบปัจจุบัน (Current Working State)
-* **Arduino UNO Q (STM32 MCU):** เฟิร์มแวร์ C++ เสถียร 100% ควบคุมเซนเซอร์ R307, หน้าจอ SH1106 OLED, ปุ่มกด D2/D3, รายงาน `EVENT:IDLE`, `EVENT:NO_MATCH`, และระบบตรวจจับลายนิ้วมือซ้ำก่อนบันทึก
-* **Uno Q Linux SoC:** สคริปต์ `unoq_bridge.py` รันเบื้องหลัง (PID 1331) เรนเดอร์ฟอนต์ไทย Tahoma 11pt คมชัด พร้อมแคชตารางห้อง (`active_room.json`) และประวัติการเช็คชื่อ (`attendance_cache.json`)
+* **Arduino UNO Q (STM32 MCU):** เฟิร์มแวร์ C++ เสถียร 100% (`sketch.ino`, `ST7735_TFT.h`, `protocol.h`) ควบคุมเซนเซอร์ R307, หน้าจอ 1.8" TFT SPI (160x128 แนวนอน), ปุ่มกด D2/D3, รายงาน `EVENT:IDLE`, `EVENT:NO_MATCH`, และระบบตรวจจับลายนิ้วมือซ้ำก่อนบันทึก
+* **Uno Q Linux SoC:** สคริปต์ `unoq_bridge.py` และ `unoq_views.py` เรนเดอร์ภาษาไทย Tahoma 160x128 แนวนอน 7 หน้าจอ คมชัด พร้อมแคชตารางห้อง (`active_room.txt`) และประวัติการเช็คชื่อ (`attendance_cache.json`)
 * **Cloud Server (Render):** Node.js Express & Socket.IO เซิร์ฟเวอร์รันปกติที่ `https://fingerprint-hrkp.onrender.com` พร้อมระบบจัดการตารางเรียนแยกห้อง (Multi-room Timetable)
 * **Database (Supabase):** ฐานข้อมูล PostgreSQL ซิงก์รายชื่อผู้ใช้, ตารางเรียน, และประวัติการสแกน (Access Logs) สมบูรณ์
 * **Code Repository:** สาขา `website` บน GitHub ซิงก์ล่าสุดตรงกับระบบที่ติดตั้งจริง
@@ -15,7 +15,7 @@
 ### ⚙️ ข้อมูลการเชื่อมต่อที่สำคัญ (Environment Info)
 * **Internal IPC Port:** `127.0.0.1:7500` (Baudrate 115200 bps)
 * **Sensor Baudrate:** 57600 bps (Serial1 บน Pins 0 RX, 1 TX)
-* **OLED Display:** SH1106 I2C Addr `0x3C` (Software I2C บน Pins A4 SDA, A5 SCL)
+* **TFT Display:** ST7735 1.8" SPI 160x128 Landscape (Pins D8 RST, D9 DC, D10 CS, D11 MOSI, D13 SCK)
 * **Button Confirm (ยืนยัน):** Pin `D2` (ปุ่มฟ้า) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
 * **Button Rescan (สแกนใหม่/ยกเลิก):** Pin `D3` (ปุ่มแดง) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
 * **Font Path บนบอร์ด:** `/home/arduino/tahoma.ttf`
@@ -102,4 +102,29 @@
     - [x] ยกเลิกการเขียนไฟล์ดิสก์ชั่วคราวซ้ำซ้อนบน Render (`server/data/room_schedules.json` และ `session_attendance.json` ลบออกหมด)
     - [x] จัดการข้อมูลใน RAM (In-Memory Cache) ให้การตอบสนองเร็วระดับ 0.001 วินาที (Sub-millisecond)
     - [x] รันชุดทดสอบ Logic 10 ด้าน ผ่านสมบูรณ์ 100%
+15. **[TASK-15] การย้ายสู่จอ 1.8" TFT SPI 160x128 แนวนอน และ 16-Byte Chunking (ADR-029, ADR-030):** ✅ COMPLETED
+    - [x] พัฒนาไดรเวอร์ Zero-dependency ST7735 ควบคุมผ่านฮาร์ดแวร์ SPI (D8, D9, D10, D11, D13)
+    - [x] หมุนหน้าจอ 180° สู่แนวนอน 160x128 (`MADCTL=0x60`) พร้อม Dynamic Color Palette
+    - [x] บิตแพ็กกิ้งภาพ 2,560 ไบต์ แบ่งส่ง 160 ชิ้น (ชิ้นละ 16B) ปลอดภัยต่อ Zephyr 64B FIFO 100%
+16. **[TASK-16] สถาปัตยกรรม Non-blocking `fingerHeld` Loop และ Zero Screen Freeze (ADR-032):** ✅ COMPLETED
+    - [x] ยกเลิก Blocking `while` loop รอปล่อยนิ้วในเฟิร์มแวร์ แทนที่ด้วย State Flag `fingerHeld`
+    - [x] ปรับ `handleDelete` ให้ทำงานแบบ Silent Background ไม่หน่วงจอ TFT
+    - [x] ฟื้นฟู Handshake Pacing 200ms ฝั่ง Python Bridge แก้ปัญหาจอค้างทุกกรณี
+17. **[TASK-17] ระบบลงทะเบียนลายนิ้วมือ 3 นิ้วแบบยืดหยุ่น (Resilient Multi-Level Enrollment - ADR-033):** ✅ COMPLETED
+    - [x] Level 1 (Firmware): In-place Step 2 Retry 3 ครั้งโดยไม่ต้องเริ่ม Step 1 ใหม่
+    - [x] Level 2 (Server): `enrollment_manager.js` Non-destructive failure state รักษา Slot ที่ผ่านแล้ว
+    - [x] Level 3 (Web UI): กล่องแจ้งเตือน `#retryActionBox` พร้อมปุ่มกดลองสแกนนิ้วเดิมใหม่
+    - [x] TDD Unit Tests ครอบคลุม 7 ข้อ ผ่านครบ 100%
+18. **[TASK-18] Hermetic Testing Seam และการจัดการ Error อย่างยืดหยุ่น (ADR-034):** ✅ COMPLETED
+    - [x] เพิ่ม Seam `setSupabaseClient(null)` ใน `schedules_manager.js` ตัด Warning Supabase ใน `npm test`
+    - [x] เปลี่ยน `process.exit(1)` ใน `database.js` เป็น `throw new Error(...)` เพื่อการจัดการข้อผิดพลาดที่ยืดหยุ่น
+19. **[TASK-19] สถาปัตยกรรมเซิร์ฟเวอร์แบบโมดูลาร์ และ Native Supabase Repositories (ADR-035, ADR-036):** ✅ COMPLETED
+    - [x] ย่อย `server.js` จาก 1,777 บรรทัด เหลือ ~155 บรรทัด (Composition Root)
+    - [x] สกัด `middleware/auth.js`, `controllers/serial_controller.js`, และ 5 Domain Routers ใน `routes/`
+    - [x] ยกเลิก `dbAsync` SQL string matching แทนที่ด้วย Native Repositories (`User`, `Admin`, `AccessLog`) ทั้ง 37 จุด
+20. **[TASK-20] แยกโมดูลมุมมองกราฟิก, ไดรเวอร์เฟิร์มแวร์ และการตรวจสอบอิสระ (ADR-037, ADR-038, ADR-039):** ✅ COMPLETED
+    - [x] สกัด `unoq_views.py` พร้อมเครื่องมือ CLI PNG Preview ใน `.scratch/png/` และขยาย Python test เป็น 18 ข้อ
+    - [x] สกัด `ST7735_TFT.h` และ `protocol.h` จาก `sketch.ino` คอมไพล์ได้ไบนารีขนาดเท่าเดิมเป๊ะ 99,344B / 40,920B
+    - [x] ตรวจยืนยันอิสระ (ADR-039): แก้ Latent No-Op Bug ของ Offline Sync, คืน Semantic สถิติ DENIED, และติดตั้ง Guard `@requires_real_pil`
+
 

@@ -18,7 +18,7 @@
 
 ## ✨ จุดเด่นและฟังก์ชันหลัก (Key Features)
 
-* **🇹🇭 Offloaded TrueType Thai Typography on 1.8" TFT:** แก้ปัญหาข้อจำกัดของไมโครคอนโทรลเลอร์ โดยให้ฝั่ง Linux SoC บนบอร์ดประมวลผลเรนเดอร์ภาษาไทยด้วยเวกเตอร์ฟอนต์ TrueType (`tahoma.ttf`) จัดระยะสระ-วรรณยุกต์ได้อย่างสมบูรณ์แบบ แล้วส่งเป็นภาพความละเอียด 128x160 ไปเปิดบนจอ 1.8" TFT SPI พร้อมชุดสีแบบไดนามิก (Dynamic Palette) ตามสถานะ
+* **🇹🇭 Offloaded TrueType Thai Typography on 1.8" TFT:** แก้ปัญหาข้อจำกัดของไมโครคอนโทรลเลอร์ โดยให้ฝั่ง Linux SoC บนบอร์ดประมวลผลเรนเดอร์ภาษาไทยด้วยเวกเตอร์ฟอนต์ TrueType (`tahoma.ttf`) จัดระยะสระ-วรรณยุกต์ได้อย่างสมบูรณ์แบบ แล้วส่งเป็นภาพความละเอียด 160x128 แนวนอน ไปเปิดบนจอ 1.8" TFT SPI (ST7735) พร้อมชุดสีแบบไดนามิก (Dynamic Palette) ตามสถานะ
 * **🏫 Multi-Room Timetable & Dynamic Room Synchronization:**
   * รองรับการจัดการตารางสอนแยกรายห้อง (เช่น ทค.1-101, ทค.2-101) พร้อมระบบนำเข้าไฟล์ Excel (.xlsx) และ Smart Room Detection อัตโนมัติ
   * ผู้ดูแลสามารถสลับห้องที่ใช้งานของเครื่อง Uno Q ได้แบบเรียลไทม์จาก Web Dashboard ผ่านอีเวนต์ `sync_device_room`
@@ -189,13 +189,18 @@ adb shell
 python3 -u /home/arduino/unoq_bridge.py > /home/arduino/bridge.log 2>&1 &
 ```
 
-### 3. รันเซิร์ฟเวอร์ Node.js (เครื่องแม่ข่าย / Local Test)
+### 3. การทดสอบและการรันเซิร์ฟเวอร์ Node.js
+- **Render Production Deployment:** เซิร์ฟเวอร์ Web Backend และ Socket.IO ทำงานอยู่บน Render Cloud โดยอัตโนมัติผ่านการ Push โค้ดไปยังกิ่ง `origin/website`
+- **การทดสอบอัตโนมัติ (Automated Testing):**
 ```powershell
+# ทดสอบโมดูลเซิร์ฟเวอร์และตารางเรียน (Node.js Test Runner)
 cd server
-npm install
-npm start
+npm test
+
+# ทดสอบสคริปต์บริดจ์และตัวเรนเดอร์กราฟิก (Python 3.13)
+cd ..
+py -3.13 -m unittest tests/test_unoq_bridge.py
 ```
-เปิดบราวเซอร์ไปที่: `http://localhost:3000` (หรือเชื่อมต่อไปยัง Render Cloud URL ของระบบ)
 
 ---
 
@@ -203,23 +208,55 @@ npm start
 
 ```text
 Fingerprint/
-├── unoq_bridge.py             # Graphic & Offline Cache Engine สำหรับ Uno Q Linux SoC
 ├── sketch/
-│   └── sketch.ino             # เฟิร์มแวร์ C++ สำหรับ STM32 (R307, OLED, D2/D3, Serial Protocol)
-├── server/
-│   ├── server.js              # Express API Server, Socket.IO Real-time Controller
+│   ├── sketch.ino             # เฟิร์มแวร์ C++ ควบคุมฮาร์ดแวร์บน STM32 (Adafruit R307 + ST7735 TFT 1.8" SPI)
+│   ├── ST7735_TFT.h           # ไดรเวอร์จอแสดงผล ST7735 SPI 160x128 แนวนอน, RGB565 Palette และฟอนต์ ASCII 5x7
+│   └── protocol.h             # นิยามโปรโตคอล Serial UART (16-byte chunking, FIFO bounds, status constants)
+│
+├── unoq_bridge.py             # สคริปต์บริดจ์ Python บน Linux SoC (Uno Q) จัดการ State, Cache และ Socket.IO
+├── unoq_views.py              # โมดูลเรนเดอร์กราฟิก TFT 160x128 Landscape (Pillow) และตัวแปลง 1-bit raster 2.5KB
+│
+├── server/                    # Web Backend & Socket.IO บน Render Cloud
+│   ├── server.js              # Application Bootstrap & Composition Root (~155 บรรทัด)
+│   ├── database.js            # Supabase PostgreSQL Client Instance & Database Initializer
 │   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียน Multi-Room & สถิติสัปดาห์ (Single Source of Truth)
-│   ├── room_schedules.seed.json # ข้อมูลตารางเรียนตั้งต้น 3 ห้อง (101, 201, 301 รวม 60 คาบ) สำหรับ Bootstrap
-│   ├── database.js            # เชื่อมต่อ Supabase PostgreSQL Cloud Database
-│   └── public/
+│   ├── enrollment_manager.js  # Resilient Multi-Finger Enrollment State Machine
+│   ├── room_schedules.seed.json # ตารางเรียนตั้งต้น 3 ห้องสำหรับ cold-start
+│   │
+│   ├── middleware/
+│   │   └── auth.js            # Authentication Middleware (authRequired, loginLimiter)
+│   │
+│   ├── controllers/
+│   │   └── serial_controller.js # ศูนย์กลางจัดการ Serial Hardware, Bridge, และ Tier-2 DB Search
+│   │
+│   ├── repositories/          # Native Supabase Repositories (Data Access Layer)
+│   │   ├── UserRepository.js  # จัดการผู้ใช้, LRU cache, Tier-2 templates
+│   │   ├── AdminRepository.js # ข้อมูลแอดมินและการยืนยันตัวตน
+│   │   └── AccessLogRepository.js # บันทึกประวัติการสแกนและสถิติรายวัน
+│   │
+│   ├── routes/                # 24 API Endpoints แบบ Modular Routers
+│   │   ├── auth.js            # /api/auth (login, logout, me, change-password)
+│   │   ├── users.js           # /api/users (รายชื่อ, เพิ่ม, ลบ)
+│   │   ├── logs.js            # /api/logs, /api/stats
+│   │   ├── schedules.js       # /api/rooms, /api/schedules, import/export excel, matrix
+│   │   └── device.js          # /api/device (serial-status, backup, restore)
+│   │
+│   └── public/                # Web Frontend (Vanilla JS + Tailwind CSS)
 │       ├── index.html / app.js       # หน้า Dashboard แสดงสถานะและบันทึกเวลาสแกนนิ้วเรียลไทม์
 │       ├── schedules.html / schedules.js # หน้าระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)
 │       ├── users.html / users.js     # หน้าระบบจัดการผู้ใช้งาน และลงทะเบียนลายนิ้วมือ 3 นิ้ว
 │       ├── login.html                # หน้าระบบล็อกอินสำหรับผู้ดูแลระบบ (Admin)
 │       └── css/style.css             # ธีมสีน้ำตาลทอง RMUTL และเอฟเฟกต์ Glassmorphism
+│
+├── tests/                     # ชุดทดสอบอัตโนมัติ (Automated Tests)
+│   ├── test_schedules_manager.js     # Node.js Unit Tests (13 ข้อ)
+│   ├── test_enrollment_manager.js    # Node.js Unit Tests (7 ข้อ)
+│   └── test_unoq_bridge.py           # Python Unit Tests (18 ข้อ)
+│
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
-├── DECISIONS.md               # บันทึกการตัดสินใจทางสถาปัตยกรรม (ADR-001 ถึง ADR-024)
+├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-039)
 ├── PROJECT_STATE.md           # บันทึกสถานะการพัฒนาและสถาปัตยกรรมปัจจุบันฉบับสมบูรณ์
+├── code_engineer.md           # แผนงานและผลการรีแฟกเตอร์สถาปัตยกรรมทั้งระบบ
 ├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
 ├── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 └── README.md                  # เอกสารคู่มือโครงการฉบับสมบูรณ์

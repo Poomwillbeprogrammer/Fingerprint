@@ -229,7 +229,7 @@ components:
 - **Attendance Status Badges:**
   - 🟢 **ตรงเวลา (On-Time):** แคปซูลสีเขียวโปร่งแสง `bg-emerald-500/15` ขอบ `border-emerald-500/30` ข้อความ `text-emerald-400 font-mono`
   - 🟠 **มาสาย (Late):** แคปซูลสีส้มโปร่งแสง `bg-amber-500/15` ขอบ `border-amber-500/30` ข้อความ `text-amber-400 font-mono`
-  - 🔴 **ขาดเรียน (Absent):** แคปซูลสีแดงโปร่งแสง `bg-rose-500/15` ขอบ `border-rose-500/30` ข้อความ `text-rose-400 font-mono`
+  - 🔴 **ปฏิเสธ / สแกนไม่ผ่าน (Denied):** แคปซูลสีแดงโปร่งแสง `bg-rose-500/15` ขอบ `border-rose-500/30` ข้อความ `text-rose-400 font-mono` *(หมายเหตุ: ตามกฎ GEMINI.md สรุปผลการเข้าเรียนจะรายงานเฉพาะตัวเลขเชิงบวก "มาตรงเวลา", "มาสาย", "รวมเข้าเรียน" และไม่ระบุสถานะ "ขาด")*
 
 ### Hardware Status Card (Signature Sidebar Component)
 - **Sidebar Hardware Card:** กล่องการ์ดสถานะฮาร์ดแวร์แบบ 3 องค์ประกอบอิสระ (`#hardwareStatusCard`):
@@ -240,7 +240,7 @@ components:
     - 🟢 **Ready:** จุดไฟสีเขียว `bg-emerald-400` ข้อความ `พร้อมใช้งาน` (`text-emerald-400`)
     - 🟠 **Not Found:** จุดไฟสีส้ม `bg-amber-400` กระพริบ ข้อความ `ไม่พบเซนเซอร์` (`text-amber-400`)
     - ⚪ **Waiting:** จุดไฟสีเทา `bg-stone-500` ข้อความ `รอเชื่อมต่อ` (`text-stone-400`)
-  - 🖥️ **จอ OLED (SH1106):**
+  - 🖥️ **จอแสดงผล TFT 1.8" (ST7735):**
     - 🟢 **Ready:** จุดไฟสีเขียว `bg-emerald-400` ข้อความ `พร้อมใช้งาน` (`text-emerald-400`)
     - ⚪ **Not Attached / Disabled:** จุดไฟสีเทากลาง `bg-stone-400` ข้อความ `ไม่มีจอ / ปิด` (`text-stone-400 font-medium`) เป็นการแจ้งเตือนสถานะที่เป็นกลาง ไม่แสดงเป็นข้อผิดพลาดสีแดง เพื่อรองรับโหมด Headless อย่างสมบูรณ์แบบ
 

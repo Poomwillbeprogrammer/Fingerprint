@@ -16,11 +16,13 @@ Single-context repo:
 
 ```
 /
-├── CONTEXT.md
+├── README.md
 ├── PROJECT_STATE.md
 ├── DECISIONS.md
 ├── GEMINI.md
-├── docs/adr/
+├── PRODUCT.md
+├── DESIGN.md
+├── code_engineer.md
 └── docs/agents/
 ```
 

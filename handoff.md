@@ -166,7 +166,7 @@ curl -s -o /dev/null -w "%{http_code}" https://fingerprint-hrkp.onrender.com/api
 
 ## 🟢 P3-10: Code quality (ทำตอนโอเคกับ risk แล้ว)
 
-- `database.js` แปล SQL → Supabase ด้วยการจับ substring (เปราะมาก: แก้ SQL นิดเดียวเงียบได้) → ระยะยาว refactor เรียก supabase client ตรงๆ
+- [x] **[RESOLVED 100% ใน ADR-036]** `database.js` แปล SQL → Supabase ด้วยการจับ substring: ได้รับการ Refactor สู่ Native Supabase Repositories (`UserRepository`, `AdminRepository`, `AccessLogRepository`) เรียบร้อยแล้ว (`dbAsync` เหลือ 0 call site และตัดโค้ด substring matching 273 บรรทัดทิ้งทั้งหมด)
 - Login คืน JWT ทั้ง JSON และ cookie → เหลือแค่ cookie httpOnly พอ (`server.js:751`)
 - ไม่มี CSP / X-Frame-Options → เพิ่ม helmet
 - `PROJECT REF: xahasiyjrfrtfovrxynf` — อย่าลืมว่า git history ยังมี key เก่าอยู่ หาก repo public พิจารณา rewrite history (BFG) หลัง rotate
