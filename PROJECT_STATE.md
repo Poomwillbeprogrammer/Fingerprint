@@ -137,6 +137,13 @@
   - ปรับปรุง `unoq_bridge.py` ให้นำเข้า `unoq_views` โดยคงความเข้ากันได้ย้อนหลัง 100%
   - เพิ่มชุดทดสอบใน `tests/test_unoq_bridge.py` ครอบคลุมการเรนเดอร์ทั้ง 7 หน้าจอ และบัฟเฟอร์ขนาด 2,560 ไบต์ (18/18 ผ่านฉลุย)
 
+### 1.9 การแยกไดรเวอร์จอแสดงผลและนิยามโปรโตคอล Serial (Firmware Modularization - ADR-038)
+- **Modular Firmware Architecture & Single Source of Truth:**
+  - แยกนิยามโปรโตคอล Serial, ค่าคงที่ UART FIFO limit (64B), ขนาดชิ้นภาพ 16-Byte Chunking (160 ชิ้น / 2,560 ไบต์), และข้อความ Protocol Event/Status ออกสู่ `sketch/protocol.h`
+  - แยกไดรเวอร์จอแสดงผล `ST7735_TFT` ความละเอียด 160x128 แนวนอน, ค่าสี RGB565 มาตรฐาน RMUTL Theme, และตารางฟอนต์ ASCII 5x7 ออกสู่ `sketch/ST7735_TFT.h`
+  - ปรับปรุง `sketch/sketch.ino` ให้เหลือเพียงตรรกะระดับ Business / Hardware Interaction (R307 Fingerprint Sensor, Physical Buttons D2/D3, Serial State Machine)
+  - **Zero Regression & Byte-Exact Binary:** คอมไพล์ผ่าน `arduino-cli` ได้ขนาด Flash 99,344 bytes และ RAM 40,920 bytes เท่ากับไฟล์ก่อนการรีแฟกเตอร์แบบไบต์ต่อไบต์ 100%
+
 ---
 
 ## 2. โครงสร้างไฟล์และสถาปัตยกรรม (System Architecture)
@@ -144,9 +151,11 @@
 ```text
 Fingerprint/
 ├── sketch/
-│   └── sketch.ino             # เฟิร์มแวร์ C++ ควบคุมฮาร์ดแวร์บน STM32 (Adafruit R307 + ST7735 TFT 1.8" SPI)
-│                              # - Non-blocking fingerHeld loop & In-place Step 2 Retry 3 ครั้ง
-│                              # - 16-byte chunking & Quiet UART (160 ชิ้น / 2,560 ไบต์)
+│   ├── sketch.ino             # เฟิร์มแวร์ C++ ควบคุมฮาร์ดแวร์บน STM32 (Adafruit R307 + ST7735 TFT 1.8" SPI)
+│   │                          # - Non-blocking fingerHeld loop & In-place Step 2 Retry 3 ครั้ง
+│   │                          # - Hardware button confirmation (D2/D3) & Serial State Machine
+│   ├── ST7735_TFT.h           # ไดรเวอร์จอแสดงผล ST7735 SPI 160x128 แนวนอน, RGB565 Palette และฟอนต์ ASCII 5x7
+│   └── protocol.h             # นิยามโปรโตคอล Serial UART (16-byte chunking, FIFO bounds, status constants)
 │
 ├── unoq_bridge.py             # สคริปต์บริดจ์ Python บน Linux SoC (Uno Q)
 │                              # - ควบคุม UART ติดต่อ STM32 และ Socket.IO Client สู่ Cloud
@@ -197,7 +206,7 @@ Fingerprint/
 │
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
 ├── handoff.md                 # รายงานการตรวจสอบความปลอดภัยและบั๊กจากสภาพแวดล้อมจริง
-├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-037)
+├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-038)
 ├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
 └── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 ```

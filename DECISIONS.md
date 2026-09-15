@@ -411,3 +411,11 @@
     2. **Offline Visual Preview CLI (`if __name__ == '__main__':`):** เพิ่มฟังก์ชัน `tft_buf_to_img` และบล็อกคำสั่ง CLI ใน `unoq_views.py` ให้สามารถส่งออกไฟล์รูปภาพ PNG พรีวิวครบทั้ง 10 กรณีตัวอย่างลงในโฟลเดอร์ `.scratch/png/` บนเครื่องพัฒนาได้ทันทีโดยไม่ต้องเชื่อมต่อฮาร์ดแวร์จริง
     3. **Zero Behavioral Change:** `unoq_bridge.py` นำเข้าฟังก์ชันและค่าคงที่ทั้งหมดผ่าน `from unoq_views import ...` ทำให้ไบต์ข้อมูล 2,560 ไบต์ที่ส่งไปยังไมโครคอนโทรลเลอร์ผ่าน UART ยังคงตรงตามมาตรฐานเดิม 100%
     4. **Automated Test Coverage (`tests/test_unoq_bridge.py`):** เพิ่มคลาส `TestUnoqViews` ตรวจสอบความถูกต้องของขนาดบัฟเฟอร์ 2,560 ไบต์ทั้ง 7 หน้าจอ และการ roundtrip แปลงบัฟเฟอร์กลับเป็นรูปภาพ ผ่านการทดสอบ 18/18 ข้อ
+* **ADR-038:** การแยกไดรเวอร์จอแสดงผล (`ST7735_TFT.h`) และโปรโตคอลการสื่อสาร (`protocol.h`) ออกจากเฟิร์มแวร์ C++ (`sketch.ino`):
+  - **ที่มาและปัญหา (Context & Problem):**
+    `sketch/sketch.ino` เดิมมีขนาดกว่า 1,530 บรรทัด รวมการควบคุมฮาร์ดแวร์ R307, ไดรเวอร์จอ SPI ST7735, ตารางฟอนต์ 5x7 ASCII, ค่าคงที่สี RGB565, และนิยามคำสั่งโปรโตคอล Serial ไว้ในไฟล์เดียว ทำให้โค้ดยาวและยากต่อการแยกแยะระหว่างระดับฮาร์ดแวร์ไดรเวอร์กับตรรกะการทำงานของแอปพลิเคชัน
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **ST7735 Display Driver Encapsulation (`sketch/ST7735_TFT.h`):** แยก `class ST7735_TFT`, ค่าคงที่ความละเอียดจอ (`TFT_WIDTH=160`, `TFT_HEIGHT=128`, `TFT_BUF_SIZE=2560`), ตารางสี 16-bit RGB565, และตารางฟอนต์ `FONT5x7` ออกเป็นไฟล์ Header พร้อม Include Guard
+    2. **Serial Protocol Specification (`sketch/protocol.h`):** รวบรวมนิยามคำสั่ง Serial (`CMD_*`), สถานะ (`STATUS_*`), อีเวนต์ (`EVENT_*`), การตอบกลับ (`RESP_*`), และข้อจำกัดทางเวลา (Timeouts/Delays) ไว้ในไฟล์ Header ส่วนกลาง
+    3. **100% Exact Binary Size Verification:** ตรวจสอบความถูกต้องของการคอมไพล์ผ่าน `arduino-cli compile --fqbn arduino:zephyr:unoq sketch` ยืนยันว่าคอมไพล์ผ่านสมบูรณ์ 100% และได้ขนาดไบนารีตรงกับก่อนการแยกไฟล์อย่างแม่นยำระดับไบต์ (Flash: 99,344 bytes / RAM: 40,920 bytes)
+
