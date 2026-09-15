@@ -1,0 +1,46 @@
+﻿
+> fingerprint-admin-server@1.0.0 test
+> node --test ../tests/test_schedules_manager.js ../tests/test_enrollment_manager.js
+
+Γû╢ Multi-Finger Resilient Enrollment Session (TDD)
+  Γ£ö initializes session for a user with correct 3 slots (4.3274ms)
+  Γ£ö slot 1 success advances to finger 2 without completing (0.5257ms)
+  Γ£ö finger 2 failure preserves previously enrolled slot 1 and allows retry (0.642ms)
+  Γ£ö retryCurrentFinger resets state to IN_PROGRESS on the exact failed slot (0.4462ms)
+  Γ£ö completing retried finger 2 advances to finger 3 (2.0334ms)
+  Γ£ö finger 3 success marks session as completed with all 3 slots (0.5432ms)
+  Γ£ö cancel returns enrolled slots so server can clean up only what was written (0.5735ms)
+Γ£ö Multi-Finger Resilient Enrollment Session (TDD) (14.1048ms)
+ΓÜí [Supabase] α╕üα╕│α╕Ñα╕▒α╕çα╣Çα╕èα╕╖α╣êα╕¡α╕íα╕òα╣êα╕¡ Supabase Cloud Database: https://xahasiyjrfrtfovrxynf.supabase.co
+Γû╢ ISO-8601 Week Calculation (getIsoWeekDetails)
+  Γ£ö correctly calculates ISO week for September 16, 2026 (1.8761ms)
+  Γ£ö Monday and Sunday of the same calendar week have identical yearWeek (0.2793ms)
+  Γ£ö Monday of next week transitions to next ISO week number (0.2173ms)
+  Γ£ö handles Date object input (0.2339ms)
+Γ£ö ISO-8601 Week Calculation (getIsoWeekDetails) (4.8475ms)
+Γû╢ Thai Week Date Range Formatting (getWeekRangeText)
+  Γ£ö formats week date range in Thai Buddhist calendar era (+543 years) (0.519ms)
+  Γ£ö formats cross-month week range correctly (0.2153ms)
+Γ£ö Thai Week Date Range Formatting (getWeekRangeText) (1.0566ms)
+Γû╢ Display Short Name Generation (generateShortName)
+  Γ£ö maps known lengthy subject names to compact OLED-friendly labels (0.5293ms)
+  Γ£ö truncates unknown subject names exceeding 16 characters (0.4527ms)
+  Γ£ö returns empty string for null, undefined, or empty input (0.2697ms)
+Γ£ö Display Short Name Generation (generateShortName) (1.9243ms)
+Γû╢ Thai Day Mapping (DAY_MAP & DAY_NAMES)
+  Γ£ö maps all 7 Thai days to ISO 1-7 numbers (0.5367ms)
+  Γ£ö DAY_NAMES array matches 1-indexed days (0.2884ms)
+Γ£ö Thai Day Mapping (DAY_MAP & DAY_NAMES) (1.1501ms)
+Γû╢ Academic Weekly Attendance Isolation (checkAlreadyCheckedIn)
+  Γ£ö allows scan when no prior attendance exists (0.6195ms)
+  Γ£ö detects duplicate scan within the same ISO week for the same course (4.075ms)
+Γ£ö Academic Weekly Attendance Isolation (checkAlreadyCheckedIn) (46.124ms)
+ΓÜá∩╕Å [Supabase] α╕Üα╕▒α╕Öα╕ùα╕╢α╕üα╣Çα╕ºα╕Ñα╕▓α╣Çα╕éα╣ëα╕▓α╣Çα╕úα╕╡α╕óα╕Öα╕éα╕╢α╣ëα╕Ö Cloud α╣äα╕íα╣êα╕¬α╕│α╣Çα╕úα╣çα╕ê: Unregistered API key
+Γä╣ tests 20
+Γä╣ suites 6
+Γä╣ pass 20
+Γä╣ fail 0
+Γä╣ cancelled 0
+Γä╣ skipped 0
+Γä╣ todo 0
+Γä╣ duration_ms 1644.3642
