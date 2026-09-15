@@ -256,6 +256,15 @@
           <p id="stepDesc" class="text-xs text-stone-400 mt-1">กดปุ่ม "บันทึกและเริ่มสแกน" ด้านล่างเพื่อเริ่มบันทึก</p>
         </div>
 
+        <!-- Retry Action Box (shown only when a finger fails with retry option) -->
+        <div id="retryActionBox" class="mt-3 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-center hidden">
+          <p id="retryPromptText" class="text-xs text-amber-300 mb-2 font-medium">สแกนไม่สำเร็จ ต้องการลองสแกนนิ้วนี้ใหม่อีกครั้งหรือไม่?</p>
+          <button type="button" id="retryFingerBtn" class="w-full py-2.5 px-3 bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white text-xs font-semibold rounded-lg transition flex items-center justify-center gap-2 shadow-md shadow-amber-600/30">
+            <i class="fa-solid fa-rotate-right"></i>
+            <span id="retryFingerBtnText">ลองสแกนนิ้วนี้ใหม่อีกครั้ง</span>
+          </button>
+        </div>
+
         <!-- Submit Button -->
         <div class="pt-3 flex gap-3">
           <button type="button" id="cancelEnrollBtn" class="w-1/2 py-2.5 px-4 bg-stone-800 hover:bg-stone-700 text-stone-300 text-sm font-medium rounded-xl transition">

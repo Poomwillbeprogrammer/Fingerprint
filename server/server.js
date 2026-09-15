@@ -10,6 +10,7 @@ const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { dbAsync, initDatabase } = require('./database');
 const schedulesManager = require('./schedules_manager');
+const { EnrollmentSession } = require('./enrollment_manager');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 const rateLimit = require('express-rate-limit');
@@ -519,39 +520,42 @@ async function handleSerialData(rawLine) {
   }
 
   // 1. สถานะขั้นตอนบันทึกลายนิ้วมือ (3-Finger Enrollment Guide)
-  if (line === 'STATUS:ENROLL_STEP1_WAIT') {
+  if (line.startsWith('STATUS:ENROLL_STEP1_WAIT')) {
     const fingerNum = currentEnrollSession ? currentEnrollSession.fingerNum : 1;
     io.emit('enroll_step_update', { status: 'STEP1_WAIT', id: currentEnrollId, fingerNum, totalFingers: 3 });
-  } else if (line === 'STATUS:ENROLL_REMOVE_FINGER') {
+  } else if (line.startsWith('STATUS:ENROLL_REMOVE_FINGER')) {
     const fingerNum = currentEnrollSession ? currentEnrollSession.fingerNum : 1;
     io.emit('enroll_step_update', { status: 'REMOVE_FINGER', id: currentEnrollId, fingerNum, totalFingers: 3 });
-  } else if (line === 'STATUS:ENROLL_STEP2_WAIT') {
+  } else if (line.startsWith('STATUS:ENROLL_STEP2_WAIT')) {
     const fingerNum = currentEnrollSession ? currentEnrollSession.fingerNum : 1;
-    io.emit('enroll_step_update', { status: 'STEP2_WAIT', id: currentEnrollId, fingerNum, totalFingers: 3 });
+    const tryMatch = line.match(/TRY=(\d+)/);
+    const attempt = tryMatch ? parseInt(tryMatch[1]) : 1;
+    io.emit('enroll_step_update', { status: 'STEP2_WAIT', id: currentEnrollId, fingerNum, totalFingers: 3, attempt });
   } else if (line.startsWith('RESP:ENROLL_OK')) {
     const match = line.match(/ID=(\d+)/);
     const completedSlot = match ? parseInt(match[1]) : currentEnrollId;
     console.log(`🎉 [Enroll OK] บันทึก Slot #${completedSlot} สำเร็จ!`);
 
     if (currentEnrollSession) {
-      currentEnrollSession.enrolledSlots.push(completedSlot);
-      if (currentEnrollSession.fingerNum < 3) {
-        const completedFinger = currentEnrollSession.fingerNum;
-        currentEnrollSession.fingerNum++;
-        const nextSlot = currentEnrollSession.slots[currentEnrollSession.fingerNum - 1];
+      const enrollRes = currentEnrollSession.onSlotSuccess(completedSlot);
+      if (!enrollRes.isComplete) {
+        const completedFinger = enrollRes.completedFinger;
+        const nextSlot = enrollRes.nextSlot;
         currentEnrollId = nextSlot;
 
         io.emit('enroll_step_update', {
           status: 'FINGER_DONE',
           fingerNum: completedFinger,
+          nextFinger: enrollRes.nextFinger,
           totalFingers: 3,
           slotId: completedSlot,
+          nextSlot: nextSlot,
           id: currentEnrollSession.userId
         });
 
-        console.log(`⏳ [3-Finger Enroll] นิ้วที่ ${completedFinger}/3 ผ่านแล้ว -> กำลังเริ่มนิ้วที่ ${currentEnrollSession.fingerNum}/3 (Slot #${nextSlot}) ใน 1.5 วินาที...`);
+        console.log(`⏳ [3-Finger Enroll] นิ้วที่ ${completedFinger}/3 ผ่านแล้ว -> กำลังเริ่มนิ้วที่ ${enrollRes.nextFinger}/3 (Slot #${nextSlot}) ใน 1.5 วินาที...`);
         setTimeout(() => {
-          if (currentEnrollSession) {
+          if (currentEnrollSession && currentEnrollSession.status === 'IN_PROGRESS') {
             sendSerialCommand(`ENROLL ${nextSlot}`);
             io.emit('enroll_step_update', {
               status: 'FINGER_START',
@@ -585,7 +589,8 @@ async function handleSerialData(rawLine) {
     console.log(`🛑 [Arduino] ยกเลิกการสแกนนิ้วสำเร็จ (${line})`);
     if (currentEnrollSession) {
       const uId = currentEnrollSession.userId;
-      const slots = [...currentEnrollSession.enrolledSlots];
+      const slots = currentEnrollSession.getSlotsForCleanup();
+      currentEnrollSession.cancel();
       currentEnrollSession = null;
       currentEnrollId = null;
       await cleanupFailedEnroll(uId, slots, 'Arduino Cancelled');
@@ -617,26 +622,34 @@ async function handleSerialData(rawLine) {
     } else if (line.includes('IMAGE1')) {
       message = 'ภาพลายนิ้วมือรอบแรกไม่ชัด กรุณาวางนิ้วใหม่';
     } else if (line.includes('IMAGE2')) {
-      message = 'ภาพลายนิ้วมือรอบสองไม่ชัด กรุณาวางนิ้วใหม่';
+      message = 'ภาพลายนิ้วมือรอบสองไม่ชัด (ลองซ้ำ 3 ครั้งแล้ว) กรุณาวางนิ้วใหม่';
     } else if (line.includes('MISMATCH')) {
-      message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก กรุณาลองใหม่';
+      message = 'ลายนิ้วมือรอบที่ 2 ไม่ตรงกับรอบแรก (ลองซ้ำ 3 ครั้งแล้ว) กรุณาลองใหม่';
     } else if (line.includes('STORE')) {
       message = 'หน่วยความจำ R307 ขัดข้อง บันทึกไม่สำเร็จ';
     }
     console.warn(`⚠️ [Enroll Failed] ${message} (${line})`);
 
     if (currentEnrollSession) {
-      const uId = currentEnrollSession.userId;
-      const slots = [...currentEnrollSession.enrolledSlots];
-      currentEnrollSession = null;
-      currentEnrollId = null;
-      await cleanupFailedEnroll(uId, slots, message);
+      const failInfo = currentEnrollSession.onSlotFailure(code, message);
+      io.emit('enroll_step_update', {
+        status: 'FINGER_FAILED',
+        code,
+        message,
+        fingerNum: failInfo.failedFinger,
+        slotId: failInfo.failedSlot,
+        enrolledSlots: failInfo.enrolledSlots,
+        canRetry: true,
+        id: currentEnrollSession.userId
+      });
     } else if (currentEnrollId) {
       const mappedId = Math.floor((currentEnrollId - 1) / 3) + 1;
       currentEnrollId = null;
       await cleanupFailedEnroll(mappedId, [], message);
+      io.emit('enroll_step_update', { status: 'FAILED', code, message });
+    } else {
+      io.emit('enroll_step_update', { status: 'FAILED', code, message });
     }
-    io.emit('enroll_step_update', { status: 'FAILED', code, message });
   }
 
   // 2. การลบลายนิ้วมือ
@@ -1407,14 +1420,8 @@ io.on('connection', (socket) => {
     const slot2 = (userId - 1) * 3 + 2;
     const slot3 = (userId - 1) * 3 + 3;
 
-    currentEnrollSession = {
-      userId: userId,
-      name: data.name,
-      fingerNum: 1,
-      slots: [slot1, slot2, slot3],
-      enrolledSlots: []
-    };
-    currentEnrollId = slot1;
+    currentEnrollSession = new EnrollmentSession(userId, data.name, [slot1, slot2, slot3]);
+    currentEnrollId = currentEnrollSession.getCurrentSlot();
 
     console.log(`🚀 [3-Finger Enroll] เริ่มลงทะเบียน User ID #${userId} (${data.name}) นิ้วที่ 1/3 (Slot #${slot1})`);
 
@@ -1439,6 +1446,38 @@ io.on('connection', (socket) => {
     }
   });
 
+  // คำสั่งลองสแกนนิ้วเดิมที่บันทึกไม่ผ่านซ้ำอีกครั้ง (Per-Finger Retry) - เฉพาะ Admin
+  socket.on('retry_current_finger', async () => {
+    if (socket.role !== 'admin') {
+      console.warn(`🚨 [Security] Blocked unauthorized retry_current_finger from ${socket.id}`);
+      return;
+    }
+    if (!currentEnrollSession) {
+      console.warn('⚠️ [Enroll Retry] No active enrollment session to retry');
+      return;
+    }
+
+    const retryInfo = currentEnrollSession.retryCurrentFinger();
+    currentEnrollId = retryInfo.slot;
+    console.log(`🔄 [3-Finger Enroll] สั่งลองสแกนนิ้วที่ ${retryInfo.fingerNum}/3 ใหม่อีกครั้ง (Slot #${retryInfo.slot})`);
+
+    const sent = sendSerialCommand(`ENROLL ${retryInfo.slot}`);
+    if (sent) {
+      io.emit('enroll_step_update', {
+        status: 'FINGER_START',
+        fingerNum: retryInfo.fingerNum,
+        totalFingers: 3,
+        slotId: retryInfo.slot,
+        id: currentEnrollSession.userId
+      });
+    } else {
+      socket.emit('enroll_step_update', {
+        status: 'FAILED',
+        message: 'ไม่สามารถส่งคำสั่งไปยังบอร์ด Arduino ได้'
+      });
+    }
+  });
+
   // คำสั่งยกเลิกการลงทะเบียนจากหน้าเว็บ - เฉพาะ Admin
   socket.on('cancel_enroll', async (data) => {
     if (socket.role !== 'admin') {
@@ -1455,7 +1494,8 @@ io.on('connection', (socket) => {
 
     if (currentEnrollSession) {
       uId = currentEnrollSession.userId;
-      enrolledSlots = [...currentEnrollSession.enrolledSlots];
+      enrolledSlots = currentEnrollSession.getSlotsForCleanup();
+      currentEnrollSession.cancel();
       currentEnrollSession = null;
       currentEnrollId = null;
     }

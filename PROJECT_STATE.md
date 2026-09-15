@@ -33,6 +33,11 @@
   - **สถาปัตยกรรม `fingerHeld` แบบ Non-blocking (`sketch.ino`):** ใช้แฟล็ก `fingerHeld` ควบคุม `scanFingerprint()` ใน `loop()` โดยไม่มีลูปบล็อคกิ้ง `while` รอปล่อยนิ้ว ทำให้ STM32 สามารถอ่านและประมวลผลคำสั่ง Serial จาก Linux ได้ตลอดเวลา 100%
   - **Silent Background Delete:** ปรับฟังก์ชัน `handleDelete` ให้ทำงานแบบเบื้องหลังเงียบสนิท ไม่เรียก `showUI` หรือหน่วงเวลา `delay(2500)` ทำให้การ Auto-Rollback ตอนยกเลิกลงทะเบียนเสร็จสิ้นในเสี้ยววินาทีโดยไม่รบกวนหน้าจอ TFT
   - **Rock-Solid 200ms Frame Handshake & Inter-frame Pacing (`unoq_bridge.py`):** ฟื้นฟู `initial_wait=0.20` และการหน่วง 150ms ก่อนส่งเฟรมภาพ เพื่อป้องกัน UART RX FIFO (64 ไบต์) บน Zephyr OS ล้น พร้อมแก้ไขการประกาศตัวแปร Global ป้องกัน `UnboundLocalError` อย่างสมบูรณ์
+- **Resilient Multi-Level Enrollment & Per-Finger Retry (ADR-033) [เสร็จสมบูรณ์ 100%]:**
+  - **Level 1 (STM32 Firmware In-Place Step 2 Retry):** ลูป Step 2 retry สูงสุด 3 ครั้งเมื่อภาพเบลอหรือลายนิ้วมือไม่ตรงกัน โดยไม่ต้องเริ่ม Step 1 ใหม่ รักษา Buffer 1 ไว้ในแรม พร้อมแสดงข้อความและรอบการลองใหม่ชัดเจนบนจอ TFT (`Retry (2/3): Place SAME finger again`)
+  - **Level 2 (Server Non-Destructive State Machine):** พัฒนาโมดูล `EnrollmentSession` (`server/enrollment_manager.js`) เปลี่ยนสถานะเป็น `FINGER_FAILED` เมื่อนิ้วใดนิ้วหนึ่งไม่ผ่าน โดยรักษานิ้วที่สำเร็จแล้วไว้ ไม่ลบผู้ใช้ใน DB และรองรับ Socket Event `retry_current_finger` เพื่อเริ่มสแกนเฉพาะนิ้วนั้นใหม่อีกครั้ง
+  - **Level 3 (Web UI Interactive Retry):** เพิ่มกล่องแจ้งเตือน `#retryActionBox` ใน `users.html` และ `app.js` พร้อมปุ่มกดลองสแกนนิ้วเดิมใหม่ และแสดงจำนวนนิ้วที่บันทึกสำเร็จแล้ว
+  - **TDD Verification:** พัฒนาชุดทดสอบ `tests/test_enrollment_manager.js` ผ่านการทดสอบครบถ้วน 7/7 รายการ (รวมชุดทดสอบทั้งระบบ 20/20 ใน `npm test` และ 14/14 ใน Python `unittest`)
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย
@@ -94,6 +99,16 @@
     4. ตารางแมปวันภาษาไทย 7 วัน (`DAY_MAP` / `DAY_NAMES`)
     5. กฎการแยกสัปดาห์เข้าเรียน (Weekly Attendance Isolation Rule) ตาม `GEMINI.md`
   - สั่งรันได้ทันทีผ่าน `npm test` ในโฟลเดอร์ `server/`
+- **Node.js Multi-Finger Resilient Enrollment Test Suite (`tests/test_enrollment_manager.js`) [TDD]:**
+  - พัฒนาชุดทดสอบ 7 รายการตามระเบียบวิธี TDD ผ่าน Node.js Native Test Runner ครอบคลุม:
+    1. การคำนวณ 3 Slots ต่อคนแบบอัตโนมัติตาม ID ผู้ใช้
+    2. การเปลี่ยนผ่านสถานะเมื่อนิ้วที่ 1 สำเร็จไปยังนิ้วที่ 2
+    3. การรักษาสถานะนิ้วก่อนหน้าเมื่อนิ้วถัดไปล้มเหลว (Non-destructive failure) โดยไม่ล้างนิ้วที่สำเร็จแล้ว
+    4. คำสั่ง `retryCurrentFinger` คืนสถานะ `IN_PROGRESS` เฉพาะ Slot นิ้วที่ล้มเหลวเดิม
+    5. การสแกนนิ้วที่ 2 ผ่านหลังการ retry แล้วขยับสู่นิ้วที่ 3 ได้อย่างถูกต้อง
+    6. การบันทึกครบทรัพย์ 3 นิ้วและจบเซสชันแบบสมบูรณ์
+    7. การคำนวณ Slot ที่ต้อง Rollback เฉพาะรายการที่บันทึกไปแล้วเมื่อกดยกเลิกจริง
+  - ทดสอบผ่านฉลุย 7/7 รายการ รวมทั้งสิ้น 20/20 รายการใน `npm test`
 
 ---
 
@@ -112,6 +127,7 @@ Fingerprint/
 │   └── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
 │                              # - ขับเซนเซอร์ R307 และจอ 1.8" TFT SPI 160x128 Landscape (ST7735)
 │                              # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
+│                              # - ลูป Step 2 Retry 1..3 ครั้งในตัว ไม่ต้องเริ่ม Step 1 ใหม่
 │                              # - รับคำสั่งภาพแบบ 16-Byte Chunking (2,560 ไบต์) พร้อม Zone-based Theming
 │                              # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
 │
@@ -120,6 +136,11 @@ Fingerprint/
 │   │                          # - จุดรวม API Endpoints ทั้งหมดพร้อม Middleware รักษาความปลอดภัย
 │   │                          # - จัดการ Real-time Events (สแกน, ลงเวลา, ซิงก์แคช, ตรวจสอบซ้ำ)
 │   │                          # - จัดการโหมด Serial (Local) และ Cloud Bridge
+│   │                          # - เชื่อมต่อ EnrollmentSession รองรับการลองสแกนนิ้วซ้ำเฉพาะนิ้วที่ล้มเหลว
+│   │
+│   ├── enrollment_manager.js  # โมดูล State Machine ดูแลการลงทะเบียน 3 นิ้วแบบ Non-destructive Retry
+│   │                          # - ป้องกันการ Auto-Rollback นิ้วที่บันทึกผ่านไปแล้ว
+│   │                          # - รองรับการลองใหม่เฉพาะนิ้ว (Per-Finger Retry)
 │   │
 │   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียนและการลงเวลา (Single Source of Truth)
 │   │                          # - เชื่อมต่อ Supabase Cloud Database (room_schedules & session_attendance)

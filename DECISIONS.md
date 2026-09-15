@@ -352,5 +352,25 @@
     2. **Silent Background Delete (`sketch.ino`):** ตัด `showUI()`, `delay(2500)`, และ `EVENT:IDLE` ออกจาก `handleDelete()` เหลือเพียงการสั่งลบโมเดลในเซนเซอร์ R307 และส่ง `RESP:DELETE_OK ID=...` หรือ `RESP:DELETE_FAIL ID=...` ออกมาทาง Serial ทำให้กระบวนการ Rollback สำเร็จในเสี้ยววินาทีโดยไม่รบกวนหน้าจอ TFT
     3. **Rock-Solid 200ms Frame Handshake (`unoq_bridge.py`):** ฟื้นฟู `initial_wait=0.20` (200ms) ใน `send_bitmap_to_mcu()` และคงการหน่วง `time.sleep(0.15)` ใน `EVENT:IDLE` ควบคู่กับ Inter-frame Pacing 600ms เพื่อรับประกันว่า STM32 มีเวลาเพียงพอในการอ่าน `FRAME_START` และเข้าสู่ `handleFrameReceive()` โดยไม่มี UART Buffer Overflow
     4. **Global Variable Safety (`unoq_bridge.py`):** ประกาศ `global boot_splash_sent, r307_connected, oled_connected` ใน `mcu_reader_thread()` ป้องกันข้อผิดพลาด `UnboundLocalError` และคงแฟล็ก `boot_splash_sent` เพื่อป้องกันการส่งภาพซ้ำซ้อนจาก periodic hardware watchdog
+* **ADR-033:** สถาปัตยกรรมการลงทะเบียนลายนิ้วมือแบบหลายระดับและความยืดหยุ่นในการลองใหม่เฉพาะนิ้ว (Resilient Multi-Level Enrollment & Non-Destructive Per-Finger Retry Architecture):
+  - **ที่มาและปัญหา (Context & Problem):**
+    1. ในการลงทะเบียนลายนิ้วมือ 3 นิ้วต่อคน (นิ้ว 1, นิ้ว 2, นิ้ว 3) เดิมทีหากนิ้วที่ 2 หรือนิ้วที่ 3 สแกนไม่ผ่าน (เช่น ลายนิ้วมือไม่ตรงกันใน Step 2 หรือภาพเบลอ) ระบบจะส่ง `RESP:ENROLL_FAIL` และสั่ง `cleanupFailedEnroll()` ลบข้อมูลผู้ใช้ในฐานข้อมูลและสั่งเซนเซอร์ R307 ลบลายนิ้วมือที่สแกนผ่านไปแล้วในนิ้วที่ 1 ทิ้งทันที (Destructive Auto-Rollback) ผู้ใช้ต้องเริ่มต้นสแกนใหม่ทั้งหมดตั้งแต่ต้น
+    2. ในระดับฮาร์ดแวร์ เมื่อสแกนนิ้วใดนิ้วหนึ่ง ขั้นตอนที่ 1 (ภาพ 1) บันทึกลง Buffer 1 สำเร็จแล้ว แต่พอยกนิ้ววางครั้งที่ 2 (ภาพ 2) หากวางเบี้ยวหรือไม่ตรง ระบบเดิมจะตัดตกทันที ทั้งที่ภาพที่ 1 ใน Buffer 1 ของ R307 ยังคงสมบูรณ์อยู่
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Level 1: Hardware In-Place Step 2 Retry Loop (`sketch.ino`):**
+       - ในฟังก์ชัน `handleEnroll(int id)` เพิ่มลูป Step 2 retry สูงสุด 3 ครั้ง (`for (int attempt = 1; attempt <= 3; attempt++)`)
+       - ตราบใดที่ Buffer 1 ยังคงอยู่ในแรมของ R307 หาก Step 2 ภาพเบลอหรือ Mismatch จะแสดงข้อความเตือนบนจอ TFT: `"Retry (2/3): Place SAME finger again"`, `"FINGER MISMATCH! Remove finger to retry"` และรอให้ยกนิ้วออกแล้ววางใหม่ โดยไม่ต้องเริ่มสแกนภาพ 1 ใหม่
+    2. **Level 2: Non-Destructive Per-Finger Server State Machine (`server/enrollment_manager.js` & `server/server.js`):**
+       - พัฒนาโมดูล `EnrollmentSession` ดูแล State Machine การลงทะเบียน 3 นิ้ว
+       - เมื่อนิ้วใดนิ้วหนึ่งไม่ผ่าน (หลังลอง 3 ครั้งใน Step 2 แล้ว) จะเปลี่ยนสถานะเป็น `FINGER_FAILED` โดย**ไม่ลบ**นิ้วก่อนหน้าที่บันทึกสำเร็จไปแล้ว (`enrolledSlots`) และไม่ลบผู้ใช้ใน DB
+       - ส่งสถานะ `FINGER_FAILED` พร้อม `canRetry: true` และจำนวนนิ้วที่บันทึกสำเร็จแล้วไปยังหน้าเว็บ
+       - เพิ่ม Socket Event `retry_current_finger` ให้แอดมินกดสั่งลองสแกนเฉพาะนิ้วที่ล้มเหลวนั้นใหม่ได้ทันที
+       - กลไก Auto-Rollback จะทำงานเฉพาะเมื่อแอดมินกดปุ่ม "ยกเลิก" หรือปิดหน้าต่างโมดอลอย่างชัดเจน (`cancel_enroll`) เท่านั้น
+    3. **Level 3: Web UX Interactive Retry Interface (`users.html` & `app.js`):**
+       - เพิ่มกล่องแจ้งเตือน `#retryActionBox` พร้อมปุ่ม `[🔄 ลองสแกนนิ้วที่ N ใหม่อีกครั้ง]` และข้อความให้กำลังใจว่านิ้วก่อนหน้าบันทึกแล้ว ไม่ต้องเริ่มใหม่
+       - อัปเดตข้อความแนะนำขั้นตอนแบบเรียลไทม์รองรับการลองใหม่ทั้งระดับฮาร์ดแวร์ (Attempt 1..3) และระดับนิ้ว
+    4. **TDD Automated Test Suite (`tests/test_enrollment_manager.js`):**
+       - เขียนชุดทดสอบ Node.js 7 รายการ ครอบคลุมการเปลี่ยนสถานะของเซสชัน, การรักษานิ้วเดิมเมื่อนิ้วถัดไปล้มเหลว, การสั่ง retry เฉพาะนิ้วเดิม และการคำนวณ Slot ที่ต้องล้างเมื่อกดยกเลิก ผ่านการทดสอบ 100%
+
 
 

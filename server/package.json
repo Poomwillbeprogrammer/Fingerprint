@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test ../tests/test_schedules_manager.js"
+    "test": "node --test ../tests/test_schedules_manager.js ../tests/test_enrollment_manager.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.114.0",

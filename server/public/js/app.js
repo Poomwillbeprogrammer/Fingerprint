@@ -804,6 +804,10 @@ if (window.location.pathname.endsWith('users.html')) {
   const closeModalBtn = document.getElementById('closeModalBtn');
   const cancelEnrollBtn = document.getElementById('cancelEnrollBtn');
   const enrollForm = document.getElementById('enrollForm');
+  const retryActionBox = document.getElementById('retryActionBox');
+  const retryFingerBtn = document.getElementById('retryFingerBtn');
+  const retryFingerBtnText = document.getElementById('retryFingerBtnText');
+  const retryPromptText = document.getElementById('retryPromptText');
 
   let isEnrolling = false;
   let createdUserId = null;
@@ -812,6 +816,7 @@ if (window.location.pathname.endsWith('users.html')) {
     isEnrolling = false;
     createdUserId = null;
     document.getElementById('submitEnrollBtn').disabled = false;
+    if (retryActionBox) retryActionBox.classList.add('hidden');
 
     // คำนวณหา Slot ID ที่ว่างอันดับแรกสุด (Auto-Fill Gaps เช่น หากลบ #3 จะนำ #3 มาใช้ใหม่ทันที)
     const usedIds = new Set(allUsers.map(u => u.id));
@@ -843,6 +848,7 @@ if (window.location.pathname.endsWith('users.html')) {
       isEnrolling = false;
       createdUserId = null;
     }
+    if (retryActionBox) retryActionBox.classList.add('hidden');
     modal.classList.add('hidden');
     document.getElementById('submitEnrollBtn').disabled = false;
     loadUsers();
@@ -850,6 +856,14 @@ if (window.location.pathname.endsWith('users.html')) {
 
   closeModalBtn.addEventListener('click', handleCancelOrClose);
   cancelEnrollBtn.addEventListener('click', handleCancelOrClose);
+
+  if (retryFingerBtn) {
+    retryFingerBtn.addEventListener('click', () => {
+      if (retryActionBox) retryActionBox.classList.add('hidden');
+      updateGuidance('step1', `[นิ้วที่ ${currentFingerNum}/3] กำลังเริ่มสแกนใหม่...`, 'กรุณาวางนิ้วบนเซนเซอร์เมื่อพร้อม');
+      socket.emit('retry_current_finger');
+    });
+  }
 
   function updateGuidance(state, title, desc) {
     const icon = document.getElementById('stepIcon');
@@ -935,19 +949,45 @@ if (window.location.pathname.endsWith('users.html')) {
     const fPrefix = `[นิ้วที่ ${currentFingerNum}/3] `;
 
     if (data.status === 'FINGER_START') {
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('step1', `${fPrefix}วางนิ้วบนเซนเซอร์`, `กรุณาวางนิ้วที่ ${currentFingerNum} (Slot #${data.slotId})`);
     } else if (data.status === 'STEP1_WAIT') {
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 1: วางนิ้วบนเซนเซอร์`, `วางนิ้วที่ ${currentFingerNum} ที่ต้องการบันทึก`);
     } else if (data.status === 'REMOVE_FINGER') {
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('remove', `${fPrefix}ขั้นตอนที่ 2: กรุณายกนิ้วออก`, 'ยกนิ้วออกจากเซนเซอร์สักครู่');
     } else if (data.status === 'STEP2_WAIT') {
-      updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง`, `วางนิ้วที่ ${currentFingerNum} อีกครั้งเพื่อยืนยัน`);
+      if (retryActionBox) retryActionBox.classList.add('hidden');
+      if (data.attempt && data.attempt > 1) {
+        updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 3 (ลองใหม่รอบที่ ${data.attempt}/3): วางนิ้วเดิมซ้ำ`, `วางนิ้วที่ ${currentFingerNum} อีกครั้งเพื่อยืนยัน`);
+      } else {
+        updateGuidance('step1', `${fPrefix}ขั้นตอนที่ 3: วางนิ้วเดิมซ้ำอีกครั้ง`, `วางนิ้วที่ ${currentFingerNum} อีกครั้งเพื่อยืนยัน`);
+      }
     } else if (data.status === 'FINGER_DONE') {
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('success', `บันทึกนิ้วที่ ${data.fingerNum}/3 สำเร็จ!`, 'กำลังเตรียมพร้อมสำหรับนิ้วถัดไป...');
       playSound('granted');
+    } else if (data.status === 'FINGER_FAILED') {
+      const isDuplicate = (data.code === 'DUPLICATE');
+      updateGuidance('failed', isDuplicate ? `⚠️ ${fPrefix}ลายนิ้วมือซ้ำในระบบ` : `⚠️ ${fPrefix}สแกนไม่ผ่าน`, data.message || 'กรุณากดลองสแกนนิ้วนี้ใหม่อีกครั้ง');
+      playSound('denied');
+      if (retryActionBox) {
+        retryActionBox.classList.remove('hidden');
+        if (retryFingerBtnText) retryFingerBtnText.innerText = `🔄 ลองสแกนนิ้วที่ ${data.fingerNum} ใหม่อีกครั้ง (Slot #${data.slotId})`;
+        if (retryPromptText) {
+          const enrolledCount = (data.enrolledSlots && data.enrolledSlots.length) || 0;
+          if (enrolledCount > 0) {
+            retryPromptText.innerText = `✨ นิ้วก่อนหน้านี้ (${enrolledCount} นิ้ว) ได้รับการบันทึกแล้ว ไม่ต้องเริ่มใหม่ทั้งหมด!`;
+          } else {
+            retryPromptText.innerText = 'กดปุ่มด้านล่างเพื่อเริ่มสแกนนิ้วนี้ใหม่อีกครั้ง หรือกดยกเลิก';
+          }
+        }
+      }
     } else if (data.status === 'SUCCESS') {
       isEnrolling = false;
       createdUserId = null;
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('success', '🎉 บันทึกลายนิ้วมือครบ 3 นิ้วสำเร็จ!', `บันทึก User ID #${data.id} (3 นิ้ว) เรียบร้อยแล้ว`);
       playSound('granted');
       setTimeout(() => {
@@ -958,6 +998,7 @@ if (window.location.pathname.endsWith('users.html')) {
     } else if (data.status === 'CANCELLED') {
       isEnrolling = false;
       createdUserId = null;
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       updateGuidance('failed', 'ยกเลิกแล้ว', data.message || 'ยกเลิกการลงทะเบียนเรียบร้อย');
       document.getElementById('submitEnrollBtn').disabled = false;
       setTimeout(() => {
@@ -967,6 +1008,7 @@ if (window.location.pathname.endsWith('users.html')) {
     } else if (data.status === 'FAILED') {
       isEnrolling = false;
       createdUserId = null;
+      if (retryActionBox) retryActionBox.classList.add('hidden');
       const isDuplicate = (data.code === 'DUPLICATE');
       updateGuidance('failed', isDuplicate ? '⚠️ ลายนิ้วมือซ้ำในระบบ' : 'การลงทะเบียนไม่สำเร็จ', data.message || 'กรุณาลองใหม่อีกครั้ง');
       playSound('denied');

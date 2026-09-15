@@ -1013,45 +1013,82 @@ void handleEnroll(int id) {
     delay(50);
   }
 
-  // ขั้นตอนที่ 2: วางนิ้วเดิมซ้ำอีกครั้ง (พร้อม Timeout 20 วิ และรับคำสั่ง CANCEL_ENROLL)
-  showUI(idHeader, "Step 2: Place SAME", "finger again...");
-  Serial.println("STATUS:ENROLL_STEP2_WAIT");
+  // ขั้นตอนที่ 2: วางนิ้วเดิมซ้ำอีกครั้ง (มีระบบ Retry สูงสุด 3 ครั้งโดยไม่ต้องเริ่ม Step 1 ใหม่)
+  bool modelSuccess = false;
+  for (int attempt = 1; attempt <= 3; attempt++) {
+    if (attempt == 1) {
+      showUI(idHeader, "Step 2: Place SAME", "finger again...");
+    } else {
+      char step2Retry[25];
+      snprintf(step2Retry, sizeof(step2Retry), "Retry (%d/3): Place", attempt);
+      showUI(idHeader, step2Retry, "SAME finger again");
+    }
+    Serial.print("STATUS:ENROLL_STEP2_WAIT TRY=");
+    Serial.println(attempt);
 
-  uint32_t step2Start = millis();
-  p = -1;
-  while (p != FINGERPRINT_OK) {
-    if (checkEnrollCancelOrTimeout(id, step2Start, 20000)) return;
+    uint32_t step2Start = millis();
+    p = -1;
+    while (p != FINGERPRINT_OK) {
+      if (checkEnrollCancelOrTimeout(id, step2Start, 20000)) return;
 
-    p = finger.getImage();
-    if (p == FINGERPRINT_NOFINGER) {
-      delay(50);
-      continue;
+      p = finger.getImage();
+      if (p == FINGERPRINT_NOFINGER) {
+        delay(50);
+        continue;
+      }
+    }
+
+    p = finger.image2Tz(2);
+    if (p != FINGERPRINT_OK) {
+      if (attempt < 3) {
+        showUI(idHeader, "Image 2 blurry!", "Remove finger to retry");
+        finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+        delay(1200);
+        uint32_t remWait = millis();
+        while (finger.getImage() != FINGERPRINT_NOFINGER && (millis() - remWait < 5000)) {
+          delay(40);
+        }
+        continue;
+      } else {
+        showUI("ENROLL FAILED", "Image 2 blurry (3x)", "Try enroll again");
+        Serial.println("RESP:ENROLL_FAIL_IMAGE2");
+        delay(1500);
+        fingerHeld = true;
+        finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+        Serial.println("EVENT:IDLE");
+        return;
+      }
+    }
+
+    // ประมวลผลสร้าง Model
+    showUI(idHeader, "Creating model...", "Comparing images...");
+    p = finger.createModel();
+    if (p == FINGERPRINT_OK) {
+      modelSuccess = true;
+      break; // เทียบผ่าน สำเร็จ!
+    } else {
+      if (attempt < 3) {
+        showUI(idHeader, "FINGER MISMATCH!", "Remove finger to retry");
+        finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+        delay(1200);
+        uint32_t remWait = millis();
+        while (finger.getImage() != FINGERPRINT_NOFINGER && (millis() - remWait < 5000)) {
+          delay(40);
+        }
+        continue;
+      } else {
+        showUI("ENROLL FAILED", "Mismatch (3 times)", "Try enroll again");
+        Serial.println("RESP:ENROLL_FAIL_MISMATCH");
+        delay(1500);
+        fingerHeld = true;
+        finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+        Serial.println("EVENT:IDLE");
+        return;
+      }
     }
   }
 
-  p = finger.image2Tz(2);
-  if (p != FINGERPRINT_OK) {
-    showUI("ENROLL FAILED", "Image 2 blurry", "Try again");
-    Serial.println("RESP:ENROLL_FAIL_IMAGE2");
-    delay(1500);
-    fingerHeld = true;
-    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-    Serial.println("EVENT:IDLE");
-    return;
-  }
-
-  // ประมวลผลสร้าง Model และบันทึก
-  showUI(idHeader, "Creating model...", "Saving to Flash...");
-  p = finger.createModel();
-  if (p != FINGERPRINT_OK) {
-    showUI("ENROLL FAILED", "Fingerprints differ", "Try again");
-    Serial.println("RESP:ENROLL_FAIL_MISMATCH");
-    delay(1500);
-    fingerHeld = true;
-    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-    Serial.println("EVENT:IDLE");
-    return;
-  }
+  if (!modelSuccess) return;
 
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
