@@ -4,7 +4,8 @@
   "description": "IoT Fingerprint Admin Dashboard and Supabase Backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test ../tests/test_schedules_manager.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.114.0",

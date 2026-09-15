@@ -77,6 +77,24 @@
 - ลบสคริปต์ทดสอบเก่า `server/seed.js` เพื่อกำจัดความเสี่ยงต่อการลบฐานข้อมูล Production และลดความซับซ้อนของโค้ด
 - ขจัดการเขียนไฟล์ดิสก์ชั่วคราวซ้ำซ้อนบน Render และตัดไฟล์ขยะ `server/data/room_schedules.json` ออกจากระบบ
 
+### 1.5 ชุดทดสอบอัตโนมัติ (Automated Testing Suites - Python & Node.js)
+- **Python Bridge Test Suite (`tests/test_unoq_bridge.py`):**
+  - พัฒนาชุดทดสอบ Unit Test 14 รายการผ่าน `unittest` ครอบคลุม:
+    1. สูตรคำนวณ Slot ลายนิ้วมือ 3-Finger Redundancy `(slot_id - 1) // 3 + 1` และ Boundary/Invalid ID
+    2. ระบบป้องกันการสแกนซ้ำรายวันและแคชประวัติ (`record_check_in` / `is_already_checked_in`)
+    3. ตรรกะคิวออฟไลน์ (Store-and-forward Offline Queue Persistence & Crash Recovery)
+    4. กฎความปลอดภัยของโปรโตคอล 16-Byte Chunking (Zephyr UART 64-Byte FIFO Invariant) ตรวจสอบความยาวทุกคำสั่ง `FRAME_DATA` ว่าไม่เกิน 64 ไบต์ และแปลงกลับครบ 2,560 ไบต์ 100%
+    5. ตรรกะการประเมินคาบเรียนและช่วงเวลาสแกนล่วงหน้า 15 นาที (`get_active_schedule`)
+  - รองรับการรันทั้งบนเครื่องพัฒนาและรันตรงบนฮาร์ดแวร์บอร์ด Uno Q Linux ผ่าน ADB (`python3 -m unittest test_unoq_bridge.py` ผ่าน 14/14 ใน 0.020s)
+- **Node.js Schedules & Attendance Test Suite (`tests/test_schedules_manager.js`):**
+  - พัฒนาชุดทดสอบ 13 รายการผ่าน Node.js Native Test Runner (`node:test` และ `node:assert`) ครอบคลุม:
+    1. การคำนวณสัปดาห์ปฏิทินสากล ISO-8601 (`getIsoWeekDetails`, `yearWeek`, Monday-Sunday week bounds)
+    2. การจัดรูปแบบช่วงวันภาษาไทยปีพุทธศักราช (`getWeekRangeText` เช่น "14 - 20 ก.ย. 2569")
+    3. ตัวย่อชื่อวิชาสำหรับหน้าจอ (`generateShortName`)
+    4. ตารางแมปวันภาษาไทย 7 วัน (`DAY_MAP` / `DAY_NAMES`)
+    5. กฎการแยกสัปดาห์เข้าเรียน (Weekly Attendance Isolation Rule) ตาม `GEMINI.md`
+  - สั่งรันได้ทันทีผ่าน `npm test` ในโฟลเดอร์ `server/`
+
 ---
 
 ## 2. ไฟล์หลักๆ และโครงสร้างโปรเจกต์ (Core Files & Architecture)
