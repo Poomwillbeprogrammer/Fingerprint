@@ -192,7 +192,8 @@ class TestOfflineQueue(unittest.TestCase):
         with open(self.temp_file.name, 'w', encoding='utf-8') as f:
             f.write('{ INVALID JSON !!!')
 
-        unoq_bridge.load_offline_queue()
+        with patch('builtins.print'):
+            unoq_bridge.load_offline_queue()
         # Should gracefully recover to an empty list without crashing
         self.assertEqual(unoq_bridge.offline_queue, [])
 
