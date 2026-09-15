@@ -403,7 +403,11 @@
     3. **De-bloat `database.js`:** ลบ `dbAsync` (273 บรรทัด) ออกจาก `server/database.js` เหลือเพียง Supabase Client Instance และ `initDatabase()`
     4. **100% Query Semantics Preservation:** คงพฤติกรรมการคิวรีเดิมเป๊กทุกจุด เช่น การกรอง Template >= 512 ไบต์, การตัดช่องว่าง, ค่าเริ่มต้น In-Sensor = 1, และรูปแบบการคืนค่า `{ lastID, changes }`
     5. **TDD Verification:** ผ่านการทดสอบ `npm test` 20/20 ข้อ เขียวสมบูรณ์ ปราศจาก Warning ใดๆ
-
-
-
-
+* **ADR-037:** การแยกโมดูลเรนเดอร์กราฟิกและหน้าจอแสดงผล (`unoq_views.py`) จากบริดจ์เครือข่ายฮาร์ดแวร์ (`unoq_bridge.py`):
+  - **ที่มาและปัญหา (Context & Problem):**
+    `unoq_bridge.py` เดิมมีขนาดกว่า 1,050 บรรทัด รวมงานเครือข่าย Socket.IO, การจัดการ UART Serial Port, การแคชประวัติออฟไลน์, และโค้ดวาดกราฟิก Pillow 160x128 ไว้ในที่เดียว ทำให้การตรวจสอบหรือปรับแต่งหน้าจอ UI จำเป็นต้องรันผ่านบริดจ์เต็มรูปแบบ หรือต่อกับบอร์ดจริง ไม่สามารถพรีวิวหรือทดสอบเดี่ยว (Isolated Testing) ได้สะดวก
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **View Module Separation (`unoq_views.py`):** แยกการโหลดฟอนต์ TrueType, ตัวแปลงบิตแมป 1-bit raster (`img_to_tft_buf`), ค่าคงที่ขนาดหน้าจอ (`TFT_WIDTH=160`, `TFT_HEIGHT=128`, `TFT_BUF_SIZE=2560`), และฟังก์ชันเรนเดอร์ทั้ง 7 หน้าจอ ออกไปที่ `unoq_views.py`
+    2. **Offline Visual Preview CLI (`if __name__ == '__main__':`):** เพิ่มฟังก์ชัน `tft_buf_to_img` และบล็อกคำสั่ง CLI ใน `unoq_views.py` ให้สามารถส่งออกไฟล์รูปภาพ PNG พรีวิวครบทั้ง 10 กรณีตัวอย่างลงในโฟลเดอร์ `.scratch/png/` บนเครื่องพัฒนาได้ทันทีโดยไม่ต้องเชื่อมต่อฮาร์ดแวร์จริง
+    3. **Zero Behavioral Change:** `unoq_bridge.py` นำเข้าฟังก์ชันและค่าคงที่ทั้งหมดผ่าน `from unoq_views import ...` ทำให้ไบต์ข้อมูล 2,560 ไบต์ที่ส่งไปยังไมโครคอนโทรลเลอร์ผ่าน UART ยังคงตรงตามมาตรฐานเดิม 100%
+    4. **Automated Test Coverage (`tests/test_unoq_bridge.py`):** เพิ่มคลาส `TestUnoqViews` ตรวจสอบความถูกต้องของขนาดบัฟเฟอร์ 2,560 ไบต์ทั้ง 7 หน้าจอ และการ roundtrip แปลงบัฟเฟอร์กลับเป็นรูปภาพ ผ่านการทดสอบ 18/18 ข้อ

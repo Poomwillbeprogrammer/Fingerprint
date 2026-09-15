@@ -130,6 +130,13 @@
   - ย้ายจุดเรียกใช้งาน `dbAsync` ทั้ง 37 จุดทั่วทั้งระบบมาใช้ Repositories ทั้งหมด (`grep -c "dbAsync\." server/*.js` = 0)
   - กำจัดความเสี่ยงเรื่อง String Mismatch และทำให้ Data Layer มี Type Safety และ Testability สูงขึ้น
 
+### 1.8 การแยกโมดูลเรนเดอร์กราฟิกและหน้าจอแสดงผล (Graphic Views Separation - ADR-037)
+- **Modular View Renderer & Layout Preview:**
+  - แยกฟังก์ชันเรนเดอร์กราฟิก Pillow 160x128 ทั้ง 7 หน้าจอ และตัวแปลงบิตแมป 1-bit raster (`img_to_tft_buf`, `tft_buf_to_img`) ออกจาก `unoq_bridge.py` ไปไว้ใน `unoq_views.py`
+  - เพิ่มฟังก์ชันพรีวิวหน้าจอผ่านคำสั่ง CLI (`if __name__ == '__main__':`) ส่งออกไฟล์ภาพ PNG ครบทั้ง 10 รูปแบบไปยังโฟลเดอร์ `.scratch/png/` ช่วยให้นักพัฒนาตรวจทาน UI Layout ได้ทันทีโดยไม่ต้องต่อบอร์ดฮาร์ดแวร์จริง
+  - ปรับปรุง `unoq_bridge.py` ให้นำเข้า `unoq_views` โดยคงความเข้ากันได้ย้อนหลัง 100%
+  - เพิ่มชุดทดสอบใน `tests/test_unoq_bridge.py` ครอบคลุมการเรนเดอร์ทั้ง 7 หน้าจอ และบัฟเฟอร์ขนาด 2,560 ไบต์ (18/18 ผ่านฉลุย)
+
 ---
 
 ## 2. โครงสร้างไฟล์และสถาปัตยกรรม (System Architecture)
@@ -142,9 +149,14 @@ Fingerprint/
 │                              # - 16-byte chunking & Quiet UART (160 ชิ้น / 2,560 ไบต์)
 │
 ├── unoq_bridge.py             # สคริปต์บริดจ์ Python บน Linux SoC (Uno Q)
-│                              # - เรนเดอร์ภาษาไทย TrueType ด้วย Pillow (160x128 แนวนอน ธีม RMUTL)
-│                              # - ตัวแปลงบิตแมป 1-bit raster 2,560 ไบต์
-│                              # - สื่อสารผ่าน WebSocket กับ Server และส่ง UART สู่ STM32
+│                              # - ควบคุม UART ติดต่อ STM32 และ Socket.IO Client สู่ Cloud
+│                              # - จัดการ Offline Queue และ Local Attendance Cache
+│                              # - ตรวจเช็คสุขภาพฮาร์ดแวร์ R307 (Watchdog)
+│
+├── unoq_views.py              # โมดูลเรนเดอร์กราฟิก TFT 160x128 Landscape (Pillow)
+│                              # - เรนเดอร์ภาษาไทย 7 หน้าจอหลัก (Idle, Denied, Card, Success, Duplicate, Cancel, Timeout)
+│                              # - ตัวแปลงบิตแมป 1-bit raster (2,560 ไบต์) แบบ 1:1
+│                              # - รองรับการส่งออกไฟล์พรีวิว PNG สู่ .scratch/png/ สำหรับงานตรวจสอบ UI
 │
 ├── server/                    # Web Backend & Socket.IO บน Render Cloud
 │   ├── server.js              # Application Bootstrap & Composition Root (~155 บรรทัด)
@@ -181,11 +193,11 @@ Fingerprint/
 ├── tests/                     # ชุดทดสอบอัตโนมัติ (Automated Tests)
 │   ├── test_schedules_manager.js     # Node.js Unit Tests (13 ข้อ)
 │   ├── test_enrollment_manager.js    # Node.js Unit Tests (7 ข้อ)
-│   └── test_unoq_bridge.py           # Python Unit Tests (14 ข้อ)
+│   └── test_unoq_bridge.py           # Python Unit Tests (18 ข้อ)
 │
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
 ├── handoff.md                 # รายงานการตรวจสอบความปลอดภัยและบั๊กจากสภาพแวดล้อมจริง
-├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-035)
+├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-037)
 ├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
 └── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 ```

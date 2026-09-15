@@ -35,8 +35,8 @@ if 'PIL' not in sys.modules:
         sys.modules['PIL.Image'] = mock_pil
         sys.modules['PIL.ImageDraw'] = mock_pil
         sys.modules['PIL.ImageFont'] = mock_pil
-
 import unoq_bridge
+import unoq_views
 
 
 class TestSlotMapping(unittest.TestCase):
@@ -298,5 +298,46 @@ class TestScheduleActiveEvaluation(unittest.TestCase):
             self.assertTrue(is_early)
 
 
+class TestUnoqViews(unittest.TestCase):
+    """
+    Test unoq_views module: 160x128 Pillow rendering, buffer size invariants, and view outputs (ADR-037).
+    """
+
+    def test_dimensions_and_buffer_invariants(self):
+        self.assertEqual(unoq_views.TFT_WIDTH, 160)
+        self.assertEqual(unoq_views.TFT_HEIGHT, 128)
+        self.assertEqual(unoq_views.TFT_BUF_SIZE, 2560)
+
+    def test_all_seven_views_produce_exact_tft_buffer_size(self):
+        views = [
+            unoq_views.render_idle_screen('ทค.1-101'),
+            unoq_views.render_denied_screen(is_offline=False),
+            unoq_views.render_denied_screen(is_offline=True),
+            unoq_views.render_user_card('6404101312345', 'สมชาย สายเสมอ', None),
+            unoq_views.render_confirm_success('6404101312345', 'สมชาย สายเสมอ', None, is_offline=False),
+            unoq_views.render_already_checked_in('สมชาย สายเสมอ', 'Programming'),
+            unoq_views.render_cancelled_screen(),
+            unoq_views.render_timeout_screen(),
+        ]
+        for buf in views:
+            self.assertEqual(len(buf), unoq_views.TFT_BUF_SIZE)
+            self.assertIsInstance(buf, bytearray)
+
+    def test_tft_buf_to_img_roundtrip(self):
+        buf = unoq_views.render_idle_screen('ทค.1-101')
+        img = unoq_views.tft_buf_to_img(buf)
+        self.assertEqual(img.size, (160, 128))
+        self.assertEqual(img.mode, '1')
+
+    def test_set_current_room_name(self):
+        orig = unoq_views.current_room_name
+        try:
+            unoq_views.set_current_room_name('ทค.2-202')
+            self.assertEqual(unoq_views.current_room_name, 'ทค.2-202')
+        finally:
+            unoq_views.set_current_room_name(orig)
+
+
 if __name__ == '__main__':
     unittest.main()
+

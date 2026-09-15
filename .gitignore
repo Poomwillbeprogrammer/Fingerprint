@@ -96,4 +96,5 @@ resume_chat.bat
 *.bat
 .impeccable/live/
 /Fingerprint/
+.scratch/png/
 
