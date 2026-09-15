@@ -35,6 +35,13 @@ if 'PIL' not in sys.modules:
         sys.modules['PIL.Image'] = mock_pil
         sys.modules['PIL.ImageDraw'] = mock_pil
         sys.modules['PIL.ImageFont'] = mock_pil
+
+# แยกแยะว่า PIL เป็นโมดูลจริงหรือถูกแทนด้วย MagicMock (เครื่องที่ไม่ได้ติดตั้ง Pillow)
+REAL_PIL = not isinstance(sys.modules.get('PIL'), MagicMock)
+requires_real_pil = unittest.skipUnless(
+    REAL_PIL,
+    'Pillow ไม่ได้ติดตั้งใน environment นี้ (PIL ถูกแทนด้วย MagicMock) — ข้าม test ที่ assert ผลเรนเดอร์จริง'
+)
 import unoq_bridge
 import unoq_views
 
@@ -309,6 +316,7 @@ class TestUnoqViews(unittest.TestCase):
         self.assertEqual(unoq_views.TFT_HEIGHT, 128)
         self.assertEqual(unoq_views.TFT_BUF_SIZE, 2560)
 
+    @requires_real_pil
     def test_all_seven_views_produce_exact_tft_buffer_size(self):
         views = [
             unoq_views.render_idle_screen('ทค.1-101'),
@@ -324,6 +332,7 @@ class TestUnoqViews(unittest.TestCase):
             self.assertEqual(len(buf), unoq_views.TFT_BUF_SIZE)
             self.assertIsInstance(buf, bytearray)
 
+    @requires_real_pil
     def test_tft_buf_to_img_roundtrip(self):
         buf = unoq_views.render_idle_screen('ทค.1-101')
         img = unoq_views.tft_buf_to_img(buf)

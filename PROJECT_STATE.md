@@ -144,6 +144,14 @@
   - ปรับปรุง `sketch/sketch.ino` ให้เหลือเพียงตรรกะระดับ Business / Hardware Interaction (R307 Fingerprint Sensor, Physical Buttons D2/D3, Serial State Machine)
   - **Zero Regression & Byte-Exact Binary:** คอมไพล์ผ่าน `arduino-cli` ได้ขนาด Flash 99,344 bytes และ RAM 40,920 bytes เท่ากับไฟล์ก่อนการรีแฟกเตอร์แบบไบต์ต่อไบต์ 100%
 
+### 1.10 ผลการตรวจสอบอิสระหลังการ Refactor (Post-Refactor Audit - ADR-039)
+- **Verified Behavior-Preserving Refactor & Performance:**
+  - ตรวจยืนยันด้วย `npm test` (20/20, ไร้ Warning Network, 2,244ms เทียบ Baseline 2,315ms), `node -c` ครบ 15 ไฟล์, snapshot diff (24 Routes / Socket Events ตรง Baseline) และการรีวิว Query Shapes ของ Repositories ทั้งหมด — ไม่มี N+1 ใหม่เกิดขึ้น
+  - **ประสิทธิภาพดีขึ้นจริง:** `broadcastUsersCache` ส่งเฉพาะ `id, name, student_id` (เดิมรั่ว `fingerprint_template` ข้อมูลชีวมิติขึ้น Socket ทุกครั้ง) โดยบอร์ดใช้แค่ `name`/`student_id` จึงไม่กระทบพฤติกรรมและลด Bandwidth
+  - **แก้ Latent No-Op Bug:** `sync_offline_attendance` ก่อน Refactor อัปเดต `last_scanned_at` ไม่เคยสำเร็จจริง (Adapter เดิมอ่าน params ผิดตำแหน่ง) — ยืนยันคงพฤติกรรมที่ถูกต้องของโค้ดใหม่ตาม ADR-039
+  - **คืน Semantic สถิติ DENIED:** `countDeniedToday()` กลับเป็น `.eq('status', 'DENIED')` ตาม Baseline
+  - **Test Hermetic ทุกเครื่อง:** ติดตั้ง `pillow` + `python-socketio` แล้ว Python Suite ผ่าน 18/18 จากการเรนเดอร์ Pillow จริง + Export PNG ครบ 10 หน้าจอ (`.scratch/png/`) พร้อม `skipUnless(REAL_PIL)` กัน FAIL บนเครื่องที่ไม่มี Pillow
+
 ---
 
 ## 2. โครงสร้างไฟล์และสถาปัตยกรรม (System Architecture)
@@ -206,7 +214,7 @@ Fingerprint/
 │
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
 ├── handoff.md                 # รายงานการตรวจสอบความปลอดภัยและบั๊กจากสภาพแวดล้อมจริง
-├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-038)
+├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-039)
 ├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
 └── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 ```

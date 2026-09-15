@@ -53,7 +53,7 @@ class AccessLogRepository {
     const { count, error } = await this.getClient()
       .from('access_logs')
       .select('*', { count: 'exact', head: true })
-      .neq('status', 'GRANTED')
+      .eq('status', 'DENIED')
       .gte('timestamp', startOfDay);
     if (error) throw error;
     return count || 0;

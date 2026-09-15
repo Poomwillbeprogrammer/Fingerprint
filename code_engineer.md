@@ -148,7 +148,7 @@ cd server && npm test 2>&1 | tail -15                            > .scratch/base
 
 ## ✅ Checklist ปิดโปรเจ็กต์ (Definition of Done)
 
-- [x] ทุก Phase มี commit แยก + ADR ครบ (ADR-034 ถึง ADR-038) ใน `DECISIONS.md`
+- [x] ทุก Phase มี commit แยก + ADR ครบ (ADR-034 ถึง ADR-039) ใน `DECISIONS.md`
 - [x] `PROJECT_STATE.md` อัปเดต "โครงสร้างไฟล์" และ "สิ่งที่ทำเสร็จแล้ว" ตาม GEMINI.md §3
 - [x] `npm test`: 20 pass / 0 fail / ไม่มี warning network (Phase 1 เป็นต้นไป)
 - [x] Snapshot diff ทุกไฟล์ (routes, socket_events, views) ตรง baseline 100%
@@ -250,9 +250,34 @@ cd server && npm test 2>&1 | tail -15                            > .scratch/base
   1. `origin/main`: บันทึกประวัติ Commit บนกิ่งหลัก
   2. `origin/website`: กิ่งสำหรับการ Deploy อัตโนมัติบน Render Cloud
 - เอกสารคู่มือระบบทั้งหมดได้รับการปรับปรุงให้ตรงกันแบบ Single Source of Truth:
-  - `DECISIONS.md`: บันทึก ADR-034 ถึง ADR-038
-  - `PROJECT_STATE.md`: ปรับปรุงผังไฟล์และบันทึกความก้าวหน้าในหัวข้อ 1.9
+  - `DECISIONS.md`: บันทึก ADR-034 ถึง ADR-039
+  - `PROJECT_STATE.md`: ปรับปรุงผังไฟล์และบันทึกความก้าวหน้าในหัวข้อ 1.9 และ 1.10
 
 ## 🔁 การปฏิบัติตามลำดับความสำคัญ (Guaranteed Invariants)
 **พฤติกรรมเดิม 100% > แผนในเอกสารนี้ > ความสวยงามของโค้ด**
 ทุกขั้นตอนไม่มีการเปลี่ยนแปลง API contract, ชื่อ Socket.IO event, รูปแบบข้อความบนหน้าจอ, โครงสร้างฐานข้อมูล Supabase หรือจังหวะเวลาของโปรโตคอลฮาร์ดแวร์แม้แต่อย่างเดียว ระบบมีความเสถียรและพร้อมสำหรับการทดสอบบนฮาร์ดแวร์จริงต่อไปครับ
+
+---
+
+## 🔍 ผลการตรวจสอบประสิทธิภาพและพฤติกรรมหลังส่งมอบ (Post-Delivery Performance & Behavior Audit)
+*ตรวจโดย ZCode เมื่อ 2026-09-16 หลังดำเนินการครบทุก Phase — พิสูจน์ด้วยการรันจริงทุกคำสั่ง ไม่ใช่การอ้างจากรายงาน*
+
+### ผลการตรวจยืนยัน (Verified)
+| รายการ | ผลจริง |
+|---|---|
+| `npm test` | **20/20 ผ่าน, 0 fail, ไม่มี Warning Supabase** (2,244ms เทียบ Baseline 2,315ms — ไม่มี Regression) |
+| `node -c` ทั้ง 15 ไฟล์ server | ผ่านหมด |
+| `dbAsync` | เหลือ 0 call site (`database.js` 325 → 50 บรรทัด) |
+| โครงสร้างใหม่ | `routes/` 5 ไฟล์, `serial_controller.js`, `middleware/auth.js`, `repositories/` 3 ไฟล์, `server.js` 145 บรรทัด, baseline snapshot ครบ 5 ไฟล์ |
+| Query Shapes | Tier-2 candidates (`.or`/`.not`/limit 60/filter ≥512), LRU, `head:true` counts ตรง Baseline ทุกดีเทล — ไม่มี N+1 ใหม่ |
+| Python Suite | **18/18 ผ่านจากการเรนเดอร์ Pillow จริง** (0.163s) + Export PNG ครบ 10 หน้าจอ (`.scratch/png/`) |
+
+### ประเด็นที่พบและการแก้ไข (Fixed — ADR-039)
+1. **Python Suite FAIL 2/18 บนเครื่องที่ไม่มี Pillow** — test มี fallback ใส่ MagicMock แทน PIL แล้ว 2 test ที่ assert ผลเรนเดอร์จริง (buf 2,560 ไบต์ / `img.size`) พังเสมอ ติดตั้ง `pillow` + `python-socketio` แล้วผ่าน 18/18 จากการเรนเดอร์จริง พร้อมเพิ่ม `@requires_real_pil` (`skipUnless`) ให้ suite เขียวบนทุกเครื่อง
+2. **Latent No-Op Bug ถูกแก้เงียบระหว่าง Phase 3** — Baseline `sync_offline_attendance` อัปเดต `last_scanned_at` ไม่เคยสำเร็จจริง (Adapter เดิมอ่าน `params[0]` เป็น id จาก `[dbTimestamp, userId]` ทำให้ `eq('id', dbTimestamp)` ไม่เจอแถว) โค้ดใหม่ update สำเร็จจริง → ยืนยันคงพฤติกรรมที่ถูกต้อง (ตามเจตนาของโค้ดเดิม) และบันทึกเหตุผลใน ADR-039
+3. **`countDeniedToday` เพี้ยนจาก Baseline** — `.neq('status','GRANTED')` คืนเป็น `.eq('status','DENIED')` ตามสัญญา 1:1
+
+### หมายเหตุการวัดผล
+- ตัวเลข "~674ms" ในบันทึก Phase 1 เป็นค่าของ test ไฟล์เดียว — ชุดเต็มวัดจริงได้ 2,244ms (Baseline 2,315ms) จุดสำคัญคือเขียวและไร้ Warning เท่ากันทั้งสองชุด
+- **ประสิทธิภาพที่ดีขึ้นจริงจาก Refactor:** `broadcastUsersCache` ไม่ส่ง `fingerprint_template` (ข้อมูลชีวมิติ) ขึ้น Socket อีกต่อไป โดยบอร์ดใช้เพียง `name`/`student_id` จาก cache (ยืนยันที่ `unoq_bridge.py:354-355`) — ลด Bandwidth และตัดข้อมูลอ่อนไหวออกจากสาย
+- **สิ่งที่ต้องติดตั้งบนเครื่อง dev:** `pip install pillow python-socketio` (จำเป็นสำหรับ test เต็มรูปแบบและเครื่องมือ Export PNG ของ ADR-037)
