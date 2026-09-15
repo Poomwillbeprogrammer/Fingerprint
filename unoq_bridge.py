@@ -491,20 +491,20 @@ last_sent_buf = None
 oled_lock = threading.Lock()
 
 # 6. ส่งภาพ 2560 bytes ไปยัง MCU ทางพอร์ต 7500 (16-byte chunks = 32 hex chars, 48 chars/line safe for 64-byte UART buffer)
-def send_bitmap_to_mcu(buf, initial_wait=0.20, theme='IDLE'):
+def send_bitmap_to_mcu(buf, initial_wait=0.04, theme='IDLE', force=False):
     global mcu_sock, last_frame_sent_time, last_sent_buf
     if not mcu_sock:
         return False
     with oled_lock:
         now = time.time()
         elapsed = now - last_frame_sent_time
-        # หากเพิ่งส่งภาพเดิมไปไม่เกิน 1.5 วินาที ข้ามได้เลย (ป้องกันการส่งเฟรมซ้ำซ้อน)
-        if last_sent_buf == buf and elapsed < 1.5:
+        # หากเพิ่งส่งภาพเดิมไปไม่เกิน 0.8 วินาที ข้ามได้เลย (ยกเว้น force=True)
+        if not force and last_sent_buf == buf and elapsed < 0.8:
             return True
 
         # ป้องกันการส่งเฟรมติดกันเกินไป (ต้องรอให้ STM32 รัน tft.display() ให้เสร็จสิ้นก่อน)
-        if elapsed < 0.6:
-            time.sleep(0.6 - elapsed)
+        if elapsed < 0.5:
+            time.sleep(0.5 - elapsed)
 
         try:
             start_cmd = f'FRAME_START THEME={theme}\n' if theme else 'FRAME_START\n'
@@ -637,7 +637,7 @@ def connect_mcu():
             except Exception as e:
                 pass
             # ส่งหน้าจอพร้อมใช้งาน (ภาษาไทย) ทันทีที่เชื่อมต่อ
-            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20, theme='IDLE')
+            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.04, theme='IDLE', force=True)
             return s
         except Exception as e:
             print(f'⚠️ [Uno Q MCU] กำลังรอเชื่อมต่อ STM32: {e}')
@@ -801,13 +801,13 @@ def mcu_reader_thread():
                         sio.emit('bridge_serial_data', line)
 
                     def handle_no_match_flow(offline_mode=False):
-                        # รอ 1.6 วินาที ให้ STM32 พ้น delay(1500) และ showIdleScreen() ของมันก่อน
-                        time.sleep(1.6)
-                        send_bitmap_to_mcu(render_denied_screen(is_offline=offline_mode), initial_wait=0.30, theme='DENIED')
-                        # ค้างหน้าปฏิเสธไว้ 3.0 วินาที ให้อ่านชัดเจน แล้วคืนสู่หน้าจอพร้อมใช้งาน
-                        time.sleep(3.0)
+                        # แสดงหน้าจอ ACCESS DENIED ภาษาไทยทันที (ไม่มี delay ใน STM32 แล้ว)
+                        denied_buf = render_denied_screen(is_offline=offline_mode)
+                        send_bitmap_to_mcu(denied_buf, initial_wait=0.04, theme='DENIED', force=True)
+                        # ค้างหน้าปฏิเสธไว้ 2.5 วินาที ให้อ่านชัดเจน แล้วคืนสู่หน้าจอพร้อมใช้งาน
+                        time.sleep(2.5)
                         print('⚡ [Local Engine] คืนสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
-                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20, theme='IDLE')
+                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.04, theme='IDLE', force=True)
 
                     threading.Thread(target=handle_no_match_flow, args=(is_off,), daemon=True).start()
 
@@ -837,9 +837,9 @@ def mcu_reader_thread():
                         sio.emit('bridge_serial_data', line)
                     if oled_connected:
                         def send_after_boot():
-                            time.sleep(2.0)
+                            time.sleep(1.0)
                             print('⚡ [Local Engine] ส่งหน้าจอพร้อมใช้งานภาษาไทยหลัง Boot สมบูรณ์')
-                            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.30, theme='IDLE')
+                            send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.04, theme='IDLE', force=True)
                         threading.Thread(target=send_after_boot, daemon=True).start()
 
                 elif line == 'STATUS:R307_NOT_FOUND':
@@ -849,14 +849,11 @@ def mcu_reader_thread():
                         sio.emit('bridge_sensor_status', {'r307_connected': False, 'oled_connected': oled_connected})
                         sio.emit('bridge_serial_data', line)
 
-                # ฉ.2) เมื่อกลับสู่หน้าจอพร้อมใช้งานตามปกติ (หลังสแกนนิ้ว / กดยกเลิก / หมดเวลา)
+                # ฉ.2) เมื่อกลับสู่หน้าจอพร้อมใช้งานตามปกติ (หลังสแกนนิ้ว / กดยกเลิก / หมดเวลา / ลงทะเบียนเสร็จ)
                 elif line == 'EVENT:IDLE':
                     print('⚡ [Local Engine] กลับสู่หน้าจอพร้อมใช้งาน (ภาษาไทย)')
                     if oled_connected:
-                        time.sleep(0.20)  # หน่วงเวลา 200ms รอให้ STM32 รัน showIdleScreen() เสร็จ
-                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.20, theme='IDLE')
-                    if sio.connected:
-                        sio.emit('bridge_serial_data', line)
+                        send_bitmap_to_mcu(IDLE_BITMAP, initial_wait=0.04, theme='IDLE', force=True)
                     if sio.connected:
                         sio.emit('bridge_serial_data', line)
 

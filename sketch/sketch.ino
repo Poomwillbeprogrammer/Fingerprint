@@ -764,8 +764,9 @@ void handleRestoreInit(int id) {
     Serial.println(" ERR=DOWNCHAR_REJECTED");
     showUI("RESTORE FAILED", "Sensor rejected write", "Try again");
     delay(1500);
-    showIdleScreen();
     restoreTargetId = 0;
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
   }
 }
 
@@ -809,7 +810,8 @@ void handleRestoreChunk(int chunkNum, const String& hexChunk) {
     }
     restoreTargetId = 0;
     delay(1500);
-    showIdleScreen();
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
   } else {
     Serial.print("RESP:CHUNK_ACK PART=");
     Serial.println(chunkNum);
@@ -901,7 +903,7 @@ void handleCompareChunk(int chunkNum, const String& hexChunk) {
         delay(50);
       }
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
-      showIdleScreen();
+      Serial.println("EVENT:IDLE");
     } else {
       // ลายนิ้วมือไม่ตรงกัน ส่งผลกลับไปยัง Server เพื่อตรวจ candidate ถัดไป
       Serial.print("RESP:TIER2_MISMATCH ID=");
@@ -923,7 +925,9 @@ bool checkEnrollCancelOrTimeout(int id, uint32_t startTime, uint32_t timeoutMs =
       Serial.print("RESP:ENROLL_CANCELLED ID=");
       Serial.println(id);
       delay(1500);
-      showIdleScreen();
+      while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+      finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+      Serial.println("EVENT:IDLE");
       return true; // ยกเลิกสำเร็จ
     }
   }
@@ -933,7 +937,9 @@ bool checkEnrollCancelOrTimeout(int id, uint32_t startTime, uint32_t timeoutMs =
     Serial.print("RESP:ENROLL_FAIL_TIMEOUT ID=");
     Serial.println(id);
     delay(2000);
-    showIdleScreen();
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return true; // หมดเวลา
   }
 
@@ -946,7 +952,8 @@ void handleEnroll(int id) {
     showUI("ENROLL ERROR", "Invalid ID (1-1000)");
     Serial.println("RESP:ENROLL_INVALID_ID");
     delay(2000);
-    showIdleScreen();
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return;
   }
 
@@ -974,7 +981,9 @@ void handleEnroll(int id) {
     showUI("ENROLL FAILED", "Image 1 blurry", "Try again");
     Serial.println("RESP:ENROLL_FAIL_IMAGE1");
     delay(2000);
-    showIdleScreen();
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return;
   }
 
@@ -987,7 +996,9 @@ void handleEnroll(int id) {
     Serial.print("RESP:ENROLL_FAIL_DUPLICATE ID=");
     Serial.println(finger.fingerID);
     delay(3000);
-    showIdleScreen();
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return;
   }
 
@@ -1024,7 +1035,9 @@ void handleEnroll(int id) {
     showUI("ENROLL FAILED", "Image 2 blurry", "Try again");
     Serial.println("RESP:ENROLL_FAIL_IMAGE2");
     delay(2000);
-    showIdleScreen();
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return;
   }
 
@@ -1035,7 +1048,9 @@ void handleEnroll(int id) {
     showUI("ENROLL FAILED", "Fingerprints differ", "Try again");
     Serial.println("RESP:ENROLL_FAIL_MISMATCH");
     delay(2000);
-    showIdleScreen();
+    while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+    finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+    Serial.println("EVENT:IDLE");
     return;
   }
 
@@ -1059,7 +1074,9 @@ void handleEnroll(int id) {
     delay(2000);
   }
 
-  showIdleScreen();
+  while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }
+  finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+  Serial.println("EVENT:IDLE");
 }
 
 // 3. ลบลายนิ้วมือตาม ID (Delete)
@@ -1088,7 +1105,8 @@ void handleDelete(int id) {
     delay(2500);
   }
 
-  showIdleScreen();
+  finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+  Serial.println("EVENT:IDLE");
 }
 
 // 4. ลบลายนิ้วมือทั้งหมด (Clear All)
@@ -1104,7 +1122,8 @@ void handleClearAll() {
     Serial.println("RESP:CLEAR_FAIL");
     delay(2500);
   }
-  showIdleScreen();
+  finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+  Serial.println("EVENT:IDLE");
 }
 
 // 5. อ่านจำนวนลายนิ้วมือทั้งหมด (Count)
@@ -1116,7 +1135,8 @@ void handleCount() {
   Serial.print("RESP:COUNT=");
   Serial.println(finger.templateCount);
   delay(2500);
-  showIdleScreen();
+  finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+  Serial.println("EVENT:IDLE");
 }
 
 // ==========================================
@@ -1248,11 +1268,11 @@ void loop() {
     } else if (cmd.startsWith("CANCEL_TIER2")) {
       tier2Searching = false;
       finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
-      showUI("ACCESS DENIED", "No match in DB", "Unauthorized finger");
       Serial.println("EVENT:NO_MATCH");
-      delay(1500);
-      showIdleScreen();
-      Serial.println("EVENT:IDLE");
+      while (finger.getImage() != FINGERPRINT_NOFINGER) {
+        delay(30);
+      }
+      finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     } else if (cmd.startsWith("DELETE ")) {
       int id = cmd.substring(7).toInt();
       handleDelete(id);
@@ -1289,7 +1309,8 @@ void loop() {
     if (millis() - restoreStartTime > 10000) {
       restoreTargetId = 0;
       Serial.println("RESP:RESTORE_FAIL ERR=TIMEOUT");
-      showIdleScreen();
+      finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
+      Serial.println("EVENT:IDLE");
     }
     delay(5);
     return;
@@ -1300,11 +1321,11 @@ void loop() {
     if (millis() - tier2StartTime > 5500) {
       tier2Searching = false;
       finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
-      showUI("ACCESS DENIED", "ไม่พบลายนิ้วมือ", "ไม่มีสิทธิ์เข้าถึง");
       Serial.println("EVENT:NO_MATCH");
-      delay(1500);
-      showIdleScreen();
-      Serial.println("EVENT:IDLE");
+      while (finger.getImage() != FINGERPRINT_NOFINGER) {
+        delay(30);
+      }
+      finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     }
     delay(5);
     return;
@@ -1469,7 +1490,6 @@ void loop() {
     // กลับสู่โหมดไฟหายใจ Breathing นุ่มนวล
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     Serial.println("EVENT:IDLE");
-    showIdleScreen();
   } else if (result == FINGERPRINT_NOTFOUND) {
     // Tier 1 Flash ไม่พบ: เริ่มต้นเข้าสู่โหมดค้นหา Tier 2 ใน Database
     tier2Searching = true;

@@ -28,6 +28,11 @@
   - **Hardware-Accelerated 180° Flip (`sketch.ino`):** ปรับตั้ง ST7735 MADCTL (`0x36`) เป็น `0x60` หมุนหน้าจอเป็นแนวนอน 160x128 ทิศทางถูกต้อง หัวข้ออยู่ขอบบน และแถบปุ่มกดอยู่ขอบล่าง สอดคล้องกับการติดตั้งจอจริง
   - **Zone-Based Multi-Color Rendering:** จัดแบ่งหน้าจอเป็น 3 โซน (Header, Body, Footer) พร้อมแมปสีระดับพิกเซลตามธีม `DESIGN.md`: แถบหัวสีทอง/เขียวมรกต/แดง, ชื่อนักศึกษาขาวบริสุทธิ์ (`0xFFFF`), รหัสวิชาสีอำพัน (`0xFBE0`), ปุ่มฟ้า D2 ยืนยัน (`0x3DFE`) และปุ่มแดง D3 ยกเลิก (`0xF9F8`)
   - **TrueType Thai Landscape Re-layout (`unoq_bridge.py`):** ออกแบบทั้ง 7 หน้าจอใหม่บนสัดส่วน 160x128 แนวนอน รองรับชื่อยาวและวิชาได้ครบถ้วนโดยไม่ตกหล่น และส่งต่อบิตแมป 2,560 ไบต์ผ่าน UART ได้อย่างราบรื่นรวดเร็ว
+- **Linux-Master Display & Zero-Hang Idle Synchronization (ADR-031) [แก้ไขเสร็จสมบูรณ์ 100%]:**
+  - **ขจัดบั๊กค้าง "READY FOR SCAN":** แก้ปัญหาหน้าจอ TFT ค้างที่ตัวอักษรภาษาอังกฤษ `READY FOR SCAN` เมื่อสแกนนิ้วไม่พบในระบบ (No Match / Denied) หรือเมื่อเสร็จสิ้น/ยกเลิก/หมดเวลาการลงทะเบียนผู้ใช้ใหม่ (Enroll Cancel / Timeout / Success)
+  - **สถาปัตยกรรม Linux-Master Display:** กำหนดให้ Linux SoC เป็นผู้ควบคุมการเรนเดอร์หน้าจอ TFT แต่เพียงผู้เดียว ตัดการเรียก `showIdleScreen()` ใน C++ ของ STM32 ระหว่างรันไทม์ทั้งหมดออก และแทนที่ด้วยการส่ง `EVENT:IDLE` แบบ Non-blocking
+  - **Finger Release Interlock:** เพิ่มลูปตรวจจับให้ผู้ใช้ยกนิ้วออกจากเซนเซอร์ (`while (finger.getImage() != FINGERPRINT_NOFINGER)`) ในทุกกรณีที่สิ้นสุดกระบวนการ ป้องกันการสแกนนิ้ววนลูปไม่สิ้นสุด
+  - **Instant Thai Denied Screen:** ใน `EVENT:NO_MATCH` สั่งส่งภาพ `render_denied_screen()` ภาษาไทยสีแดงเข้มทันทีโดยไม่มีคำสั่งบล็อกกิ้งบน MCU ค้างหน้าจอไว้ 2.5 วินาที แล้วคืนสู่หน้าจอพร้อมใช้งานภาษาไทยโดยอัตโนมัติ
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย

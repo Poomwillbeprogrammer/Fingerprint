@@ -314,4 +314,20 @@
        - **Body Zone ($Y=24..103$):** พื้นหลัง Deep Espresso (`#0c0a09`) พร้อมแยกสีข้อความหลายระดับ: ชื่อนักศึกษาภาษาไทยแสดงเป็นสีขาวบริสุทธิ์ (`0xFFFF`), รหัสนักศึกษาและตารางเรียนเป็นสีทองอำพัน (`0xFBE0`), และแท็กสถานะ/ห้องเป็นสีฟ้าสดใส (`0x3DFE`)
        - **Footer Zone ($Y \ge 104$):** แถบคำแนะนำปุ่มกดบนพื้น Warm Surface (`#1c1917`) โดยในหน้ายืนยันการ์ดนักศึกษา ฝั่งซ้าย ($X < 80$) แสดงสีฟ้าสดใส (**Sky Blue**) สำหรับปุ่มยืนยัน D2 และฝั่งขวา ($X \ge 80$) แสดงสีแดงแจ้งเตือน (**Crimson**) สำหรับปุ่มยกเลิก D3 ตรงกับสีของปุ่มกดทางกายภาพจริง
     4. **Landscape Re-layout ใน `unoq_bridge.py`:** ปรับปรุงฟังก์ชันเรนเดอร์ทั้ง 7 หน้าจอ (`render_idle_screen`, `render_user_card`, `render_confirm_success`, `render_already_checked_in`, `render_denied_screen`, `render_cancelled_screen`, `render_timeout_screen`) ให้กระจายข้อความแนวนอนเต็มความกว้าง 160 พิกเซล แสดงชื่อ-สกุลนักศึกษาภาษาไทยและรหัสวิชาได้ครบถ้วนโดยไม่ต้องตัดทอนคำ
+* **ADR-031:** การกำหนดบทบาท Master Display ให้แก่ Uno Q Linux SoC และการตัดวงจร "READY FOR SCAN" ค้าง (Linux-Master Display Architecture & Zero-Hang Idle Synchronization):
+  - **ที่มาและปัญหา:**
+    1. เมื่อผู้ใช้สแกนลายนิ้วมือที่ไม่พบในระบบ (No Match / Denied) หน้าจอบน TFT 1.8" จะไปค้างอยู่ที่หน้าภาษาอังกฤษตัวอักษรหยาบ `READY FOR SCAN` แทนที่จะแสดงหน้าจอ `ACCESS DENIED` ภาษาไทยสีแดงเข้มแล้วกลับสู่หน้าจอพร้อมใช้งานภาษาไทย
+    2. เมื่อทำการลงทะเบียนเพิ่มลายนิ้วมือใหม่ (Enroll) จนเสร็จสิ้น หรือเมื่อกดยกเลิก (Cancel) หรือปล่อยให้หมดเวลา (Timeout) หน้าจอจะกลับไปค้างที่ `READY FOR SCAN` เช่นกัน
+    3. **สาเหตุของปัญหา (Root Cause Analysis):**
+       - ข้อความ `READY FOR SCAN` เกิดจากฟังก์ชัน C++ `showIdleScreen()` ใน `sketch.ino` ซึ่งเขียนทับหน้าจอบิตแมปความละเอียดสูงของ Linux
+       - ในขั้นตอน Enroll / Cancel / Timeout / Delete ใน `sketch.ino` มีการเรียก `showIdleScreen()` แต่**ไม่เคยส่ง** `EVENT:IDLE` ออกมา ทำให้ Linux ไม่รู้ว่ากระบวนการเสร็จสิ้น จึงไม่เคยส่งหน้าจอภาษาไทย `IDLE_BITMAP` มาแทนที่
+       - ในขั้นตอน No Match (`CANCEL_TIER2` และ Tier 2 Timeout) ตัว STM32 เรียก `showUI(...)` -> `Serial.println("EVENT:NO_MATCH");` -> `delay(1500);` -> `showIdleScreen();` -> `Serial.println("EVENT:IDLE");` โดยที่ตัวไมโครคอนโทรลเลอร์ติดอยู่ในคำสั่งบล็อกกิ้ง `delay(1500)` ในขณะที่ Linux พยายามยิงภาพ `render_denied_screen()` เข้ามา ทำให้เกิด UART RX Buffer Overflow และเกิด Race Condition แย่งชิงหน้าจอกับเธรดของ Python
+       - ที่สำคัญคือใน `CANCEL_TIER2` และ Tier 2 Timeout ไม่มีลูปรอให้ผู้ใช้ยกนิ้วออกจากเซนเซอร์ (`while (finger.getImage() != FINGERPRINT_NOFINGER)`) ทำให้เมื่อสแกนไม่พบนิ้ว แล้วนิ้วยังวางอยู่ ตัวเซนเซอร์จะยิง `TIER1_NO_MATCH` ซ้ำซ้อนวนลูปไม่สิ้นสุด
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Linux-Master Display Paradigm:** กำหนดให้ Linux SoC (`unoq_bridge.py`) เป็นผู้ถือสิทธิ์ขาดแต่เพียงผู้เดียว (Exclusive Master) ในการควบคุมหน้าจอ TFT ระหว่างการทำงานปกติ ไมโครคอนโทรลเลอร์ STM32 จะมีสิทธิ์เรียก `showIdleScreen()` เพียงครั้งเดียวใน `setup()` เพื่อเป็น Splash Screen ขณะบู๊ตเครื่องเท่านั้น
+    2. **Non-blocking Event Signaling (`sketch.ino`):** ตัด `showUI()`, `delay(1500)`, `showIdleScreen()`, และ `EVENT:IDLE` ออกจาก `CANCEL_TIER2` และ Tier 2 Timeout โดยให้ STM32 มีหน้าที่เพียงกระพริบไฟสีแดง ส่ง `EVENT:NO_MATCH` ออกมา รอยกนิ้วออก แล้วกลับสู่ไฟหายใจ (Breathing Red) ทันที
+    3. **Finger Release Interlock (`sketch.ino`):** เพิ่มลูป `while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }` ในทุกจุดที่สิ้นสุดกระบวนการ (No Match, Enroll Success, Enroll Cancel, Enroll Timeout, Blurry Image, Mismatch, Duplicate) ป้องกันการสแกนนิ้วซ้ำซ้อนวนลูป 100%
+    4. **Universal `EVENT:IDLE` Emission (`sketch.ino`):** เปลี่ยนจุดจบการทำงานทุกกรณีใน C++ (Enroll OK, Cancel, Timeout, Invalid ID, Blurry, Duplicate, Delete, Clear All, Count, Check-in finish) ให้ส่ง `Serial.println("EVENT:IDLE");`
+    5. **Instant Denied Flow & Frame Lock Assurance (`unoq_bridge.py`):** ปรับจังหวะใน `EVENT:NO_MATCH` ให้ส่งภาพ `render_denied_screen()` ทันทีโดยไม่ต้องหน่วงเวลา รอ 2.5 วินาทีเพื่อให้ผู้ใช้อ่านข้อความชัดเจน แล้วคืนสู่ `IDLE_BITMAP` พร้อมเพิ่มพารามิเตอร์ `force=True` ใน `send_bitmap_to_mcu()` เพื่อป้องกันไม่ให้ระบบ Deduplication สกัดกั้นการรีเฟรชหน้าจอ
+
 
