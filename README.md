@@ -1,7 +1,7 @@
 # 🌟 IoT Biometric Attendance System (Arduino UNO Q)
 > **ระบบลงเวลาด้วยลายนิ้วมืออัจฉริยะ (IoT) พร้อมการเรนเดอร์ภาษาไทยระดับความละเอียดสูง ระบบยืนยันตัวตน 2 ขั้นตอน และการจัดการตารางเรียนแยกห้อง (Multi-Room Timetable)**
 
-โปรเจกต์นี้เป็นการพัฒนาระบบลงเวลาด้วยลายนิ้วมือที่ใช้สถาปัตยกรรมประมวลผลร่วม **Heterogeneous Dual-Core (STM32 MCU + Linux SoC ARM64)** บนบอร์ด **Arduino UNO Q** ร่วมกับเซนเซอร์ลายนิ้วมือแบบ Optical (R307), หน้าจอแสดงผล 1.8" TFT SPI 128x160 (ST7735 v1.1), ปุ่มกดฮาร์ดแวร์ยืนยันตัวตน (ปุ่มฟ้า D2 / ปุ่มแดง D3), และระบบจัดการผ่าน Cloud Web Application (Node.js + Express + Supabase PostgreSQL)
+โปรเจกต์นี้เป็นการพัฒนาระบบลงเวลาด้วยลายนิ้วมือที่ใช้สถาปัตยกรรมประมวลผลร่วม **Heterogeneous Dual-Core (STM32 MCU + Linux SoC ARM64)** บนบอร์ด **Arduino UNO Q** ร่วมกับเซนเซอร์ลายนิ้วมือแบบ Optical (R307), หน้าจอแสดงผล 1.8" TFT SPI 160x128 แนวนอน (ST7735 v1.1 Landscape Mode), ปุ่มกดฮาร์ดแวร์ยืนยันตัวตน (ปุ่มฟ้า D2 / ปุ่มแดง D3), และระบบจัดการผ่าน Cloud Web Application (Node.js + Express + Supabase PostgreSQL)
 
 ---
 
@@ -62,7 +62,7 @@ flowchart TD
     subgraph Arduino_UNO_Q ["บอร์ด Arduino UNO Q"]
         subgraph STM32 ["STM32U585 MCU (Zephyr OS)"]
             R307["เซนเซอร์ลายนิ้วมือ R307<br/>(Serial1: Pins 0/1)"]
-            TFT["จอ 1.8 TFT SPI 128x160 ST7735<br/>(SPI: D8, D9, D10, D11, D13)"]
+            TFT["จอ 1.8 TFT SPI 160x128 Landscape ST7735<br/>(SPI: D8, D9, D10, D11, D13)"]
             BTN["ปุ่มกดฮาร์ดแวร์ ปุ่มฟ้า D2 / ปุ่มแดง D3<br/>(Internal Pullup)"]
         end
 

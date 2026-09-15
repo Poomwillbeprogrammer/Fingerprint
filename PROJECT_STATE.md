@@ -24,6 +24,10 @@
   - **1-Bit Raster Bitpacking 2,560 ไบต์ พร้อม Dynamic Palette:** ขยายความละเอียดเป็น 128x160 พิกเซล โดยยังคงความคมชัดของภาษาไทย TrueType ผ่าน Pillow บนฝั่ง Linux SoC และส่งผ่าน 16-Byte Chunking Protocol (160 ชิ้น) ปลอดภัยต่อ UART FIFO 64 ไบต์ 100%
   - **ระบบชุดสี RMUTL Theme:** แสดงแถบสถานะและหัวข้อด้วยสีทอง RMUTL Gold (`0xFD20`), พื้นหลัง Espresso (`0x0821`), สีเขียวมรกต (`0x1E10`) เมื่อบันทึกสำเร็จ และสีแดง (`0xF9F8`) เมื่อปฏิเสธหรือยกเลิก
   - **UI Dashboard Alignment:** อัปเดต Hardware Status Card บนเว็บเป็น `จอแสดงผล TFT 1.8"` พร้อมซัพพอร์ตทั้ง `OLED=READY` และ `TFT=READY` แบบไร้รอยต่อ
+- **160x128 Landscape Mode & Zone-Based Multi-Color Theming (ADR-030) [เสร็จสมบูรณ์ 100%]:**
+  - **Hardware-Accelerated 180° Flip (`sketch.ino`):** ปรับตั้ง ST7735 MADCTL (`0x36`) เป็น `0x60` หมุนหน้าจอเป็นแนวนอน 160x128 ทิศทางถูกต้อง หัวข้ออยู่ขอบบน และแถบปุ่มกดอยู่ขอบล่าง สอดคล้องกับการติดตั้งจอจริง
+  - **Zone-Based Multi-Color Rendering:** จัดแบ่งหน้าจอเป็น 3 โซน (Header, Body, Footer) พร้อมแมปสีระดับพิกเซลตามธีม `DESIGN.md`: แถบหัวสีทอง/เขียวมรกต/แดง, ชื่อนักศึกษาขาวบริสุทธิ์ (`0xFFFF`), รหัสวิชาสีอำพัน (`0xFBE0`), ปุ่มฟ้า D2 ยืนยัน (`0x3DFE`) และปุ่มแดง D3 ยกเลิก (`0xF9F8`)
+  - **TrueType Thai Landscape Re-layout (`unoq_bridge.py`):** ออกแบบทั้ง 7 หน้าจอใหม่บนสัดส่วน 160x128 แนวนอน รองรับชื่อยาวและวิชาได้ครบถ้วนโดยไม่ตกหล่น และส่งต่อบิตแมป 2,560 ไบต์ผ่าน UART ได้อย่างราบรื่นรวดเร็ว
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย
@@ -77,15 +81,15 @@ Fingerprint/
 ├── unoq_bridge.py             # สคริปต์บริดจ์หลักบน Arduino Uno Q Linux (Python)
 │                              # - ควบคุม UART ติดต่อ STM32
 │                              # - เชื่อมต่อ Socket.IO Client ไปยัง Cloud
-│                              # - เรนเดอร์ภาษาไทย TFT 128x160 ด้วย Pillow พร้อม Dynamic Palette
+│                              # - เรนเดอร์ภาษาไทย TFT 160x128 Landscape ด้วย Pillow พร้อม Dynamic Palette
 │                              # - จัดการ Offline Queue และ Local Attendance Cache
 │                              # - ตรวจเช็คสุขภาพฮาร์ดแวร์ R307 (Watchdog)
 │
 ├── sketch/
 │   └── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
-│                              # - ขับเซนเซอร์ R307 และจอ 1.8" TFT SPI 128x160 (ST7735)
+│                              # - ขับเซนเซอร์ R307 และจอ 1.8" TFT SPI 160x128 Landscape (ST7735)
 │                              # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
-│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking (2,560 ไบต์) ทาง Serial
+│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking (2,560 ไบต์) พร้อม Zone-based Theming
 │                              # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
 │
 ├── server/

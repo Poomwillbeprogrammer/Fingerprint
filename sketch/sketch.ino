@@ -12,21 +12,24 @@
 #define TFT_SCK_PIN   13 // ขา SCL / SCK (SPI Clock)
 #define TFT_BLK_PIN   -1 // ขา BLK / LED (ต่อ 3.3V ถาวร หรือระบุขาพิน เช่น 7)
 
-// ขนาดความละเอียดจอ 1.8 TFT SPI
-#define TFT_WIDTH     128
-#define TFT_HEIGHT    160
+// ขนาดความละเอียดจอ 1.8 TFT SPI แนวนอน (160x128 Landscape)
+#define TFT_WIDTH     160
+#define TFT_HEIGHT    128
 #define TFT_BUF_SIZE  (TFT_WIDTH * TFT_HEIGHT / 8) // 2560 Bytes (1-bit Horizontal Raster)
 
-// โทนสี 16-bit RGB565 มาตรฐาน (อิงตามอัตลักษณ์ RMUTL Golden Brown ใน DESIGN.md)
-#define TFT_BLACK       0x0000 // สีดำสนิท
-#define TFT_DARK        0x0821 // สี Dark Espresso (#0c0a09)
-#define TFT_WHITE       0xFFFF // สีขาวสว่าง (#ffffff)
-#define TFT_GOLD        0xFD20 // สีทองอำพัน RMUTL Golden Bronze (#f59e0b)
-#define TFT_AMBER       0xFBE0 // สีทองอร่าม Accent Gold (#fbbf24)
-#define TFT_GREEN       0x1E10 // สีเขียวสำเร็จ (#10b981)
-#define TFT_RED         0xF9F8 // สีแดงแจ้งเตือน/ยกเลิก (#f43f5e)
-#define TFT_BLUE        0x3DFE // สีฟ้าสดใส (#38bdf8 สำหรับปุ่มฟ้า D2)
-#define TFT_GRAY        0x7BEF // สีเทาหม่น (#78716c)
+// โทนสี 16-bit RGB565 มาตรฐาน (อิงตามอัตลักษณ์ RMUTL Lanna Golden Brown ใน DESIGN.md)
+#define TFT_BLACK       0x0000 // ดำสนิท (#000000)
+#define TFT_DARK        0x0821 // Deep Void Espresso (#0c0a09)
+#define TFT_SURFACE     0x18C3 // Warm Stone Surface (#1c1917)
+#define TFT_WHITE       0xFFFF // Pure Crisp White (#ffffff)
+#define TFT_GOLD        0xFD20 // Lanna Royal Gold (#f59e0b)
+#define TFT_AMBER       0xFBE0 // Lanna Solar Amber (#fbbf24)
+#define TFT_BRONZE      0xD3A0 // Lanna Deep Bronze (#b45309)
+#define TFT_GREEN       0x15D0 // Bio Emerald (#10b981)
+#define TFT_RED         0xF9F8 // Alert Crimson (#f43f5e)
+#define TFT_CYAN        0x3DFE // Sky Blue Confirm (#38bdf8 สำหรับปุ่มฟ้า D2)
+#define TFT_GRAY        0xAD55 // Text Muted Silver (#a8a29e)
+#define TFT_BORDER      0x4440 // Border Stone (#44403c)
 
 // การเชื่อมต่อเซนเซอร์ลายนิ้วมือ R307 (Hardware Serial1 สำหรับ Uno Q: Pin 0 RX, Pin 1 TX)
 #define mySerial Serial1
@@ -275,9 +278,9 @@ public:
     // Inversion OFF
     writeCommand(0x20);
 
-    // Memory Access Data Control (MADCTL) - กำหนดแนวตั้ง 128x160 RGB
+    // Memory Access Data Control (MADCTL) - กำหนดแนวนอน 160x128 Landscape RGB
     writeCommand(0x36);
-    writeData(0xC0); // MY=1, MX=1, RGB Order (128x160 standard orientation)
+    writeData(0x60); // MY=0, MX=1, MV=1, RGB Order (160x128 Landscape orientation - Header on top, Footer on bottom)
 
     // Color Format: 16-bit RGB565
     writeCommand(0x3A); // COLMOD
@@ -400,6 +403,99 @@ public:
     return nextOffset;
   }
 
+  // ส่งข้อมูล Frame Buffer 2560 Bytes ไปยังหน้าจอ TFT พร้อมกำหนดชุดสีระดับโซน (Zone-based RGB Theme ตาม DESIGN.md)
+  void displayTheme(const String& theme) {
+    if (!_detected) return;
+    setAddrWindow(0, 0, _width - 1, _height - 1);
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+
+    bool isSuccess = (theme.indexOf("SUCCESS") >= 0);
+    bool isDenied  = (theme.indexOf("DENIED") >= 0 || theme.indexOf("TIMEOUT") >= 0);
+    bool isAlready = (theme.indexOf("ALREADY") >= 0);
+    bool isCard    = (theme.indexOf("CARD") >= 0);
+    bool isCancel  = (theme.indexOf("CANCEL") >= 0);
+
+    for (uint16_t y = 0; y < _height; y++) {
+      uint16_t rowOffset = y * (_width / 8);
+      for (uint16_t x = 0; x < _width; x++) {
+        uint8_t byteVal = buffer[rowOffset + (x / 8)];
+        bool pixelOn = (byteVal >> (7 - (x % 8))) & 0x01;
+        uint16_t color;
+
+        if (y <= 22) {
+          // โซน 1: HEADER (แถบหัวข้อ Y: 0..22)
+          if (isSuccess) {
+            color = pixelOn ? TFT_WHITE : TFT_GREEN;
+          } else if (isDenied) {
+            color = pixelOn ? TFT_WHITE : TFT_RED;
+          } else if (isAlready) {
+            color = pixelOn ? TFT_DARK : TFT_AMBER;
+          } else if (isCard) {
+            color = pixelOn ? TFT_GOLD : TFT_SURFACE;
+          } else if (isCancel) {
+            color = pixelOn ? TFT_WHITE : TFT_BRONZE;
+          } else { // IDLE
+            color = pixelOn ? TFT_GOLD : TFT_DARK;
+          }
+        } else if (y == 23) {
+          // เส้นคั่นระหว่าง Header และ Body
+          if (isSuccess) color = TFT_GREEN;
+          else if (isDenied) color = TFT_RED;
+          else if (isAlready) color = TFT_AMBER;
+          else color = TFT_BRONZE;
+        } else if (y >= 104) {
+          // โซน 3: FOOTER (แถบคำแนะนำปุ่มกด / สถานะ Y: 104..127)
+          if (y == 104) {
+            color = TFT_BORDER;
+          } else {
+            if (!pixelOn) {
+              color = TFT_SURFACE;
+            } else {
+              if (isCard) {
+                // ปุ่มฟ้า D2 (x < 80) / ปุ่มแดง D3 (x >= 80)
+                color = (x < 80) ? TFT_CYAN : TFT_RED;
+              } else if (isSuccess) {
+                color = TFT_GREEN;
+              } else if (isDenied) {
+                color = TFT_RED;
+              } else if (isAlready) {
+                color = TFT_AMBER;
+              } else {
+                color = TFT_GREEN; // IDLE พร้อมใช้งาน
+              }
+            }
+          }
+        } else {
+          // โซน 2: BODY (เนื้อหาหลัก Y: 24..103)
+          if (!pixelOn) {
+            color = TFT_DARK;
+          } else {
+            if (isSuccess) {
+              color = (y < 65) ? TFT_GREEN : TFT_WHITE;
+            } else if (isDenied) {
+              color = (y < 65) ? TFT_RED : TFT_WHITE;
+            } else if (isAlready) {
+              color = (y < 65) ? TFT_AMBER : TFT_WHITE;
+            } else if (isCard) {
+              // การ์ดนักศึกษา: ชื่อ (ขาวบริสุทธิ์), รหัส (ทองอร่าม), วิชา (ฟ้าสดใส)
+              if (y < 60) color = TFT_WHITE;
+              else if (y < 82) color = TFT_AMBER;
+              else color = TFT_CYAN;
+            } else { // IDLE
+              if (y < 68) color = TFT_WHITE;
+              else color = TFT_AMBER;
+            }
+          }
+        }
+
+        writeByte(color >> 8);
+        writeByte(color & 0xFF);
+      }
+    }
+    digitalWrite(_cs, HIGH);
+  }
+
   // ส่งข้อมูล Frame Buffer 2560 Bytes ไปยังหน้าจอ TFT พร้อมกำหนดคู่สี (Theme Color)
   void display(uint16_t fgColor = TFT_WHITE, uint16_t bgColor = TFT_BLACK) {
     if (!_detected) return;
@@ -424,13 +520,13 @@ ST7735_TFT tft(TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN, TFT_MOSI_PIN, TFT_SCK_PIN, T
 #define oled tft // รักษาความเข้ากันได้ย้อนหลัง 100%
 
 // ==========================================
-// 4. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ TFT (Clean Standard UI 128x160)
+// 4. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ TFT (Clean Standard UI 160x128 Landscape)
 // ==========================================
 void showUI(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
   tft.clearBuffer();
   tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
   
-  // แถบหัวข้อ Title ด้านบน
+  // แถบหัวข้อ Title ด้านบน (Y: 0..18)
   tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
   tft.drawString(8, 5, title, 0);
 
@@ -439,9 +535,9 @@ void showUI(const char* title, const char* line1, const char* line2 = "", const 
   if (line3 && strlen(line3) > 0) tft.drawString(8, 70, line3);
 
   tft.drawHLine(4, TFT_HEIGHT - 22, TFT_WIDTH - 8);
-  tft.drawString(10, TFT_HEIGHT - 16, "RMUTL Attendance");
+  tft.drawString(12, TFT_HEIGHT - 16, "RMUTL Attendance System");
 
-  tft.display(TFT_GOLD, TFT_DARK);
+  tft.displayTheme("THEME=IDLE");
 }
 
 // การ์ดแสดงผลเมื่อสแกนผ่าน (Fallback เมื่อไม่มีบิตแมป)
@@ -450,20 +546,20 @@ void showUserCard(const char* stuId, const char* name) {
   tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
 
   tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
-  tft.drawString(10, 5, "ACCESS GRANTED", 0);
+  tft.drawString(12, 5, "ACCESS GRANTED", 0);
 
-  tft.drawString(8, 30, "ID:");
-  tft.drawString(32, 30, stuId ? stuId : "-");
+  tft.drawString(8, 28, "STUDENT ID:");
+  tft.drawString(80, 28, stuId ? stuId : "-");
 
   tft.drawString(8, 48, name ? name : "Student");
 
   tft.drawHLine(4, 75, TFT_WIDTH - 8);
-  tft.drawString(12, 85, "CHECK-IN SUCCESS");
+  tft.drawString(14, 84, "VERIFY & CONFIRM");
 
-  tft.drawHLine(4, TFT_HEIGHT - 26, TFT_WIDTH - 8);
-  tft.drawString(8, TFT_HEIGHT - 18, "[D2:OK | D3:Cancel]");
+  tft.drawHLine(4, TFT_HEIGHT - 24, TFT_WIDTH - 8);
+  tft.drawString(8, TFT_HEIGHT - 16, "[ D2: Confirm  |  D3: Cancel ]");
 
-  tft.display(TFT_GREEN, TFT_DARK);
+  tft.displayTheme("THEME=CARD");
 }
 
 void showIdleScreen() {
@@ -471,17 +567,15 @@ void showIdleScreen() {
   tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
 
   tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
-  tft.drawString(16, 5, "FINGERPRINT IOT", 0);
+  tft.drawString(14, 5, "RMUTL BIOMETRIC IOT", 0);
 
-  tft.drawString(14, 38, "READY FOR SCAN");
-  tft.drawHLine(4, 58, TFT_WIDTH - 8);
-  tft.drawString(10, 72, "Place your finger");
-  tft.drawString(10, 88, "on R307 sensor");
+  tft.drawString(18, 36, "READY FOR SCAN");
+  tft.drawString(18, 56, "Place finger on sensor");
 
-  tft.drawHLine(4, TFT_HEIGHT - 22, TFT_WIDTH - 8);
-  tft.drawString(14, TFT_HEIGHT - 16, "RMUTL Attendance");
+  tft.drawHLine(4, TFT_HEIGHT - 24, TFT_WIDTH - 8);
+  tft.drawString(14, TFT_HEIGHT - 16, "[ Status: System Ready ]");
 
-  tft.display(TFT_GOLD, TFT_DARK);
+  tft.displayTheme("THEME=IDLE");
 }
 
 // ==========================================
@@ -1082,25 +1176,7 @@ void setup() {
 }
 
 bool handleFrameReceive(const String& startLine = "") {
-  uint16_t fgColor = TFT_WHITE;
-  uint16_t bgColor = TFT_DARK;
-
-  if (startLine.indexOf("THEME=IDLE") >= 0) {
-    fgColor = TFT_GOLD;
-    bgColor = TFT_DARK;
-  } else if (startLine.indexOf("THEME=SUCCESS") >= 0) {
-    fgColor = TFT_GREEN;
-    bgColor = TFT_DARK;
-  } else if (startLine.indexOf("THEME=DENIED") >= 0 || startLine.indexOf("THEME=TIMEOUT") >= 0) {
-    fgColor = TFT_RED;
-    bgColor = TFT_DARK;
-  } else if (startLine.indexOf("THEME=CANCEL") >= 0) {
-    fgColor = TFT_AMBER;
-    bgColor = TFT_DARK;
-  } else if (startLine.indexOf("THEME=CARD") >= 0) {
-    fgColor = TFT_WHITE;
-    bgColor = TFT_DARK;
-  }
+  String theme = startLine.length() > 0 ? startLine : "THEME=IDLE";
 
   tft.clearBuffer();
   uint32_t lastActivity = millis();
@@ -1119,7 +1195,7 @@ bool handleFrameReceive(const String& startLine = "") {
           tft.loadFrameChunk(offset, hex.c_str());
         }
       } else if (line == "FRAME_END") {
-        tft.display(fgColor, bgColor);
+        tft.displayTheme(theme);
         Serial.println("FRAME_DONE");
         return true;
       }

@@ -139,12 +139,12 @@ for fp in FONT_CANDIDATES:
 
 if actual_font_path:
     try:
-        font_title = ImageFont.truetype(actual_font_path, 10)
-        font_id    = ImageFont.truetype(actual_font_path, 10)
-        font_name  = ImageFont.truetype(actual_font_path, 11)
-        font_name_sm = ImageFont.truetype(actual_font_path, 9)
+        font_title = ImageFont.truetype(actual_font_path, 11)
+        font_id    = ImageFont.truetype(actual_font_path, 11)
+        font_name  = ImageFont.truetype(actual_font_path, 12)
+        font_name_sm = ImageFont.truetype(actual_font_path, 10)
         font_body  = ImageFont.truetype(actual_font_path, 11)
-        font_small = ImageFont.truetype(actual_font_path, 9)
+        font_small = ImageFont.truetype(actual_font_path, 10)
         print(f'✅ [Font] โหลดฟอนต์ {actual_font_path} สำเร็จ คมชัด 100%')
     except Exception as e:
         print(f'⚠️ [Font] โหลดฟอนต์ {actual_font_path} ล้มเหลว: {e}')
@@ -154,12 +154,12 @@ if not actual_font_path:
     print('⚠️ [Font] ไม่พบไฟล์ฟอนต์ TrueType กำลังใช้ฟอนต์เริ่มต้น (อาจแสดงผลภาษาไทยไม่สมบูรณ์)')
     font_title = font_id = font_name = font_name_sm = font_body = font_small = ImageFont.load_default()
 
-# ขนาดความละเอียดจอ 1.8" TFT SPI (128x160)
-TFT_WIDTH = 128
-TFT_HEIGHT = 160
+# ขนาดความละเอียดจอ 1.8" TFT SPI (160x128 แนวนอน Landscape)
+TFT_WIDTH = 160
+TFT_HEIGHT = 128
 TFT_BUF_SIZE = (TFT_WIDTH * TFT_HEIGHT) // 8  # 2,560 Bytes
 
-# 2. ฟังก์ชันแปลงภาพ Pillow (128x160) เป็น 2560-byte TFT Horizontal 1-bit Buffer
+# 2. ฟังก์ชันแปลงภาพ Pillow (160x128) เป็น 2560-byte TFT Horizontal 1-bit Buffer
 def img_to_tft_buf(img):
     try:
         # โหมด '1' ของ Pillow เข้ารหัสแบบ 1-bit MSB Horizontal Raster ตรงตามสเปก 100%
@@ -178,7 +178,7 @@ def img_to_tft_buf(img):
 # Alias เพื่อความเข้ากันได้ย้อนหลัง 100%
 img_to_oled_buf = img_to_tft_buf
 
-# 3. เรนเดอร์หน้าจอพร้อมใช้งาน (Idle Screen ภาษาไทยคมกริบ - 128x160 พร้อมชื่อห้องประจำเครื่อง)
+# 3. เรนเดอร์หน้าจอพร้อมใช้งาน (Idle Screen ภาษาไทยคมกริบ - 160x128 แนวนอน พร้อมชื่อห้องประจำเครื่อง)
 def render_idle_screen(room_name=None):
     global current_room_name
     r_name = room_name or current_room_name or 'ทค.1-101'
@@ -186,311 +186,297 @@ def render_idle_screen(room_name=None):
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
-    # Header: ระบบลงเวลาเรียน IoT
+    # โซน Header: ระบบลงเวลาเรียน IoT (Y: 0..22)
     title = 'ระบบลงเวลาเรียน IoT'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 6), title, font=font_title, fill=1)
-    d.line([(2, 22), (TFT_WIDTH - 3, 22)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
-    # Subheader / Institution
+    # โซน Body: RMUTL + กรอบวางนิ้ว (Y: 24..103)
     inst = 'มทร.ล้านนา (RMUTL)'
     bb = d.textbbox((0, 0), inst, font=font_small)
     iw = bb[2] - bb[0]
     d.text(((TFT_WIDTH - iw) // 2, 28), inst, font=font_small, fill=1)
 
-    # Central Fingerprint Prompt Box
-    d.rectangle([12, 46, TFT_WIDTH - 13, 108], outline=1)
-    prompt1 = 'กรุณาวางนิ้ว'
+    d.rectangle([14, 46, TFT_WIDTH - 15, 96], outline=1)
+    prompt1 = 'กรุณาวางลายนิ้วมือ'
     bb = d.textbbox((0, 0), prompt1, font=font_name)
     pw1 = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - pw1) // 2, 56), prompt1, font=font_name, fill=1)
+    d.text(((TFT_WIDTH - pw1) // 2, 54), prompt1, font=font_name, fill=1)
 
-    prompt2 = 'เพื่อสแกนเวลาเรียน'
+    prompt2 = 'เพื่อบันทึกเวลาเรียน'
     bb = d.textbbox((0, 0), prompt2, font=font_small)
     pw2 = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - pw2) // 2, 82), prompt2, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - pw2) // 2, 75), prompt2, font=font_small, fill=1)
 
-    # Footer / Room Information
-    d.line([(2, 118), (TFT_WIDTH - 3, 118)], fill=1)
-    room_text = f'[ {r_name} ]'
-    bb = d.textbbox((0, 0), room_text, font=font_title)
-    rw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - rw) // 2, 124), room_text, font=font_title, fill=1)
-
-    status_text = 'พร้อมใช้งาน (READY)'
-    bb = d.textbbox((0, 0), status_text, font=font_small)
-    sw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - sw) // 2, 142), status_text, font=font_small, fill=1)
+    # โซน Footer: ข้อมูลห้อง + สถานะพร้อมใช้งาน (Y: 104..127)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    footer_text = f'[ {r_name} ]   ● พร้อมใช้งาน'
+    bb = d.textbbox((0, 0), footer_text, font=font_small)
+    fw = bb[2] - bb[0]
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer_text, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 4. เรนเดอร์หน้าจอไม่พบลายนิ้วมือ (Denied Screen ภาษาไทย - 128x160)
+# 4. เรนเดอร์หน้าจอไม่พบลายนิ้วมือ (Denied Screen ภาษาไทย - 160x128 แนวนอน)
 def render_denied_screen(is_offline=False):
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
+    # โซน Header: ACCESS DENIED (Y: 0..22)
     title = 'ACCESS DENIED'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 6), title, font=font_title, fill=1)
-    d.line([(2, 22), (TFT_WIDTH - 3, 22)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
-    d.rectangle([10, 40, TFT_WIDTH - 11, 102], outline=1)
+    # โซน Body: ข้อความเตือน (Y: 24..103)
+    d.rectangle([14, 36, TFT_WIDTH - 15, 96], outline=1)
     body1 = 'ไม่พบลายนิ้วมือ'
     bb = d.textbbox((0, 0), body1, font=font_name)
     b1w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b1w) // 2, 50), body1, font=font_name, fill=1)
+    d.text(((TFT_WIDTH - b1w) // 2, 46), body1, font=font_name, fill=1)
 
-    body2 = 'ในฐานข้อมูลระบบ'
-    bb = d.textbbox((0, 0), body2, font=font_body)
+    body2 = 'ไม่มีข้อมูลในระบบ หรือสแกนไม่ชัด'
+    bb = d.textbbox((0, 0), body2, font=font_small)
     b2w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b2w) // 2, 74), body2, font=font_body, fill=1)
+    d.text(((TFT_WIDTH - b2w) // 2, 72), body2, font=font_small, fill=1)
 
-    d.line([(2, 120), (TFT_WIDTH - 3, 120)], fill=1)
+    # โซน Footer: สถานะ (Y: 104..127)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
     footer = 'ไม่พบข้อมูล (โหมดออฟไลน์)' if is_offline else 'ไม่มีสิทธิ์เข้าถึง (DENIED)'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 134), footer, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - 128x160 แสดงชื่อเต็ม + รหัสนักศึกษา + ข้อมูลวิชา + ปุ่มกด)
+# 5. เรนเดอร์การ์ดนักศึกษา (User Card ภาษาไทยคมกริบ - 160x128 แนวนอน แสดงชื่อเต็ม + รหัส + คาบเรียน + ปุ่มกด)
 def render_user_card(student_id, name, sched_info=None):
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
-    # หัวข้อ: ยินดีต้อนรับ สวยงามกึ่งกลาง
-    title = 'ยินดีต้อนรับ'
+    # โซน Header: ยืนยันตัวตนการเข้าเรียน (Y: 0..22)
+    title = 'ข้อมูลการลงเวลาเรียน'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 5), title, font=font_title, fill=1)
-    d.line([(2, 20), (TFT_WIDTH - 3, 20)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
-    # ข้อมูลชื่อนักศึกษา
+    # โซน Body: ชื่อนักศึกษา (Y < 60 เป็นสีขาว)
     display_name = name or 'Unknown'
-    if len(display_name) > 22:
-        display_name = display_name[:21] + '..'
+    if len(display_name) > 26:
+        display_name = display_name[:25] + '..'
     bb = d.textbbox((0, 0), display_name, font=font_name)
     nw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - nw) // 2, 25), display_name, font=font_name, fill=1)
+    d.text(((TFT_WIDTH - nw) // 2, 27), display_name, font=font_name, fill=1)
 
-    # รหัสนักศึกษา (บนจอ 128x160 สามารถแสดงรหัสได้ครบถ้วน ชัดเจน)
+    # ข้อมูลรหัสนักศึกษา และคาบเรียน (Y: 60..103 สีอำพัน/ฟ้า)
     sid = str(student_id) if student_id else '-'
     sid_text = f"รหัส: {sid}"
     bb = d.textbbox((0, 0), sid_text, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - sw) // 2, 42), sid_text, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - sw) // 2, 48), sid_text, font=font_small, fill=1)
 
-    d.line([(2, 56), (TFT_WIDTH - 3, 56)], fill=1)
-
-    # ข้อมูลคาบเรียนและสถานะ
     sched = sched_info.get('schedule') if sched_info else None
     att_status = sched_info.get('attendanceStatus', 'OUT_OF_SCHEDULE') if sched_info else 'OUT_OF_SCHEDULE'
 
     if sched:
         short_name = sched.get('short_name') or sched.get('subject_name', 'Class')
         class_type = sched.get('class_type', 'T')
-        subj_line = f"{short_name} [{class_type}]"
-        if len(subj_line) > 18:
-            subj_line = subj_line[:17] + '..'
-        d.text((6, 62), subj_line, font=font_small, fill=1)
+        subj_line = f"วิชา: {short_name} [{class_type}]"
+        if len(subj_line) > 24:
+            subj_line = subj_line[:23] + '..'
+        bb = d.textbbox((0, 0), subj_line, font=font_small)
+        slw = bb[2] - bb[0]
+        d.text(((TFT_WIDTH - slw) // 2, 66), subj_line, font=font_small, fill=1)
 
-        status_tag = '[ทันเวลา]' if att_status == 'ON_TIME' else '[มาสาย]'
-        d.text((6, 76), f"สถานะ: {status_tag}", font=font_small, fill=1)
-        
+        status_tag = 'ตรงเวลา' if att_status == 'ON_TIME' else 'มาสาย'
         room = sched.get('room_name', current_room_name)
-        d.text((6, 90), f"ห้อง: {room}", font=font_small, fill=1)
+        detail_line = f"ห้อง: {room}   สถานะ: [{status_tag}]"
+        bb = d.textbbox((0, 0), detail_line, font=font_small)
+        dlw = bb[2] - bb[0]
+        d.text(((TFT_WIDTH - dlw) // 2, 84), detail_line, font=font_small, fill=1)
     else:
-        d.text((6, 62), "นอกเวลาเรียน (General)", font=font_small, fill=1)
-        d.text((6, 76), "สถานะ: [บันทึกทั่วไป]", font=font_small, fill=1)
-        d.text((6, 90), f"ห้อง: {current_room_name}", font=font_small, fill=1)
+        subj_line = "วิชา: นอกเวลาเรียน (General)"
+        bb = d.textbbox((0, 0), subj_line, font=font_small)
+        slw = bb[2] - bb[0]
+        d.text(((TFT_WIDTH - slw) // 2, 66), subj_line, font=font_small, fill=1)
 
-    d.line([(2, 106), (TFT_WIDTH - 3, 106)], fill=1)
+        detail_line = f"ห้อง: {current_room_name}   [บันทึกทั่วไป]"
+        bb = d.textbbox((0, 0), detail_line, font=font_small)
+        dlw = bb[2] - bb[0]
+        d.text(((TFT_WIDTH - dlw) // 2, 84), detail_line, font=font_small, fill=1)
 
-    # ปุ่มกด Physical Switch
-    prompt1 = '[ ปุ่มฟ้า : ยืนยัน ]'
-    bb = d.textbbox((0, 0), prompt1, font=font_small)
-    p1w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - p1w) // 2, 112), prompt1, font=font_small, fill=1)
+    # โซน Footer: ปุ่มกด 2 สี (ปุ่มฟ้า D2 ยืนยัน X < 80 / ปุ่มแดง D3 ยกเลิก X >= 80)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    
+    prompt1 = '[ ฟ้า: ยืนยัน ]'
+    bb1 = d.textbbox((0, 0), prompt1, font=font_small)
+    w1 = bb1[2] - bb1[0]
+    d.text((40 - (w1 // 2), 110), prompt1, font=font_small, fill=1)
 
-    prompt2 = '[ ปุ่มแดง : สแกนใหม่ ]'
-    bb = d.textbbox((0, 0), prompt2, font=font_small)
-    p2w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - p2w) // 2, 126), prompt2, font=font_small, fill=1)
-
-    d.line([(2, 142), (TFT_WIDTH - 3, 142)], fill=1)
-    footer = 'หมดเวลาใน 10 วินาที'
-    bb = d.textbbox((0, 0), footer, font=font_small)
-    fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 146), footer, font=font_small, fill=1)
+    prompt2 = '[ แดง: ยกเลิก ]'
+    bb2 = d.textbbox((0, 0), prompt2, font=font_small)
+    w2 = bb2[2] - bb2[0]
+    d.text((120 - (w2 // 2), 110), prompt2, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 5.1 เรนเดอร์หน้าจอยืนยันสำเร็จ (Confirm Success Screen - 128x160)
+# 5.1 เรนเดอร์หน้าจอยืนยันสำเร็จ (Confirm Success Screen - 160x128 แนวนอน)
 def render_confirm_success(student_id, name, sched_info=None, is_offline=False):
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
-    title = 'ยินดีต้อนรับ'
+    # โซน Header: บันทึกสำเร็จ (Y: 0..22)
+    title = '✓ บันทึกเวลาสำเร็จ ✓'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 5), title, font=font_title, fill=1)
-    d.line([(2, 20), (TFT_WIDTH - 3, 20)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
+    # โซน Body: ชื่อ + รหัส + กล่องสถานะ
     display_name = name or 'Unknown'
-    if len(display_name) > 22:
-        display_name = display_name[:21] + '..'
+    if len(display_name) > 26:
+        display_name = display_name[:25] + '..'
     bb = d.textbbox((0, 0), display_name, font=font_name)
     nw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - nw) // 2, 25), display_name, font=font_name, fill=1)
+    d.text(((TFT_WIDTH - nw) // 2, 27), display_name, font=font_name, fill=1)
 
     sid = str(student_id) if student_id else '-'
     sid_text = f"รหัส: {sid}"
     bb = d.textbbox((0, 0), sid_text, font=font_small)
     sw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - sw) // 2, 42), sid_text, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - sw) // 2, 48), sid_text, font=font_small, fill=1)
 
-    d.line([(2, 56), (TFT_WIDTH - 3, 56)], fill=1)
-
-    sched = sched_info.get('schedule') if sched_info else None
-    if sched:
-        short_name = sched.get('short_name') or sched.get('subject_name', 'Class')
-        class_type = sched.get('class_type', 'T')
-        subj_line = f"{short_name} [{class_type}]"
-        if len(subj_line) > 18:
-            subj_line = subj_line[:17] + '..'
-        d.text((6, 62), subj_line, font=font_small, fill=1)
-    else:
-        d.text((6, 62), "นอกเวลาเรียน (General)", font=font_small, fill=1)
-
-    # กล่องผลการลงเวลา
-    d.rectangle([10, 84, TFT_WIDTH - 11, 124], outline=1)
-    chk_title = '✓ บันทึกสำเร็จ'
-    bb = d.textbbox((0, 0), chk_title, font=font_title)
-    cw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - cw) // 2, 90), chk_title, font=font_title, fill=1)
-
-    status = 'บันทึกออฟไลน์ (รอเน็ต)' if is_offline else 'บันทึกขึ้น Cloud แล้ว'
+    d.rectangle([14, 68, TFT_WIDTH - 15, 96], outline=1)
+    status = 'บันทึกออฟไลน์ (รอเชื่อมต่อ)' if is_offline else '✓ บันทึกขึ้น Cloud เรียบร้อย'
     bb = d.textbbox((0, 0), status, font=font_small)
-    sw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - sw) // 2, 106), status, font=font_small, fill=1)
+    stw = bb[2] - bb[0]
+    d.text(((TFT_WIDTH - stw) // 2, 75), status, font=font_small, fill=1)
 
-    d.line([(2, 136), (TFT_WIDTH - 3, 136)], fill=1)
-    footer = 'ขอบคุณที่เข้าชั้นเรียน'
+    # โซน Footer: คำขอบคุณ
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    footer = 'ยินดีต้อนรับเข้าสู่ห้องเรียน'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 142), footer, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 5.1.1 เรนเดอร์หน้าจอแจ้งเตือนลงเวลาซ้ำ (Already Checked In Screen - 128x160)
+# 5.1.1 เรนเดอร์หน้าจอแจ้งเตือนลงเวลาซ้ำ (Already Checked In Screen - 160x128 แนวนอน)
 def render_already_checked_in(name, subject_str):
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
+    # โซน Header: แจ้งเตือนการลงเวลา (Y: 0..22)
     title = 'แจ้งเตือนการลงเวลา'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 6), title, font=font_title, fill=1)
-    d.line([(2, 22), (TFT_WIDTH - 3, 22)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
+    # โซน Body: ชื่อ + กรอบแจ้งเตือน (Y: 24..103)
     display_name = name or 'Student'
-    if len(display_name) > 22:
-        display_name = display_name[:21] + '..'
+    if len(display_name) > 26:
+        display_name = display_name[:25] + '..'
     bb = d.textbbox((0, 0), display_name, font=font_name)
     nw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - nw) // 2, 30), display_name, font=font_name, fill=1)
+    d.text(((TFT_WIDTH - nw) // 2, 27), display_name, font=font_name, fill=1)
 
-    d.rectangle([10, 52, TFT_WIDTH - 11, 108], outline=1)
+    d.rectangle([12, 48, TFT_WIDTH - 13, 96], outline=1)
     w1 = 'คุณได้ลงเวลาคาบนี้แล้ว'
     bb = d.textbbox((0, 0), w1, font=font_small)
     w1_w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - w1_w) // 2, 60), w1, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - w1_w) // 2, 54), w1, font=font_small, fill=1)
 
     subj = subject_str or 'วิชาปัจจุบัน'
-    if len(subj) > 18:
-        subj = subj[:17] + '..'
-    bb = d.textbbox((0, 0), subj, font=font_small)
-    w2 = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - w2) // 2, 76), subj, font=font_small, fill=1)
+    if len(subj) > 24:
+        subj = subj[:23] + '..'
+    w2 = f'{subj} (ไม่บันทึกซ้ำ)'
+    bb = d.textbbox((0, 0), w2, font=font_small)
+    w2_w = bb[2] - bb[0]
+    d.text(((TFT_WIDTH - w2_w) // 2, 74), w2, font=font_small, fill=1)
 
-    w3 = '(ไม่บันทึกเวลาซ้ำ)'
-    bb = d.textbbox((0, 0), w3, font=font_small)
-    w3_w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - w3_w) // 2, 92), w3, font=font_small, fill=1)
-
-    d.line([(2, 126), (TFT_WIDTH - 3, 126)], fill=1)
-    footer = 'อนุญาตสแกน 1 ครั้ง/สัปดาห์'
+    # โซน Footer: สแกน 1 ครั้ง/วิชา/สัปดาห์ (Y: 104..127)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    footer = 'อนุญาตสแกน 1 ครั้ง/วิชา/สัปดาห์'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 136), footer, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 5.2 เรนเดอร์หน้าจอยกเลิก (Cancelled Screen - D3 Rescan 128x160)
+# 5.2 เรนเดอร์หน้าจอยยกเลิก (Cancelled Screen - D3 Rescan 160x128 แนวนอน)
 def render_cancelled_screen():
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
+    # โซน Header: ยกเลิกการลงเวลา (Y: 0..22)
     title = 'ยกเลิกการลงเวลา'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 6), title, font=font_title, fill=1)
-    d.line([(2, 22), (TFT_WIDTH - 3, 22)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
-    d.rectangle([10, 42, TFT_WIDTH - 11, 100], outline=1)
+    # โซน Body: กล่องแจ้งเตือน (Y: 24..103)
+    d.rectangle([14, 36, TFT_WIDTH - 15, 96], outline=1)
     body1 = 'ยกเลิกด้วยปุ่มแดง (D3)'
-    bb = d.textbbox((0, 0), body1, font=font_small)
+    bb = d.textbbox((0, 0), body1, font=font_name)
     b1w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b1w) // 2, 54), body1, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - b1w) // 2, 46), body1, font=font_name, fill=1)
 
-    body2 = 'กรุณาวางนิ้วสแกนใหม่'
-    bb = d.textbbox((0, 0), body2, font=font_body)
+    body2 = 'กรุณาวางนิ้วเพื่อสแกนใหม่อีกครั้ง'
+    bb = d.textbbox((0, 0), body2, font=font_small)
     b2w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b2w) // 2, 74), body2, font=font_body, fill=1)
+    d.text(((TFT_WIDTH - b2w) // 2, 72), body2, font=font_small, fill=1)
 
-    d.line([(2, 120), (TFT_WIDTH - 3, 120)], fill=1)
-    footer = 'สถานะ: ยกเลิกแล้ว'
+    # โซน Footer: สถานะยกเลิก (Y: 104..127)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    footer = 'สถานะ: ยกเลิกรายการแล้ว'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 134), footer, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
-# 5.3 เรนเดอร์หน้าจอหมดเวลา (Timeout Screen - 10s Auto-Cancel 128x160)
+# 5.3 เรนเดอร์หน้าจอหมดเวลา (Timeout Screen - 10s Auto-Cancel 160x128 แนวนอน)
 def render_timeout_screen():
     img = Image.new('1', (TFT_WIDTH, TFT_HEIGHT), 0)
     d = ImageDraw.Draw(img)
     d.rectangle([0, 0, TFT_WIDTH - 1, TFT_HEIGHT - 1], outline=1)
     
+    # โซน Header: หมดเวลาการยืนยัน (Y: 0..22)
     title = 'หมดเวลาการยืนยัน'
     bb = d.textbbox((0, 0), title, font=font_title)
     tw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - tw) // 2, 6), title, font=font_title, fill=1)
-    d.line([(2, 22), (TFT_WIDTH - 3, 22)], fill=1)
+    d.text(((TFT_WIDTH - tw) // 2, 4), title, font=font_title, fill=1)
+    d.line([(2, 23), (TFT_WIDTH - 3, 23)], fill=1)
 
-    d.rectangle([10, 42, TFT_WIDTH - 11, 100], outline=1)
+    # โซน Body: ข้อความเตือนหมดเวลา (Y: 24..103)
+    d.rectangle([14, 36, TFT_WIDTH - 15, 96], outline=1)
     body1 = 'ไม่มีการกดปุ่มยืนยัน'
-    bb = d.textbbox((0, 0), body1, font=font_small)
+    bb = d.textbbox((0, 0), body1, font=font_name)
     b1w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b1w) // 2, 54), body1, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - b1w) // 2, 46), body1, font=font_name, fill=1)
 
-    body2 = 'ยกเลิกอัตโนมัติ (10 วิ)'
-    bb = d.textbbox((0, 0), body2, font=font_body)
+    body2 = 'ยกเลิกอัตโนมัติภายใน 10 วินาที'
+    bb = d.textbbox((0, 0), body2, font=font_small)
     b2w = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - b2w) // 2, 74), body2, font=font_body, fill=1)
+    d.text(((TFT_WIDTH - b2w) // 2, 72), body2, font=font_small, fill=1)
 
-    d.line([(2, 120), (TFT_WIDTH - 3, 120)], fill=1)
-    footer = 'สถานะ: ไม่ได้บันทึกเวลา'
+    # โซน Footer: สถานะไม่ได้บันทึกเวลา (Y: 104..127)
+    d.line([(2, 104), (TFT_WIDTH - 3, 104)], fill=1)
+    footer = 'สถานะ: ไม่ได้บันทึกเวลาเรียน'
     bb = d.textbbox((0, 0), footer, font=font_small)
     fw = bb[2] - bb[0]
-    d.text(((TFT_WIDTH - fw) // 2, 134), footer, font=font_small, fill=1)
+    d.text(((TFT_WIDTH - fw) // 2, 110), footer, font=font_small, fill=1)
 
     return img_to_tft_buf(img)
 
@@ -743,7 +729,7 @@ def mcu_reader_thread():
                         resp_buf = render_already_checked_in(name, f"{short_name}{type_suffix}")
                         if sio.connected:
                             sio.emit('bridge_serial_data', line)
-                        send_bitmap_to_mcu(resp_buf, initial_wait=0.04, theme='DENIED')
+                        send_bitmap_to_mcu(resp_buf, initial_wait=0.04, theme='ALREADY')
                     else:
                         is_offline = not sio.connected
                         if is_offline:
