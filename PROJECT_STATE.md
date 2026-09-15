@@ -112,42 +112,6 @@
 - **Hermetic Unit Testing Seam (ADR-034):**
   - สร้าง Seam ตัดขาดการติดต่อเครือข่ายภายนอกระหว่างรัน `npm test` ด้วย `setSupabaseClient(null)` ทำให้ชุดทดสอบรันแบบ Hermetic 100% ปราศจาก Warning `Unregistered API key` และลดเวลารันเทสลงเหลือ ~670ms พร้อมปรับ `database.js` ให้ใช้การ Throw Error แทน `process.exit(1)` เพื่อความยืดหยุ่นในการจัดการข้อผิดพลาด
 
----
-
-## 2. ไฟล์หลักๆ และโครงสร้างโปรเจกต์ (Core Files & Architecture)
-
-```
-Fingerprint/
-├── unoq_bridge.py             # สคริปต์บริดจ์หลักบน Arduino Uno Q Linux (Python)
-│                              # - ควบคุม UART ติดต่อ STM32
-│                              # - เชื่อมต่อ Socket.IO Client ไปยัง Cloud
-│                              # - เรนเดอร์ภาษาไทย TFT 160x128 Landscape ด้วย Pillow พร้อม Dynamic Palette
-│                              # - จัดการ Offline Queue และ Local Attendance Cache
-│                              # - ตรวจเช็คสุขภาพฮาร์ดแวร์ R307 (Watchdog)
-│
-├── sketch/
-│   └── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
-│                              # - ขับเซนเซอร์ R307 และจอ 1.8" TFT SPI 160x128 Landscape (ST7735)
-│                              # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
-│                              # - ลูป Step 2 Retry 1..3 ครั้งในตัว ไม่ต้องเริ่ม Step 1 ใหม่
-│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking (2,560 ไบต์) พร้อม Zone-based Theming
-│                              # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
-│
-├── server/
-│   ├── server.js              # เมนเซิร์ฟเวอร์ Node.js + Express + Socket.IO
-│   │                          # - จุดรวม API Endpoints ทั้งหมดพร้อม Middleware รักษาความปลอดภัย
-│   │                          # - จัดการ Real-time Events (สแกน, ลงเวลา, ซิงก์แคช, ตรวจสอบซ้ำ)
-│   │                          # - จัดการโหมด Serial (Local) และ Cloud Bridge
-│   │                          # - เชื่อมต่อ EnrollmentSession รองรับการลองสแกนนิ้วซ้ำเฉพาะนิ้วที่ล้มเหลว
-│   │
-│   ├── enrollment_manager.js  # โมดูล State Machine ดูแลการลงทะเบียน 3 นิ้วแบบ Non-destructive Retry
-│   │                          # - ป้องกันการ Auto-Rollback นิ้วที่บันทึกผ่านไปแล้ว
-│   │                          # - รองรับการลองใหม่เฉพาะนิ้ว (Per-Finger Retry)
-│   │
-│   ├── schedules_manager.js   # ขุมพลังจัดการตารางเรียนและการลงเวลา (Single Source of Truth)
-│   │                          # - เชื่อมต่อ Supabase Cloud Database (room_schedules & session_attendance)
-│   │                          # - นำเข้าและแปลงไฟล์ Excel ตารางสอน (.xlsx)
-│   │                          # - คำนวณคาบเรียนปัจจุบัน และสัปดาห์ ISO-8601
 ### 1.6 สถาปัตยกรรมเซิร์ฟเวอร์แบบโมดูลาร์ (Modular Server Architecture - ADR-035)
 - **Modular Server Architecture & Clean Bootstrap:**
   - แยก `server/server.js` จากไฟล์ Monolith 1,778 บรรทัด ออกเป็นโมดูลย่อยชัดเจน ช่วยให้ทดสอบและดูแลรักษาง่าย:
@@ -156,6 +120,15 @@ Fingerprint/
     - `server/routes/`: จัดกลุ่ม 24 Routes ออกเป็น 5 โมดูลตามขอบเขตงาน (`auth.js`, `users.js`, `logs.js`, `schedules.js`, `device.js`)
     - `server/server.js`: ลดขนาดเหลือ ~155 บรรทัด ทำหน้าที่เพียง Composition Root ในการเชื่อมต่อ Middleware, Controller, และ Routers
   - **100% Behavioral Preservation:** พฤติกรรมเดิมคงอยู่ครบถ้วน 100% ผ่านการทดสอบ `npm test` 20/20 เขียวสมบูรณ์
+
+### 1.7 สถาปัตยกรรม Native Repositories (Native Repository Pattern - ADR-036)
+- **Data Access Layer & Clean Repositories:**
+  - ทดแทนการคิวรีฐานข้อมูลผ่านการตรวจจับสตริง SQL แบบเก่า (`dbAsync` string-matching 273 บรรทัด) ด้วย Native Supabase Repositories:
+    - `server/repositories/UserRepository.js`: จัดการข้อมูลผู้ใช้, Tier 2 Candidate Search, LRU Sensor Eviction, และ Template Backup
+    - `server/repositories/AdminRepository.js`: จัดการข้อมูลแอดมิน, ค้นหาตาม Username/ID, และอัปเดต Password Hash
+    - `server/repositories/AccessLogRepository.js`: บันทึกประวัติการสแกน, สถิติประจำวันตามโซนเวลาประเทศไทย (+7 ชม.), และดึงบันทึกล่าสุด
+  - ย้ายจุดเรียกใช้งาน `dbAsync` ทั้ง 37 จุดทั่วทั้งระบบมาใช้ Repositories ทั้งหมด (`grep -c "dbAsync\." server/*.js` = 0)
+  - กำจัดความเสี่ยงเรื่อง String Mismatch และทำให้ Data Layer มี Type Safety และ Testability สูงขึ้น
 
 ---
 
@@ -185,6 +158,11 @@ Fingerprint/
 │   │
 │   ├── controllers/
 │   │   └── serial_controller.js # ศูนย์กลางจัดการ Serial Hardware, Bridge, และ Tier-2 DB Search
+│   │
+│   ├── repositories/          # Native Supabase Repositories (Data Access Layer)
+│   │   ├── UserRepository.js  # จัดการผู้ใช้, LRU cache, Tier-2 templates
+│   │   ├── AdminRepository.js # ข้อมูลแอดมินและการยืนยันตัวตน
+│   │   └── AccessLogRepository.js # บันทึกประวัติการสแกนและสถิติรายวัน
 │   │
 │   ├── routes/                # 24 API Endpoints แบบ Modular Routers
 │   │   ├── auth.js            # /api/auth (login, logout, me, change-password)

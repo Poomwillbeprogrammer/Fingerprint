@@ -1,5 +1,5 @@
 const express = require('express');
-const { dbAsync } = require('../database');
+const userRepository = require('../repositories/UserRepository');
 const { authRequired } = require('../middleware/auth');
 
 function createUsersRouter({ serialController, io }) {
@@ -7,7 +7,7 @@ function createUsersRouter({ serialController, io }) {
 
   router.get('/', authRequired, async (req, res) => {
     try {
-      const users = await dbAsync.all('SELECT * FROM users ORDER BY id ASC');
+      const users = await userRepository.findAllOrderById();
       res.json(users);
     } catch (err) {
       res.status(500).json({ error: err.message });
@@ -25,7 +25,7 @@ function createUsersRouter({ serialController, io }) {
 
     try {
       // 1. ตรวจสอบว่ารหัสนักศึกษานี้มีอยู่ในระบบแล้วหรือไม่ (ป้องกันการซ้ำ)
-      const existingStudent = await dbAsync.get('SELECT id, name FROM users WHERE student_id = ?', [cleanStudentId]);
+      const existingStudent = await userRepository.findByStudentId(cleanStudentId);
       if (existingStudent) {
         return res.status(400).json({ 
           error: `รหัสนักศึกษา "${cleanStudentId}" มีในระบบแล้ว (Slot ID #${existingStudent.id} - ${existingStudent.name})` 
@@ -33,7 +33,7 @@ function createUsersRouter({ serialController, io }) {
       }
 
       // 2. คำนวณ Slot ID อัตโนมัติ: เติมเต็มช่องว่างที่ว่างอยู่ (Re-use lowest available ID)
-      const allExisting = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+      const allExisting = await userRepository.findAllOrderById();
       const usedIds = new Set(allExisting.map(u => u.id));
       
       let targetId = req.body.id ? parseInt(req.body.id) : 0;
@@ -47,10 +47,11 @@ function createUsersRouter({ serialController, io }) {
       }
 
       // 3. บันทึกข้อมูลลงฐานข้อมูล
-      await dbAsync.run(
-        "INSERT INTO users (id, student_id, name, created_at) VALUES (?, ?, ?, datetime('now', '+7 hours'))",
-        [targetId, cleanStudentId, cleanName]
-      );
+      await userRepository.insertUser({
+        id: targetId,
+        studentId: cleanStudentId,
+        name: cleanName
+      });
 
       io.emit('user_updated');
       serialController.broadcastUsersCache();
@@ -69,7 +70,7 @@ function createUsersRouter({ serialController, io }) {
   router.delete('/:id', authRequired, async (req, res) => {
     const id = parseInt(req.params.id);
     try {
-      await dbAsync.run('DELETE FROM users WHERE id = ?', [id]);
+      await userRepository.deleteUser(id);
       
       // สั่งเซนเซอร์ R307 บนบอร์ด Arduino ให้ลบลายนิ้วมือทั้ง 3 ช่องของคนนี้ออกทันที
       const { slot1, slot2, slot3 } = serialController.deleteUserSlots(id);

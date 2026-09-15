@@ -1,10 +1,11 @@
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 const { EnrollmentSession } = require('../enrollment_manager');
+const userRepository = require('../repositories/UserRepository');
+const accessLogRepository = require('../repositories/AccessLogRepository');
 
 function createSerialController({
   io,
-  dbAsync,
   schedulesManager,
   targetPort = process.env.SERIAL_PORT || 'COM12',
   baudRate = 115200,
@@ -34,7 +35,7 @@ function createSerialController({
   // บรอดแคสต์แคชรายชื่อนักศึกษาให้ทุก Bridge และ Client
   async function broadcastUsersCache() {
     try {
-      const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+      const users = await userRepository.findAllBasic();
       io.emit('sync_users_cache', users || []);
       console.log(`📦 [Sync Cache] ส่งแคชรายชื่อนักศึกษา (${users.length} คน) ให้ทุก Client แล้ว`);
     } catch (err) {
@@ -179,13 +180,7 @@ function createSerialController({
 
   async function startTier2Search() {
     console.log('🔍 [Tier 2] เริ่มต้นค้นหา candidate จาก Database...');
-    const candidates = await dbAsync.all(`
-      SELECT id, name, fingerprint_template 
-      FROM users 
-      WHERE (in_sensor = 0 OR in_sensor IS NULL) AND fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 512
-      ORDER BY COALESCE(last_scanned_at, created_at) DESC
-      LIMIT 60
-    `);
+    const candidates = await userRepository.getTier2Candidates();
 
     if (!candidates || candidates.length === 0) {
       console.log('⚠️ [Tier 2] ไม่มี candidate ใน Database ที่อยู่นอกเซนเซอร์');
@@ -232,31 +227,25 @@ function createSerialController({
 
   async function autoPromoteToSensor(userId) {
     try {
-      const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [userId]);
+      const user = await userRepository.findById(userId);
       if (!user || !user.fingerprint_template) return;
 
-      const countRow = await dbAsync.get('SELECT COUNT(*) as count FROM users WHERE in_sensor = 1');
-      const currentInSensor = countRow ? countRow.count : 0;
+      const currentInSensor = await userRepository.countInSensor();
       
       let targetSlot = userId;
 
       if (currentInSensor >= 1000) {
-        const lruUser = await dbAsync.get(`
-          SELECT id, name FROM users 
-          WHERE in_sensor = 1 AND id != ?
-          ORDER BY COALESCE(last_scanned_at, created_at) ASC 
-          LIMIT 1
-        `, [userId]);
+        const lruUser = await userRepository.findLruInSensor(userId);
 
         if (lruUser) {
           console.log(`🔄 [Auto-Promote] เซนเซอร์เต็ม: ย้าย ID #${lruUser.id} (${lruUser.name}) ไปอยู่ Tier 2 แทน`);
-          await dbAsync.run('UPDATE users SET in_sensor = 0 WHERE id = ?', [lruUser.id]);
+          await userRepository.updateInSensor(lruUser.id, 0);
           targetSlot = lruUser.id;
         }
       }
 
       console.log(`🚀 [Auto-Promote] บันทึก Template ของ ID #${userId} (${user.name}) ลง Flash Slot #${targetSlot} ของ R307`);
-      await dbAsync.run('UPDATE users SET in_sensor = 1 WHERE id = ?', [userId]);
+      await userRepository.updateInSensor(userId, 1);
       io.emit('user_updated');
 
       const restoreRaw = user.fingerprint_template || '';
@@ -291,15 +280,15 @@ function createSerialController({
 
       if (fingerprint_id > 0) {
         const mappedUserId = Math.floor((fingerprint_id - 1) / 3) + 1;
-        let user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [mappedUserId]);
+        let user = await userRepository.findById(mappedUserId);
         if (!user) {
-          user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [fingerprint_id]);
+          user = await userRepository.findById(fingerprint_id);
         }
         if (user) {
           userName = user.name;
           studentId = user.student_id || '-';
           userId = user.id;
-          await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
+          await userRepository.updateLastScanned(userId);
         }
       }
 
@@ -352,10 +341,14 @@ function createSerialController({
         io.emit('session_attendance_update', sessionRecord);
       }
 
-      const insertResult = await dbAsync.run(`
-        INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now', '+7 hours'))
-      `, [userId, studentId, userName, fingerprint_id || 0, isGranted ? 'GRANTED' : 'DENIED', score || 0]);
+      const insertResult = await accessLogRepository.insertLog({
+        userId,
+        studentId,
+        userName,
+        fingerprintId: fingerprint_id || 0,
+        status: isGranted ? 'GRANTED' : 'DENIED',
+        score: score || 0
+      });
 
       const newLogEntry = {
         id: insertResult.lastID,
@@ -401,7 +394,7 @@ function createSerialController({
       }
 
       try {
-        await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
+        await userRepository.deleteUser(userId);
         console.log(`🗑️ [Auto-Rollback] ลบผู้ใช้ ID #${userId} ออกจากฐานข้อมูลเรียบร้อยแล้ว`);
       } catch (err) {
         console.error(`Error deleting user #${userId} in cleanup:`, err);
@@ -529,7 +522,7 @@ function createSerialController({
         let ownerName = 'ผู้ใช้อื่นในระบบ';
         if (mappedOwnerId > 0) {
           try {
-            const owner = await dbAsync.get('SELECT name FROM users WHERE id = ?', [mappedOwnerId]);
+            const owner = await userRepository.findById(mappedOwnerId);
             if (owner) ownerName = owner.name;
           } catch (e) {}
         }
@@ -635,16 +628,16 @@ function createSerialController({
             targetUserId = currentEnrollSession.userId;
           } else {
             const mappedUserId = Math.floor((slotId - 1) / 3) + 1;
-            const userExists = await dbAsync.get('SELECT id FROM users WHERE id = ?', [mappedUserId]);
+            const userExists = await userRepository.findById(mappedUserId);
             if (userExists) {
               targetUserId = mappedUserId;
             } else {
-              const fallbackUser = await dbAsync.get('SELECT id FROM users WHERE id = ?', [slotId]);
+              const fallbackUser = await userRepository.findById(slotId);
               targetUserId = fallbackUser ? slotId : mappedUserId;
             }
           }
 
-          const existingUser = await dbAsync.get('SELECT id, fingerprint_template FROM users WHERE id = ?', [targetUserId]);
+          const existingUser = await userRepository.findById(targetUserId);
           let combinedTemplate = templateData;
           if (existingUser && existingUser.fingerprint_template && existingUser.fingerprint_template.length >= 512) {
             const templates = existingUser.fingerprint_template.split(',').map(t => t.trim()).filter(t => t.length >= 512);
@@ -656,7 +649,7 @@ function createSerialController({
             }
           }
 
-          await dbAsync.run('UPDATE users SET fingerprint_template = ?, in_sensor = 1 WHERE id = ?', [combinedTemplate, targetUserId]);
+          await userRepository.updateTemplateAndInSensor(targetUserId, combinedTemplate);
           console.log(`💾 [DB Backup] บันทึก Template ลายนิ้วมือ Slot #${slotId} -> User ID #${targetUserId} (${templateData.length / 2} Bytes) ลง Database สำเร็จ!`);
           io.emit('template_saved', { id: targetUserId, slotId, success: true });
           io.emit('user_updated');
@@ -954,7 +947,7 @@ function createSerialController({
       io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)', r307_connected: r307Connected, oled_connected: oledConnected });
 
       try {
-        const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+        const users = await userRepository.findAllBasic();
         const activeRoom = schedulesManager.getActiveDeviceRoom();
         socket.emit('sync_users_cache', users || []);
         socket.emit('sync_device_room', { room_name: activeRoom });
@@ -1002,7 +995,7 @@ function createSerialController({
 
     socket.on('get_users_cache', async () => {
       try {
-        const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+        const users = await userRepository.findAllBasic();
         socket.emit('sync_users_cache', users || []);
       } catch (err) {
         console.error('Error in get_users_cache:', err);
@@ -1072,7 +1065,7 @@ function createSerialController({
 
           if (userId) {
             try {
-              await dbAsync.run("UPDATE users SET last_scanned_at = ? WHERE id = ?", [dbTimestamp, userId]);
+              await userRepository.updateLastScanned(userId, dbTimestamp);
             } catch (e) {}
           }
 
@@ -1108,10 +1101,15 @@ function createSerialController({
             }
           }
 
-          const insertResult = await dbAsync.run(`
-            INSERT INTO access_logs (user_id, student_id, user_name, fingerprint_id, status, score, timestamp)
-            VALUES (?, ?, ?, ?, 'GRANTED', ?, ?)
-          `, [userId, studentId, userName, fingerprintId, score, dbTimestamp]);
+          const insertResult = await accessLogRepository.insertLog({
+            userId,
+            studentId,
+            userName,
+            fingerprintId,
+            status: 'GRANTED',
+            score,
+            timestamp: dbTimestamp
+          });
 
           const logEntry = {
             id: insertResult ? insertResult.lastID : 0,

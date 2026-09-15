@@ -391,6 +391,19 @@
        - `device.js` (`/api/device`): ตรวจสอบสถานะ Serial, Backup, และ Restore ลายนิ้วมือ
     4. **Clean Application Bootstrap (`server/server.js`):** ลดขนาด `server.js` จาก 1,778 บรรทัดเหลือ ~155 บรรทัด ทำหน้าที่เพียง Composition Root ในการเชื่อมต่อ Middleware, Router, และ Socket.IO
     5. **100% Behavioral Preservation:** ผลลัพธ์ API Schema, Middleware Pipeline, ข้อความ และ Socket Events ทั้งหมดตรงตาม Baseline เดิม 100% ผ่านการทดสอบ `npm test` (20/20 pass)
+* **ADR-036:** สถาปัตยกรรม Repository Pattern ทดแทนการแปลงคำสั่ง SQL ผ่าน String-Matching (`server/repositories/`):
+  - **ที่มาและปัญหา (Context & Problem):**
+    `server/database.js` เดิมใช้ `dbAsync` ซึ่งจำลองฐานข้อมูล SQL ด้วยการดักจับสตริงคำสั่ง (`s.includes('...')`) เพื่อกระจายไปยัง Supabase Query Builder ซึ่งมีความเปราะบางสูงต่อการเปลี่ยนแปลงสตริงคำสั่ง พึ่งพาลำดับเงื่อนไข if/else และมีจุดเรียกใช้งาน (Call Sites) กระจายตัวถึง 37 จุดทั่วระบบ
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Native Repositories (`server/repositories/`):** สร้าง 3 Repositories สื่อความหมายชัดเจนตาม Entity และ Domain:
+       - `UserRepository.js`: จัดการข้อมูลผู้ใช้, Tier 2 Candidate Search, LRU Sensor Eviction, และ Template Backup
+       - `AdminRepository.js`: จัดการข้อมูลแอดมิน, ค้นหาตาม Username/ID, และอัปเดต Password Hash
+       - `AccessLogRepository.js`: บันทึกประวัติการสแกน, สถิติประจำวันตามโซนเวลาประเทศไทย (+7 ชม.), และดึงบันทึกล่าสุด
+    2. **Complete Call Site Migration:** ย้ายจุดเรียกใช้งาน `dbAsync` ทั้ง 37 จุดใน `server/routes/` และ `server/controllers/serial_controller.js` มาเรียกผ่าน Native Repositories ทั้งหมด (`grep -c "dbAsync\." server/*.js` = 0)
+    3. **De-bloat `database.js`:** ลบ `dbAsync` (273 บรรทัด) ออกจาก `server/database.js` เหลือเพียง Supabase Client Instance และ `initDatabase()`
+    4. **100% Query Semantics Preservation:** คงพฤติกรรมการคิวรีเดิมเป๊กทุกจุด เช่น การกรอง Template >= 512 ไบต์, การตัดช่องว่าง, ค่าเริ่มต้น In-Sensor = 1, และรูปแบบการคืนค่า `{ lastID, changes }`
+    5. **TDD Verification:** ผ่านการทดสอบ `npm test` 20/20 ข้อ เขียวสมบูรณ์ ปราศจาก Warning ใดๆ
+
 
 
 

@@ -1,5 +1,5 @@
 const express = require('express');
-const { dbAsync } = require('../database');
+const userRepository = require('../repositories/UserRepository');
 const { authRequired } = require('../middleware/auth');
 
 function createDeviceRouter({ serialController }) {
@@ -27,7 +27,7 @@ function createDeviceRouter({ serialController }) {
   // กู้คืนลายนิ้วมือจาก Database ลงเซนเซอร์ R307 ทีละคน (รองรับ 3 นิ้วต่อคน)
   router.post('/restore/:id', authRequired, async (req, res) => {
     const id = parseInt(req.params.id);
-    const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
+    const user = await userRepository.findById(id);
     if (!user || !user.fingerprint_template || user.fingerprint_template.length < 512) {
       return res.status(404).json({ error: `ไม่พบข้อมูลลายนิ้วมือสำรองของ ID #${id} ในฐานข้อมูล` });
     }
@@ -45,7 +45,7 @@ function createDeviceRouter({ serialController }) {
 
   // กู้คืนลายนิ้วมือทั้งหมดจาก Database ลงเซนเซอร์ R307 (เหมาะสำหรับเปลี่ยนเซนเซอร์ใหม่)
   router.post('/restore-all', authRequired, async (req, res) => {
-    const usersWithTemplate = await dbAsync.all('SELECT id, fingerprint_template FROM users WHERE fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 512');
+    const usersWithTemplate = await userRepository.getUsersWithTemplate();
     if (usersWithTemplate.length === 0) {
       return res.status(400).json({ error: 'ไม่มีข้อมูลลายนิ้วมือสำรองในฐานข้อมูล' });
     }
@@ -61,7 +61,7 @@ function createDeviceRouter({ serialController }) {
 
   // ดึงข้อมูลสำรองจากเซนเซอร์ R307 เข้าสู่ Database ทั้งหมด
   router.post('/backup-all', authRequired, async (req, res) => {
-    const allUsers = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+    const allUsers = await userRepository.findAllOrderById();
     if (allUsers.length === 0) {
       return res.status(400).json({ error: 'ไม่มีรายชื่อผู้ใช้ในระบบ' });
     }

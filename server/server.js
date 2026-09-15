@@ -7,7 +7,7 @@ const jwt = require('jsonwebtoken');
 const path = require('path');
 const multer = require('multer');
 
-const { dbAsync, initDatabase } = require('./database');
+const { initDatabase } = require('./database');
 const schedulesManager = require('./schedules_manager');
 const { createSerialController } = require('./controllers/serial_controller');
 
@@ -48,7 +48,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Hardware / Serial Controller
 const serialController = createSerialController({
   io,
-  dbAsync,
   schedulesManager,
   targetPort: TARGET_PORT,
   baudRate: BAUD_RATE,

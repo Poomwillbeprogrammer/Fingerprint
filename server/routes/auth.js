@@ -1,7 +1,7 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { dbAsync } = require('../database');
+const adminRepository = require('../repositories/AdminRepository');
 const { authRequired, loginLimiter } = require('../middleware/auth');
 
 const router = express.Router();
@@ -13,7 +13,7 @@ router.post('/login', loginLimiter, async (req, res) => {
   }
 
   try {
-    const admin = await dbAsync.get('SELECT * FROM admins WHERE username = ?', [username]);
+    const admin = await adminRepository.findByUsername(username);
     if (!admin || !bcrypt.compareSync(password, admin.password_hash)) {
       return res.status(401).json({ error: 'Username หรือ Password ไม่ถูกต้อง' });
     }
@@ -58,7 +58,7 @@ router.post('/change-password', authRequired, async (req, res) => {
   }
 
   try {
-    const admin = await dbAsync.get('SELECT * FROM admins WHERE id = ?', [req.admin.id]);
+    const admin = await adminRepository.findById(req.admin.id);
     if (!admin || !bcrypt.compareSync(currentPassword, admin.password_hash)) {
       return res.status(400).json({ error: 'รหัสผ่านเดิมไม่ถูกต้อง' });
     }
@@ -66,7 +66,7 @@ router.post('/change-password', authRequired, async (req, res) => {
     const salt = bcrypt.genSaltSync(10);
     const newHash = bcrypt.hashSync(newPassword, salt);
 
-    await dbAsync.run('UPDATE admins SET password_hash = ? WHERE id = ?', [newHash, req.admin.id]);
+    await adminRepository.updatePasswordHash(req.admin.id, newHash);
 
     res.json({ success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว' });
   } catch (err) {
