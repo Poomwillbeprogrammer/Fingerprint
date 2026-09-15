@@ -377,7 +377,20 @@
   - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
     1. **Dependency Injection Seam (`schedules_manager.js`):** เพิ่มฟังก์ชัน `setSupabaseClient(client)` เพื่อเปิดช่องทาง Seam สำหรับสลับ Supabase Client หรือปิดการทำงาน (`setSupabaseClient(null)`)
     2. **Hermetic Test Isolation (`tests/test_schedules_manager.js`):** เรียก `setSupabaseClient(null)` ก่อนรันชุดทดสอบ ทำให้การทดสอบหน่วย (Unit Test) ทำงานบน In-memory Cache 100% โดยไม่แตะต้องเครือข่ายภายนอก ลดระยะเวลาทดสอบลงจาก 1,644ms เหลือเพียง 674ms และปราศจาก Warning ใดๆ
-    3. **Graceful Exception Pattern (`database.js`):** เปลี่ยนจากการเรียก `process.exit(1)` เป็นการโยนข้อยกเว้น `throw new Error(...)` เพื่อให้ฝั่ง Application Bootstrap หรือ Test Suite สามารถดักจับและจัดการข้อผิดพลาดได้อย่างเป็นระบบ
+* **ADR-035:** สถาปัตยกรรมการแยกส่วนเซิร์ฟเวอร์แบบโมดูลาร์ (Modular Server Architecture: Express Routes & Serial Hardware Controller):
+  - **ที่มาและปัญหา (Context & Problem):**
+    `server/server.js` เดิมเป็น Monolith ขนาด 1,778 บรรทัด รวมหน้าที่หลากหลายไว้ในไฟล์เดียว ได้แก่ การตั้งค่า Express/Socket.IO, การจัดการ Serial Port/Bridge Hardware, ตรรกะ Authentication/Rate Limiting, และ Endpoint ทั้งหมด 24 Routes ทำให้ยากต่อการทดสอบและบำรุงรักษา อีกทั้งมีความเสี่ยงเรื่อง State Collision ของตัวแปรฮาร์ดแวร์
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Middleware Isolation (`server/middleware/auth.js`):** แยก `authRequired` และ `loginLimiter` ออกเป็นโมดูลอิสระ รองรับการอ่าน `JWT_SECRET` อย่างปลอดภัย
+    2. **Single Hardware State Controller (`server/controllers/serial_controller.js`):** รวมการควบคุมฮาร์ดแวร์ SerialPort, WebSocket Cloud Bridge, Tier 2 Database Search, Auto-Promote LRU Cache, และ Socket Event Handlers ที่เกี่ยวข้องไว้ใน `createSerialController` มีเจ้าของ State เพียงจุดเดียว
+    3. **Domain-Specific Express Routers (`server/routes/`):** จัดกลุ่ม 24 Routes ออกเป็น 5 โมดูลตามขอบเขตงาน:
+       - `auth.js` (`/api/auth`): จัดการ Authentication, Logout, Me, และ Change Password
+       - `users.js` (`/api/users`): จัดการข้อมูลผู้ใช้, สั่งลบ Slot นิ้วมือบนฮาร์ดแวร์
+       - `logs.js` (`/api`): การดึงประวัติการเข้าใช้งาน (Logs) และสถิติภาพรวม (Stats)
+       - `schedules.js` (`/api`): จัดการห้องเรียน, ตารางเรียน, Import/Export Excel, และ Academic Matrix
+       - `device.js` (`/api/device`): ตรวจสอบสถานะ Serial, Backup, และ Restore ลายนิ้วมือ
+    4. **Clean Application Bootstrap (`server/server.js`):** ลดขนาด `server.js` จาก 1,778 บรรทัดเหลือ ~155 บรรทัด ทำหน้าที่เพียง Composition Root ในการเชื่อมต่อ Middleware, Router, และ Socket.IO
+    5. **100% Behavioral Preservation:** ผลลัพธ์ API Schema, Middleware Pipeline, ข้อความ และ Socket Events ทั้งหมดตรงตาม Baseline เดิม 100% ผ่านการทดสอบ `npm test` (20/20 pass)
 
 
 

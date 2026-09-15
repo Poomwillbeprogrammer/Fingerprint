@@ -148,24 +148,66 @@ Fingerprint/
 │   │                          # - เชื่อมต่อ Supabase Cloud Database (room_schedules & session_attendance)
 │   │                          # - นำเข้าและแปลงไฟล์ Excel ตารางสอน (.xlsx)
 │   │                          # - คำนวณคาบเรียนปัจจุบัน และสัปดาห์ ISO-8601
-│   │                          # - ตรวจสอบการเช็คชื่อซ้ำรายสัปดาห์ (1 ครั้ง/สัปดาห์/วิชา)
-│   │                          # - สร้างไฟล์ Excel Export ทั้งแบบ Single Week และ Academic Matrix
+### 1.6 สถาปัตยกรรมเซิร์ฟเวอร์แบบโมดูลาร์ (Modular Server Architecture - ADR-035)
+- **Modular Server Architecture & Clean Bootstrap:**
+  - แยก `server/server.js` จากไฟล์ Monolith 1,778 บรรทัด ออกเป็นโมดูลย่อยชัดเจน ช่วยให้ทดสอบและดูแลรักษาง่าย:
+    - `server/middleware/auth.js`: แยก `authRequired` และ `loginLimiter`
+    - `server/controllers/serial_controller.js`: ศูนย์กลางควบคุมฮาร์ดแวร์ SerialPort, WebSocket Cloud Bridge, Tier-2 Database Candidate Search, Auto-Promote LRU Cache, และ Socket.IO Handlers
+    - `server/routes/`: จัดกลุ่ม 24 Routes ออกเป็น 5 โมดูลตามขอบเขตงาน (`auth.js`, `users.js`, `logs.js`, `schedules.js`, `device.js`)
+    - `server/server.js`: ลดขนาดเหลือ ~155 บรรทัด ทำหน้าที่เพียง Composition Root ในการเชื่อมต่อ Middleware, Controller, และ Routers
+  - **100% Behavioral Preservation:** พฤติกรรมเดิมคงอยู่ครบถ้วน 100% ผ่านการทดสอบ `npm test` 20/20 เขียวสมบูรณ์
+
+---
+
+## 2. โครงสร้างไฟล์และสถาปัตยกรรม (System Architecture)
+
+```text
+Fingerprint/
+├── sketch/
+│   └── sketch.ino             # เฟิร์มแวร์ C++ ควบคุมฮาร์ดแวร์บน STM32 (Adafruit R307 + ST7735 TFT 1.8" SPI)
+│                              # - Non-blocking fingerHeld loop & In-place Step 2 Retry 3 ครั้ง
+│                              # - 16-byte chunking & Quiet UART (160 ชิ้น / 2,560 ไบต์)
+│
+├── unoq_bridge.py             # สคริปต์บริดจ์ Python บน Linux SoC (Uno Q)
+│                              # - เรนเดอร์ภาษาไทย TrueType ด้วย Pillow (160x128 แนวนอน ธีม RMUTL)
+│                              # - ตัวแปลงบิตแมป 1-bit raster 2,560 ไบต์
+│                              # - สื่อสารผ่าน WebSocket กับ Server และส่ง UART สู่ STM32
+│
+├── server/                    # Web Backend & Socket.IO บน Render Cloud
+│   ├── server.js              # Application Bootstrap & Composition Root (~155 บรรทัด)
+│   ├── database.js            # Supabase PostgreSQL Adapter & In-memory Client
+│   ├── schedules_manager.js   # โมดูลคำนวณคาบเรียน ตารางห้องเรียน และ Weekly Attendance
+│   ├── enrollment_manager.js  # Resilient Multi-Finger Enrollment State Machine
+│   ├── room_schedules.seed.json # ตารางเรียนตั้งต้น 3 ห้องสำหรับ cold-start
 │   │
-│   ├── room_schedules.seed.json # ข้อมูลตารางเรียนตั้งต้น 3 ห้อง (101, 201, 301 รวม 60 คาบ) สำหรับ Bootstrap
+│   ├── middleware/
+│   │   └── auth.js            # Authentication Middleware (authRequired, loginLimiter)
 │   │
-│   ├── database.js            # ตัวเชื่อมต่อฐานข้อมูล Supabase PostgreSQL (Master Database)
-│   │                          # - จัดการตาราง users, admins, access_logs
+│   ├── controllers/
+│   │   └── serial_controller.js # ศูนย์กลางจัดการ Serial Hardware, Bridge, และ Tier-2 DB Search
 │   │
-│   └── public/                # ไฟล์หน้าบ้าน Frontend (Vanilla JS + Tailwind CSS)
+│   ├── routes/                # 24 API Endpoints แบบ Modular Routers
+│   │   ├── auth.js            # /api/auth (login, logout, me, change-password)
+│   │   ├── users.js           # /api/users (รายชื่อ, เพิ่ม, ลบ)
+│   │   ├── logs.js            # /api/logs, /api/stats
+│   │   ├── schedules.js       # /api/rooms, /api/schedules, import/export excel, matrix
+│   │   └── device.js          # /api/device (serial-status, backup, restore)
+│   │
+│   └── public/                # Web Frontend (Vanilla JS + Tailwind CSS)
 │       ├── index.html / app.js       # หน้าแดชบอร์ดหลัก ดูสถานะสแกนสด, ฮาร์ดแวร์, สลับห้อง
 │       ├── schedules.html / schedules.js # หน้าระบบตารางเรียน, ใบเช็คชื่อรายสัปดาห์, ส่งออก Excel
 │       ├── users.html / users.js     # หน้าจัดการผู้ใช้และการลงทะเบียนลายนิ้วมือ 3 นิ้ว
 │       ├── login.html                # หน้าเข้าสู่ระบบของผู้ดูแลระบบ
 │       └── css/style.css             # ธีมสีน้ำตาลทอง RMUTL และเอฟเฟกต์ Glassmorphism
 │
+├── tests/                     # ชุดทดสอบอัตโนมัติ (Automated Tests)
+│   ├── test_schedules_manager.js     # Node.js Unit Tests (13 ข้อ)
+│   ├── test_enrollment_manager.js    # Node.js Unit Tests (7 ข้อ)
+│   └── test_unoq_bridge.py           # Python Unit Tests (14 ข้อ)
+│
 ├── GEMINI.md                  # กฎระเบียบและข้อห้ามในการทำงานของ AI Agent ใน Workspace
 ├── handoff.md                 # รายงานการตรวจสอบความปลอดภัยและบั๊กจากสภาพแวดล้อมจริง
-├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR) และข้อห้ามที่เคยล้มเหลว
+├── DECISIONS.md               # บันทึกการตัดสินใจเชิงสถาปัตยกรรม (ADR-001 ถึง ADR-035)
 ├── PRODUCT.md                 # ข้อกำหนดและขอบเขตผลิตภัณฑ์ (Product Requirements)
 └── DESIGN.md                  # คู่มือระบบการออกแบบและอัตลักษณ์สีสถาบัน (Design System)
 ```
