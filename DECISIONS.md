@@ -37,10 +37,20 @@
 * **ผลลัพธ์ที่ล้มเหลว:** เกิด Frame Collision และ UART Buffer Flood บน STM32 ทำให้ไมโครคอนโทรลเลอร์กระตุก หน้าจอ OLED ค้างที่เฟรมผลลัพธ์เดิมและไม่ยอมกลับสู่หน้าจอหลัก (Idle Screen)
 * **ข้อห้าม:** ห้ามส่งเฟรมภาพซ้ำซ้อนทาง UART เด็ดขาด ต้องมีระบบ Local Attendance Cache (`attendance_cache.json`) สกัดกั้นการเรนเดอร์ซ้ำ และจำกัดให้ส่งหน้าจอยืนยันเพียงเฟรมเดียว (Single-Frame Confirm)
 
-### 7. การส่งภาพ Idle ทันทีเมื่อได้รับข้อความ `STATUS:R307_READY` ระหว่างบู๊ตบอร์ด
-* **สิ่งที่เคยลอง:** ฝั่ง Linux รีบส่งหน้าจอ Idle Bitmap ทันทีที่เซนเซอร์ R307 เริ่มต้นสำเร็จและส่งสถานะพร้อมออกมา
-* **ผลลัพธ์ที่ล้มเหลว:** ฟังก์ชัน `setup()` ของ STM32 ยังทำงานไม่เสร็จสมบูรณ์ และ I2C Bus ของจอ OLED ยังไม่พร้อมรับสตรีมข้อมูลภาพ 1,024 ไบต์ ภาพที่ส่งไปจึงหล่นหาย ส่งผลให้หน้าจอค้างอยู่ที่ "READY FOR SCAN" ซึ่งเป็นข้อความเริ่มต้นของเฟิร์มแวร์
-* **ข้อห้าม:** ห้ามส่งภาพทันทีที่เซนเซอร์พร้อม ต้องรอให้ STM32 ส่งสัญญาณ `EVENT:IDLE` จบ `setup()` เสียก่อน และเว้นระยะ Settling Time 2.0 วินาที พร้อมมี Watchdog (3.5 วินาที) เผื่อกรณีสัญญาณหลุด
+### 8. การใช้ Blocking Loop `while (finger.getImage() != FINGERPRINT_NOFINGER)` เพื่อรอปล่อยนิ้ว
+* **สิ่งที่เคยลอง:** ใส่ลูป `while (finger.getImage() != FINGERPRINT_NOFINGER) delay(30);` ในขั้นตอนจบสแกน, `CANCEL_TIER2`, Tier 2 timeout, และ Enroll เพื่อป้องกันการสแกนนิ้วซ้ำ
+* **ผลลัพธ์ที่ล้มเหลว:** หากผู้ใช้ยังคงวางนิ้วค้างอยู่บนเซนเซอร์ R307 ตัว STM32 จะบล็อคค้างอยู่ในลูป `while` ทำให้ไม่สามารถอ่านคำสั่ง Serial (เช่น `FRAME_START`) ที่ Linux ส่งมาได้ บัฟเฟอร์ UART RX FIFO (64 ไบต์) ของ Zephyr OS จึงล้น ข้อมูลภาพบิตแมปสูญหาย และทำให้หน้าจอค้างอยู่ที่ "✓ บันทึกเวลาสำเร็จ ✓" หรือ "SEARCHING DB... / Checking Tier 2..." หรือ "ID #15 REMOVED"
+* **ข้อห้าม:** ห้ามใช้ Blocking Loop รอปล่อยนิ้วใน STM32 เด็ดขาด ให้ใช้สถาปัตยกรรม Non-blocking `fingerHeld` flag ใน `loop()` เพื่อตรวจจับการปล่อยนิ้วโดยไม่บล็อกการประมวลผลคำสั่ง Serial
+
+### 9. การลด `initial_wait` ต่ำกว่า 150ms และตัด `time.sleep(0.15)` ในการส่งบิตแมป
+* **สิ่งที่เคยลอง:** ลดเวลารอส่งเฟรมจาก 200ms เหลือ 40ms (`initial_wait=0.04`) เพื่อความรวดเร็ว
+* **ผลลัพธ์ที่ล้มเหลว:** ฝั่ง Linux ส่งข้อมูลภาพ 160 ชิ้นเร็วเกินไปในขณะที่ STM32 กำลังอยู่ในช่วงท้ายของรอบ `loop()` ทำให้ UART RX FIFO ล้นและทำลาย handshake ส่งผลให้หน้าจอ TFT ไม่ได้รับเฟรมและค้างอยู่ที่หน้าจอเดิม
+* **ข้อห้าม:** ต้องคง `initial_wait=0.20` (200ms) และคง `time.sleep(0.15)` หลัง `EVENT:IDLE` เสมอ เพื่อให้ STM32 มีเวลาเพียงพอในการตรวจจับ `FRAME_START` และเข้าสู่ฟังก์ชันรับเฟรม `handleFrameReceive()` ได้ 100%
+
+### 10. การเรียก `showUI()` และ `delay(2500)` ระหว่างคำสั่งลบลายนิ้วมือ (`handleDelete`)
+* **สิ่งที่เคยลอง:** ให้ฟังก์ชันลบลายนิ้วมือ `handleDelete(int id)` แสดงผล "DELETE SUCCESS! / ID #... REMOVED" และหน่วงเวลา 2.5 วินาทีต่อครั้ง
+* **ผลลัพธ์ที่ล้มเหลว:** เมื่อเกิดการยกเลิกการลงทะเบียน (Enroll Cancel) หรือข้อผิดพลาด ระบบจะทำการ Auto-Rollback ด้วยการยิงคำสั่ง `DELETE` ต่อเนื่อง 3 ครั้ง ทำให้หน้าจอถูกบล็อกด้วยข้อความภาษาอังกฤษค้างนานถึง 7.5 วินาที และชนกับคำสั่งส่งภาพหน้าจอหลักของ Linux
+* **ข้อห้าม:** คำสั่ง `handleDelete` ต้องทำงานแบบเงียบ (Silent background operation) สั่งลบโมเดลและส่ง `RESP:DELETE_OK` กลับไปเท่านั้น ห้ามแตะต้องหน้าจอ TFT หรือเรียกใช้คำสั่งหน่วงเวลาเด็ดขาด
 
 ---
 
@@ -328,6 +338,19 @@
     2. **Non-blocking Event Signaling (`sketch.ino`):** ตัด `showUI()`, `delay(1500)`, `showIdleScreen()`, และ `EVENT:IDLE` ออกจาก `CANCEL_TIER2` และ Tier 2 Timeout โดยให้ STM32 มีหน้าที่เพียงกระพริบไฟสีแดง ส่ง `EVENT:NO_MATCH` ออกมา รอยกนิ้วออก แล้วกลับสู่ไฟหายใจ (Breathing Red) ทันที
     3. **Finger Release Interlock (`sketch.ino`):** เพิ่มลูป `while (finger.getImage() != FINGERPRINT_NOFINGER) { delay(30); }` ในทุกจุดที่สิ้นสุดกระบวนการ (No Match, Enroll Success, Enroll Cancel, Enroll Timeout, Blurry Image, Mismatch, Duplicate) ป้องกันการสแกนนิ้วซ้ำซ้อนวนลูป 100%
     4. **Universal `EVENT:IDLE` Emission (`sketch.ino`):** เปลี่ยนจุดจบการทำงานทุกกรณีใน C++ (Enroll OK, Cancel, Timeout, Invalid ID, Blurry, Duplicate, Delete, Clear All, Count, Check-in finish) ให้ส่ง `Serial.println("EVENT:IDLE");`
-    5. **Instant Denied Flow & Frame Lock Assurance (`unoq_bridge.py`):** ปรับจังหวะใน `EVENT:NO_MATCH` ให้ส่งภาพ `render_denied_screen()` ทันทีโดยไม่ต้องหน่วงเวลา รอ 2.5 วินาทีเพื่อให้ผู้ใช้อ่านข้อความชัดเจน แล้วคืนสู่ `IDLE_BITMAP` พร้อมเพิ่มพารามิเตอร์ `force=True` ใน `send_bitmap_to_mcu()` เพื่อป้องกันไม่ให้ระบบ Deduplication สกัดกั้นการรีเฟรชหน้าจอ
+* **ADR-032:** สถาปัตยกรรมตรวจจับการปล่อยนิ้วแบบ Non-blocking (`fingerHeld`), การลบข้อมูลเบื้องหลังแบบ Silent Delete, และ Handshake UART 200ms:
+  - **ที่มาและปัญหา:**
+    1. ผู้ใช้สแกนผ่าน แต่หน้าจอบน TFT ค้างอยู่ที่ "✓ บันทึกเวลาสำเร็จ ✓" ไม่ยอมกลับสู่หน้าจอพร้อมใช้งาน
+    2. สแกนนิ้วที่ไม่พบในระบบ (No Match) หน้าจอค้างอยู่ที่ "SEARCHING DB... / Checking Tier 2..."
+    3. กดยกเลิกตอนเพิ่มลายนิ้วมือ (Enroll Cancel) หน้าจอค้างอยู่ที่ "ID #15 REMOVED"
+    4. **สาเหตุของปัญหา (Root Cause Analysis):**
+       - STM32 มีลูปบล็อค `while (finger.getImage() != FINGERPRINT_NOFINGER)` ในขณะที่ผู้ใช้วางนิ้วค้าง ทำให้ไม่สามารถรับ `FRAME_START` จาก Linux ได้
+       - ฝั่ง Linux มีการปรับลด `initial_wait` จาก 200ms เหลือ 40ms ทำให้ Zephyr UART RX FIFO (64 ไบต์) ล้นขณะ STM32 อยู่ในช่วงท้ายของ `loop()`
+       - ฟังก์ชัน `handleDelete` ใน STM32 มี `showUI("DELETE SUCCESS!", "ID #15 REMOVED")` พร้อม `delay(2500)` ทำให้เมื่อ Server ทำการ Auto-Rollback ลบ 3 ลายนิ้วมือ หน้าจอจะถูกวาดทับด้วยข้อความภาษาอังกฤษและบล็อกค้างรวมกว่า 7.5 วินาที
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Non-blocking `fingerHeld` Architecture (`sketch.ino`):** ใช้แฟล็กระดับโกลบอล `bool fingerHeld = false;` ใน `loop()` ของ STM32 หากนิ้วยังวางอยู่ จะไม่เรียก `scanFingerprint()` ซ้ำจนกว่า `finger.getImage() == FINGERPRINT_NOFINGER` เพื่อยกเลิกลูป `while` บล็อกกิ้งทั้งหมด 100% เปิดให้ UART รับข้อมูลได้ตลอดเวลา
+    2. **Silent Background Delete (`sketch.ino`):** ตัด `showUI()`, `delay(2500)`, และ `EVENT:IDLE` ออกจาก `handleDelete()` เหลือเพียงการสั่งลบโมเดลในเซนเซอร์ R307 และส่ง `RESP:DELETE_OK ID=...` หรือ `RESP:DELETE_FAIL ID=...` ออกมาทาง Serial ทำให้กระบวนการ Rollback สำเร็จในเสี้ยววินาทีโดยไม่รบกวนหน้าจอ TFT
+    3. **Rock-Solid 200ms Frame Handshake (`unoq_bridge.py`):** ฟื้นฟู `initial_wait=0.20` (200ms) ใน `send_bitmap_to_mcu()` และคงการหน่วง `time.sleep(0.15)` ใน `EVENT:IDLE` ควบคู่กับ Inter-frame Pacing 600ms เพื่อรับประกันว่า STM32 มีเวลาเพียงพอในการอ่าน `FRAME_START` และเข้าสู่ `handleFrameReceive()` โดยไม่มี UART Buffer Overflow
+    4. **Global Variable Safety (`unoq_bridge.py`):** ประกาศ `global boot_splash_sent, r307_connected, oled_connected` ใน `mcu_reader_thread()` ป้องกันข้อผิดพลาด `UnboundLocalError` และคงแฟล็ก `boot_splash_sent` เพื่อป้องกันการส่งภาพซ้ำซ้อนจาก periodic hardware watchdog
 
 
