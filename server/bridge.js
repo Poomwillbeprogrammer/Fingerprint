@@ -63,8 +63,8 @@ function initSerial() {
       if (!trimmed) return;
       if (trimmed.startsWith('STATUS:HARDWARE')) {
         r307Ready = trimmed.includes('R307=READY');
-        oledReady = trimmed.includes('OLED=READY');
-        socket.emit('bridge_sensor_status', { r307_connected: r307Ready, oled_connected: oledReady });
+        oledReady = trimmed.includes('OLED=READY') || trimmed.includes('TFT=READY');
+        socket.emit('bridge_sensor_status', { r307_connected: r307Ready, oled_connected: oledReady, tft_connected: oledReady });
       } else if (trimmed === 'STATUS:R307_READY') {
         r307Ready = true;
         socket.emit('bridge_sensor_status', { r307_connected: true, oled_connected: oledReady });

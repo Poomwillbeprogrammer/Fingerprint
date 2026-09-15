@@ -19,6 +19,11 @@
   - **STM32 Firmware (`sketch.ino`):** ปรับปรุงลูปตรวจจับปุ่มกด D2/D3 ให้ตอบกลับคำสั่งสถานะฮาร์ดแวร์ `CHECK_R307` / `CHECK_HARDWARE` จาก Background Watchdog แบบ In-place โดยไม่หลุดออกจากลูปตรวจจับปุ่มกด ช่วยให้กดยืนยันปุ่ม D2 ได้ทันที ไม่ถูก Watchdog ยกเลิก คอมไพล์และอัปโหลดเข้าบอร์ด STM32 ผ่าน OpenOCD (`COM12`) เรียบร้อย
   - **Uno Q Linux Bridge (`unoq_bridge.py`):** แก้ไข Indentation Bug ใน `on_bridge_scan_match` ให้เรียก `send_bitmap_to_mcu` เสมอแม้กรณีตรวจพบว่าลงเวลาซ้ำ เพื่อให้หน้าจอ OLED แสดงภาพแจ้งเตือนการลงเวลาซ้ำเสมอ ไม่ค้างอยู่ที่การ์ดนักศึกษา พร้อมเพิ่ม Watchdog Interlock `is_awaiting_confirmation` ชะลอการยิงคำสั่งตรวจเช็คฮาร์ดแวร์ขณะรอกดปุ่มยืนยัน
   - **Hardware Sync & Cache Purge:** ล้างแคชค้างเก่าบนบอร์ด Uno Q ผ่าน ADB (`rm -f /home/arduino/attendance_cache.json`) และอัปเดตระบบซิงก์ประวัติการลงเวลากับ Cloud Database ให้แม่นยำ 100% โดยสคริปต์บริดจ์ทำงานเป็น Daemon พร้อมทำงานตลอดเวลา (PID 11985 รายงานสถานะ `R307=READY OLED=READY`)
+- **Full-Color 1.8" TFT SPI (ST7735 128x160) Migration (ADR-029) [เสร็จสมบูรณ์]:**
+  - **ไดรเวอร์ ST7735 แบบ Zero-Dependency (`sketch.ino`):** พัฒนาคลาสไดรเวอร์ SPI C++ ในตัวโดยตรงโดยไม่ต้องพึ่งพาไลบรารีภายนอก ปราศจากปัญหาความเข้ากันไม่ได้บน Zephyr OS บน Arduino UNO Q ควบคุมพิน D8 (RST), D9 (DC), D10 (CS), D11 (MOSI), D13 (SCK)
+  - **1-Bit Raster Bitpacking 2,560 ไบต์ พร้อม Dynamic Palette:** ขยายความละเอียดเป็น 128x160 พิกเซล โดยยังคงความคมชัดของภาษาไทย TrueType ผ่าน Pillow บนฝั่ง Linux SoC และส่งผ่าน 16-Byte Chunking Protocol (160 ชิ้น) ปลอดภัยต่อ UART FIFO 64 ไบต์ 100%
+  - **ระบบชุดสี RMUTL Theme:** แสดงแถบสถานะและหัวข้อด้วยสีทอง RMUTL Gold (`0xFD20`), พื้นหลัง Espresso (`0x0821`), สีเขียวมรกต (`0x1E10`) เมื่อบันทึกสำเร็จ และสีแดง (`0xF9F8`) เมื่อปฏิเสธหรือยกเลิก
+  - **UI Dashboard Alignment:** อัปเดต Hardware Status Card บนเว็บเป็น `จอแสดงผล TFT 1.8"` พร้อมซัพพอร์ตทั้ง `OLED=READY` และ `TFT=READY` แบบไร้รอยต่อ
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย
@@ -72,15 +77,15 @@ Fingerprint/
 ├── unoq_bridge.py             # สคริปต์บริดจ์หลักบน Arduino Uno Q Linux (Python)
 │                              # - ควบคุม UART ติดต่อ STM32
 │                              # - เชื่อมต่อ Socket.IO Client ไปยัง Cloud
-│                              # - เรนเดอร์ภาษาไทย OLED 128x64 ด้วย Pillow
+│                              # - เรนเดอร์ภาษาไทย TFT 128x160 ด้วย Pillow พร้อม Dynamic Palette
 │                              # - จัดการ Offline Queue และ Local Attendance Cache
 │                              # - ตรวจเช็คสุขภาพฮาร์ดแวร์ R307 (Watchdog)
 │
 ├── sketch/
 │   └── sketch.ino             # เฟิร์มแวร์ C++ บนไมโครคอนโทรลเลอร์ STM32 (Uno Q)
-│                              # - ขับเซนเซอร์ R307 และจอ OLED 128x64 (I2C)
+│                              # - ขับเซนเซอร์ R307 และจอ 1.8" TFT SPI 128x160 (ST7735)
 │                              # - ตรวจจับปุ่มกด D2 (Confirm) / D3 (Rescan)
-│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking ทาง Serial
+│                              # - รับคำสั่งภาพแบบ 16-Byte Chunking (2,560 ไบต์) ทาง Serial
 │                              # - รองรับคำสั่ง CHECK_R307 ตรวจจับเซนเซอร์
 │
 ├── server/

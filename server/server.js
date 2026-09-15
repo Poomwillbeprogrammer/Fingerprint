@@ -496,13 +496,13 @@ async function handleSerialData(rawLine) {
   if (!line) return;
   console.log(`📥 [Arduino] ${line}`);
 
-  // ตรวจจับสถานะความพร้อมของฮาร์ดแวร์ (R307 และ OLED)
+  // ตรวจจับสถานะความพร้อมของฮาร์ดแวร์ (R307 และ OLED/TFT)
   if (line.startsWith('STATUS:HARDWARE')) {
     r307Connected = line.includes('R307=READY');
-    oledConnected = line.includes('OLED=READY');
+    oledConnected = line.includes('OLED=READY') || line.includes('TFT=READY');
     const displayPort = hardwareBridgeSocket ? 'Cloud Bridge (Active)' : TARGET_PORT;
-    console.log(`✅ [Hardware] สถานะ: R307=${r307Connected ? 'Ready' : 'Not Found'}, OLED=${oledConnected ? 'Ready' : 'Not Found'}`);
-    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
+    console.log(`✅ [Hardware] สถานะ: R307=${r307Connected ? 'Ready' : 'Not Found'}, Display(TFT/OLED)=${oledConnected ? 'Ready' : 'Not Found'}`);
+    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected, tft_connected: oledConnected });
     return;
   } else if (line === 'STATUS:R307_READY') {
     r307Connected = true;

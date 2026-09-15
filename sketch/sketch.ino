@@ -4,9 +4,29 @@
 // ==========================================
 // 1. กำหนดขาเชื่อมต่อ Hardware
 // ==========================================
-#define OLED_SDA_PIN A4
-#define OLED_SCL_PIN A5
-#define OLED_I2C_ADDR 0x3C
+// การเชื่อมต่อจอ 1.8" TFT SPI 128x160 (ST7735 v1.1)
+#define TFT_CS_PIN    10 // ขา CS (Chip Select)
+#define TFT_DC_PIN     9 // ขา DC / A0 (Data/Command)
+#define TFT_RST_PIN    8 // ขา RES (Reset)
+#define TFT_MOSI_PIN  11 // ขา SDA / MOSI (SPI Data)
+#define TFT_SCK_PIN   13 // ขา SCL / SCK (SPI Clock)
+#define TFT_BLK_PIN   -1 // ขา BLK / LED (ต่อ 3.3V ถาวร หรือระบุขาพิน เช่น 7)
+
+// ขนาดความละเอียดจอ 1.8 TFT SPI
+#define TFT_WIDTH     128
+#define TFT_HEIGHT    160
+#define TFT_BUF_SIZE  (TFT_WIDTH * TFT_HEIGHT / 8) // 2560 Bytes (1-bit Horizontal Raster)
+
+// โทนสี 16-bit RGB565 มาตรฐาน (อิงตามอัตลักษณ์ RMUTL Golden Brown ใน DESIGN.md)
+#define TFT_BLACK       0x0000 // สีดำสนิท
+#define TFT_DARK        0x0821 // สี Dark Espresso (#0c0a09)
+#define TFT_WHITE       0xFFFF // สีขาวสว่าง (#ffffff)
+#define TFT_GOLD        0xFD20 // สีทองอำพัน RMUTL Golden Bronze (#f59e0b)
+#define TFT_AMBER       0xFBE0 // สีทองอร่าม Accent Gold (#fbbf24)
+#define TFT_GREEN       0x1E10 // สีเขียวสำเร็จ (#10b981)
+#define TFT_RED         0xF9F8 // สีแดงแจ้งเตือน/ยกเลิก (#f43f5e)
+#define TFT_BLUE        0x3DFE // สีฟ้าสดใส (#38bdf8 สำหรับปุ่มฟ้า D2)
+#define TFT_GRAY        0x7BEF // สีเทาหม่น (#78716c)
 
 // การเชื่อมต่อเซนเซอร์ลายนิ้วมือ R307 (Hardware Serial1 สำหรับ Uno Q: Pin 0 RX, Pin 1 TX)
 #define mySerial Serial1
@@ -16,70 +36,8 @@ Adafruit_Fingerprint finger = Adafruit_Fingerprint(&mySerial);
 #define BTN_CONFIRM_PIN 2 // ขา D2: ปุ่มกดยืนยันบันทึกเวลา
 #define BTN_RESCAN_PIN  3 // ขา D3: ปุ่มกดสแกนใหม่/ยกเลิก
 
-
-
-
 // ==========================================
-// 2. ไดรเวอร์ Software I2C (Bit-Banging สำหรับ Zephyr)
-// ==========================================
-class SoftwareI2C {
-private:
-  uint8_t _sda, _scl;
-
-  inline void i2c_delay() {
-    delayMicroseconds(4);
-  }
-
-  inline void sda_high() { pinMode(_sda, INPUT_PULLUP); }
-  inline void sda_low()  { pinMode(_sda, OUTPUT); digitalWrite(_sda, LOW); }
-  inline void scl_high() { pinMode(_scl, INPUT_PULLUP); }
-  inline void scl_low()  { pinMode(_scl, OUTPUT); digitalWrite(_scl, LOW); }
-  inline uint8_t sda_read() { pinMode(_sda, INPUT_PULLUP); return digitalRead(_sda); }
-
-public:
-  SoftwareI2C(uint8_t sda, uint8_t scl) : _sda(sda), _scl(scl) {}
-
-  void begin() {
-    sda_high();
-    scl_high();
-    i2c_delay();
-  }
-
-  void start() {
-    sda_high(); scl_high(); i2c_delay();
-    sda_low();  i2c_delay();
-    scl_low();  i2c_delay();
-  }
-
-  void stop() {
-    sda_low();  i2c_delay();
-    scl_high(); i2c_delay();
-    sda_high(); i2c_delay();
-  }
-
-  bool writeByte(uint8_t byte) {
-    for (uint8_t i = 0; i < 8; i++) {
-      if (byte & 0x80) sda_high();
-      else sda_low();
-      i2c_delay();
-      scl_high();
-      i2c_delay();
-      scl_low();
-      byte <<= 1;
-    }
-    sda_high();
-    i2c_delay();
-    scl_high();
-    i2c_delay();
-    bool ack = (sda_read() == LOW);
-    scl_low();
-    i2c_delay();
-    return ack;
-  }
-};
-
-// ==========================================
-// 3. ตารางฟอนต์มาตรฐาน 5x7 ASCII
+// 2. ตารางฟอนต์มาตรฐาน 5x7 ASCII
 // ==========================================
 const uint8_t FONT5x7[][5] = {
   {0x00, 0x00, 0x00, 0x00, 0x00}, // Space
@@ -180,99 +138,228 @@ const uint8_t FONT5x7[][5] = {
 };
 
 // ==========================================
-// 4. ไดรเวอร์ SH1106 OLED (128x64, Offset 2)
+// 3. ไดรเวอร์จอ 1.8" TFT SPI 128x160 (ST7735 v1.1)
 // ==========================================
-class SH1106_Display {
+class ST7735_TFT {
 private:
-  SoftwareI2C _i2c;
-  uint8_t _addr;
-  uint8_t buffer[1024]; // 128 * 64 / 8 = 1024 Bytes
+  int8_t _cs, _dc, _rst, _mosi, _sck, _blk;
+  uint16_t _width, _height;
   bool _detected;
+  uint8_t buffer[TFT_BUF_SIZE]; // 2560 Bytes (128x160 1-bit Monochrome Horizontal Buffer)
 
-  void sendCommand(uint8_t cmd) {
-    if (!_detected) return;
-    _i2c.start();
-    _i2c.writeByte(_addr << 1);
-    _i2c.writeByte(0x80);
-    _i2c.writeByte(cmd);
-    _i2c.stop();
+  inline void writeByte(uint8_t b) {
+    for (uint8_t i = 0; i < 8; i++) {
+      if (b & 0x80) digitalWrite(_mosi, HIGH);
+      else digitalWrite(_mosi, LOW);
+      digitalWrite(_sck, HIGH);
+      b <<= 1;
+      digitalWrite(_sck, LOW);
+    }
   }
 
-  void sendCommand2(uint8_t cmd, uint8_t arg) {
-    if (!_detected) return;
-    _i2c.start();
-    _i2c.writeByte(_addr << 1);
-    _i2c.writeByte(0x00); // Co = 0, D/C# = 0: stream of commands/parameters
-    _i2c.writeByte(cmd);
-    _i2c.writeByte(arg);
-    _i2c.stop();
+  void writeCommand(uint8_t cmd) {
+    digitalWrite(_dc, LOW);
+    digitalWrite(_cs, LOW);
+    writeByte(cmd);
+    digitalWrite(_cs, HIGH);
+  }
+
+  void writeData(uint8_t data) {
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    writeByte(data);
+    digitalWrite(_cs, HIGH);
+  }
+
+  void writeData16(uint16_t data) {
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    writeByte(data >> 8);
+    writeByte(data & 0xFF);
+    digitalWrite(_cs, HIGH);
   }
 
 public:
-  SH1106_Display(uint8_t sda, uint8_t scl, uint8_t addr = 0x3C)
-    : _i2c(sda, scl), _addr(addr), _detected(false) {}
+  ST7735_TFT(int8_t cs, int8_t dc, int8_t rst, int8_t mosi, int8_t sck, int8_t blk = -1)
+    : _cs(cs), _dc(dc), _rst(rst), _mosi(mosi), _sck(sck), _blk(blk),
+      _width(TFT_WIDTH), _height(TFT_HEIGHT), _detected(false) {
+    memset(buffer, 0, sizeof(buffer));
+  }
 
   bool isConnected() {
-    _i2c.start();
-    bool ack = _i2c.writeByte((_addr << 1) | 0x00);
-    _i2c.stop();
-    bool wasDetected = _detected;
-    _detected = ack;
-    if (!wasDetected && ack) {
-      begin();
-    }
-    return ack;
+    return _detected;
   }
 
   bool isDetected() const {
     return _detected;
   }
 
+  void setAddrWindow(uint8_t x0, uint8_t y0, uint8_t x1, uint8_t y1) {
+    writeCommand(0x2A); // CASET (Column Address Set)
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    writeByte(0x00); writeByte(x0);
+    writeByte(0x00); writeByte(x1);
+    digitalWrite(_cs, HIGH);
+
+    writeCommand(0x2B); // RASET (Row Address Set)
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    writeByte(0x00); writeByte(y0);
+    writeByte(0x00); writeByte(y1);
+    digitalWrite(_cs, HIGH);
+
+    writeCommand(0x2C); // RAMWR (Memory Write)
+  }
+
   void begin() {
-    _i2c.begin();
-    delay(50);
-    _detected = isConnected();
-    if (!_detected) {
-      return;
+    pinMode(_cs, OUTPUT);
+    pinMode(_dc, OUTPUT);
+    pinMode(_mosi, OUTPUT);
+    pinMode(_sck, OUTPUT);
+    digitalWrite(_cs, HIGH);
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_sck, LOW);
+
+    if (_rst >= 0) {
+      pinMode(_rst, OUTPUT);
+      digitalWrite(_rst, HIGH);
+      delay(10);
+      digitalWrite(_rst, LOW);
+      delay(20);
+      digitalWrite(_rst, HIGH);
+      delay(150);
     }
 
-    // ลำดับ Init Command สำหรับ SH1106 (คมชัดระดับสูงสุด + ไร้ปัญหาเลื่อนบรรทัด)
-    sendCommand(0xAE); // Display OFF
-    sendCommand(0x02); // Column Offset = 2 (สำหรับ SH1106 132x64)
-    sendCommand(0x10);
-    sendCommand(0x40); // Start line 0
-    sendCommand(0xB0); // Page 0
-    sendCommand2(0x81, 0xCF); // Contrast สูง คมชัดสว่างเต็มที่
-    sendCommand(0xA1); // Segment Re-map
-    sendCommand(0xC8); // COM Scan Direction
-    sendCommand(0xA6); // Normal Display
-    sendCommand2(0xA8, 0x3F); // Multiplex 1/64 duty
-    sendCommand2(0xAD, 0x8B); // DC-DC Mode ON (SH1106 Charge Pump)
-    sendCommand2(0xD3, 0x00); // Display Offset = 0 (แก้ไขปัญหาภาพเลื่อนลงมา)
-    sendCommand2(0xD5, 0x80); // Display Clock Divide
-    sendCommand2(0xD9, 0xF1); // Pre-charge Period คมชัดไม่มีเงา Ghosting
-    sendCommand2(0xDA, 0x12); // COM Pins Hardware Configuration
-    sendCommand2(0xDB, 0x40); // VCOM Deselect Level สูงสุด
-    sendCommand(0xAF); // Display ON
+    if (_blk >= 0) {
+      pinMode(_blk, OUTPUT);
+      digitalWrite(_blk, HIGH);
+    }
 
-    clear();
-    display();
+    // ลำดับ Init Command สำหรับ ST7735 (1.8 TFT SPI 128x160 v1.1)
+    writeCommand(0x01); // Software Reset
+    delay(150);
+
+    writeCommand(0x11); // Sleep Out
+    delay(200);
+
+    // Frame Rate Control
+    writeCommand(0xB1);
+    writeData(0x01); writeData(0x2C); writeData(0x2D);
+    writeCommand(0xB2);
+    writeData(0x01); writeData(0x2C); writeData(0x2D);
+    writeCommand(0xB3);
+    writeData(0x01); writeData(0x2C); writeData(0x2D);
+    writeData(0x01); writeData(0x2C); writeData(0x2D);
+
+    // Inversion Control
+    writeCommand(0xB4);
+    writeData(0x07);
+
+    // Power Control
+    writeCommand(0xC0); // PWCTR1
+    writeData(0xA2); writeData(0x02); writeData(0x84);
+    writeCommand(0xC1); // PWCTR2
+    writeData(0xC5);
+    writeCommand(0xC2); // PWCTR3
+    writeData(0x0A); writeData(0x00);
+    writeCommand(0xC3); // PWCTR4
+    writeData(0x8A); writeData(0x2A);
+    writeCommand(0xC4); // PWCTR5
+    writeData(0x8A); writeData(0xEE);
+
+    // VCOM Control
+    writeCommand(0xC5); // VMCTR1
+    writeData(0x0E);
+
+    // Inversion OFF
+    writeCommand(0x20);
+
+    // Memory Access Data Control (MADCTL) - กำหนดแนวตั้ง 128x160 RGB
+    writeCommand(0x36);
+    writeData(0xC0); // MY=1, MX=1, RGB Order (128x160 standard orientation)
+
+    // Color Format: 16-bit RGB565
+    writeCommand(0x3A); // COLMOD
+    writeData(0x05);
+
+    // Gamma Sequence
+    writeCommand(0xE0);
+    writeData(0x02); writeData(0x1C); writeData(0x07); writeData(0x12);
+    writeData(0x37); writeData(0x32); writeData(0x29); writeData(0x2D);
+    writeData(0x29); writeData(0x25); writeData(0x2B); writeData(0x39);
+    writeData(0x00); writeData(0x01); writeData(0x03); writeData(0x10);
+
+    writeCommand(0xE1);
+    writeData(0x03); writeData(0x1D); writeData(0x07); writeData(0x06);
+    writeData(0x2E); writeData(0x2C); writeData(0x29); writeData(0x2D);
+    writeData(0x2E); writeData(0xE2); writeData(0x37); writeData(0x3F);
+    writeData(0x00); writeData(0x00); writeData(0x02); writeData(0x10);
+
+    // Normal Display Mode On
+    writeCommand(0x13); // NORON
+    delay(10);
+
+    // Display ON
+    writeCommand(0x29); // DISPON
+    delay(100);
+
+    _detected = true;
+    clear(TFT_BLACK);
   }
 
   void keepAlive() {
     if (!_detected) return;
-    sendCommand2(0xAD, 0x8B); // Force DC-DC Charge Pump ON ในคำสั่งเดียว
-    sendCommand(0xAF);        // Force Display ON
+    writeCommand(0x29); // Force Display ON
   }
 
-  void clear() {
+  void fillScreen(uint16_t color) {
+    if (!_detected) return;
+    setAddrWindow(0, 0, _width - 1, _height - 1);
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    for (uint32_t i = 0; i < (uint32_t)_width * _height; i++) {
+      writeByte(color >> 8);
+      writeByte(color & 0xFF);
+    }
+    digitalWrite(_cs, HIGH);
+  }
+
+  void clear(uint16_t color = TFT_BLACK) {
+    memset(buffer, 0x00, sizeof(buffer));
+    fillScreen(color);
+  }
+
+  void clearBuffer() {
     memset(buffer, 0x00, sizeof(buffer));
   }
 
+  // วาดจุดพิกเซลลงบน Frame Buffer (1-bit Horizontal Raster)
   void drawPixel(int16_t x, int16_t y, uint8_t color = 1) {
-    if (x < 0 || x >= 128 || y < 0 || y >= 64) return;
-    if (color) buffer[x + (y / 8) * 128] |= (1 << (y % 8));
-    else buffer[x + (y / 8) * 128] &= ~(1 << (y % 8));
+    if (x < 0 || x >= _width || y < 0 || y >= _height) return;
+    uint16_t byteIdx = (y * (_width / 8)) + (x / 8);
+    uint8_t bitIdx = 7 - (x % 8);
+    if (color) buffer[byteIdx] |= (1 << bitIdx);
+    else buffer[byteIdx] &= ~(1 << bitIdx);
+  }
+
+  void drawHLine(int16_t x, int16_t y, int16_t w, uint8_t color = 1) {
+    for (int16_t i = 0; i < w; i++) drawPixel(x + i, y, color);
+  }
+
+  void drawVLine(int16_t x, int16_t y, int16_t h, uint8_t color = 1) {
+    for (int16_t i = 0; i < h; i++) drawPixel(x, y + i, color);
+  }
+
+  void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
+    drawHLine(x, y, w, color);
+    drawHLine(x, y + h - 1, w, color);
+    drawVLine(x, y, h, color);
+    drawVLine(x + w - 1, y, h, color);
+  }
+
+  void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
+    for (int16_t i = 0; i < h; i++) drawHLine(x, y + i, w, color);
   }
 
   void drawChar(int16_t x, int16_t y, char c, uint8_t color = 1) {
@@ -291,39 +378,18 @@ public:
 
   void drawString(int16_t x, int16_t y, const char *str, uint8_t color = 1) {
     while (*str) {
-      if (x + 6 > 128) { x = 0; y += 9; }
-      if (y + 8 > 64) break;
+      if (x + 6 > _width) { x = 0; y += 9; }
+      if (y + 8 > _height) break;
       drawChar(x, y, *str++, color);
       x += 6;
     }
   }
 
-  void drawHLine(int16_t x, int16_t y, int16_t w, uint8_t color = 1) {
-    for (int16_t i = 0; i < w; i++) drawPixel(x + i, y, color);
-  }
-
-  void drawRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
-    drawHLine(x, y, w, color);
-    drawHLine(x, y + h - 1, w, color);
-    for (int16_t i = 0; i < h; i++) {
-      drawPixel(x, y + i, color);
-      drawPixel(x + w - 1, y + i, color);
-    }
-  }
-
-  void fillRect(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t color = 1) {
-    for (int16_t i = 0; i < h; i++) drawHLine(x, y + i, w, color);
-  }
-
-  void clearBuffer() {
-    memset(buffer, 0, sizeof(buffer));
-  }
-
   int loadFrameChunk(int offset, const char* hexData) {
-    if (offset < 0 || offset >= 1024) return offset;
+    if (offset < 0 || offset >= TFT_BUF_SIZE) return offset;
     int hexLen = strlen(hexData);
     int byteLen = hexLen / 2;
-    for (int i = 0; i < byteLen && (offset + i) < 1024; i++) {
+    for (int i = 0; i < byteLen && (offset + i) < TFT_BUF_SIZE; i++) {
       char c1 = hexData[i * 2];
       char c2 = hexData[i * 2 + 1];
       uint8_t b1 = (c1 >= '0' && c1 <= '9') ? (c1 - '0') : ((c1 >= 'A' && c1 <= 'F') ? (c1 - 'A' + 10) : ((c1 >= 'a' && c1 <= 'f') ? (c1 - 'a' + 10) : 0));
@@ -331,82 +397,91 @@ public:
       buffer[offset + i] = (b1 << 4) | b2;
     }
     int nextOffset = offset + byteLen;
-    if (nextOffset >= 1024) {
-      display();
-    }
     return nextOffset;
   }
 
-  // ส่งข้อมูล Frame Buffer 1024 Bytes ไปยัง SH1106 ด้วย Offset = 2
-  void display() {
+  // ส่งข้อมูล Frame Buffer 2560 Bytes ไปยังหน้าจอ TFT พร้อมกำหนดคู่สี (Theme Color)
+  void display(uint16_t fgColor = TFT_WHITE, uint16_t bgColor = TFT_BLACK) {
     if (!_detected) return;
-    for (uint8_t page = 0; page < 8; page++) {
-      sendCommand(0xB0 + page);
-      sendCommand(0x02); // Column Offset = 2
-      sendCommand(0x10);
-
-      _i2c.start();
-      _i2c.writeByte(_addr << 1);
-      _i2c.writeByte(0x40);
-      for (uint8_t col = 0; col < 128; col++) {
-        _i2c.writeByte(buffer[col + (page * 128)]);
+    setAddrWindow(0, 0, _width - 1, _height - 1);
+    digitalWrite(_dc, HIGH);
+    digitalWrite(_cs, LOW);
+    for (uint16_t y = 0; y < _height; y++) {
+      uint16_t rowOffset = y * (_width / 8);
+      for (uint16_t x = 0; x < _width; x++) {
+        uint8_t byteVal = buffer[rowOffset + (x / 8)];
+        bool pixelOn = (byteVal >> (7 - (x % 8))) & 0x01;
+        uint16_t color = pixelOn ? fgColor : bgColor;
+        writeByte(color >> 8);
+        writeByte(color & 0xFF);
       }
-      _i2c.stop();
     }
+    digitalWrite(_cs, HIGH);
   }
 };
 
-SH1106_Display oled(OLED_SDA_PIN, OLED_SCL_PIN, OLED_I2C_ADDR);
+ST7735_TFT tft(TFT_CS_PIN, TFT_DC_PIN, TFT_RST_PIN, TFT_MOSI_PIN, TFT_SCK_PIN, TFT_BLK_PIN);
+#define oled tft // รักษาความเข้ากันได้ย้อนหลัง 100%
 
 // ==========================================
-// 5. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ OLED (Clean Standard UI)
+// 4. ฟังก์ชันแสดงสถานะ UI บนหน้าจอ TFT (Clean Standard UI 128x160)
 // ==========================================
 void showUI(const char* title, const char* line1, const char* line2 = "", const char* line3 = "") {
-  oled.clear();
-  oled.drawRect(0, 0, 128, 64);
+  tft.clearBuffer();
+  tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
   
-  // แถบหัวข้อ Title
-  oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawString(8, 3, title, 0);
+  // แถบหัวข้อ Title ด้านบน
+  tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
+  tft.drawString(8, 5, title, 0);
 
-  if (line1 && strlen(line1) > 0) oled.drawString(8, 20, line1);
-  if (line2 && strlen(line2) > 0) oled.drawString(8, 34, line2);
-  if (line3 && strlen(line3) > 0) oled.drawString(8, 48, line3);
+  if (line1 && strlen(line1) > 0) tft.drawString(8, 30, line1);
+  if (line2 && strlen(line2) > 0) tft.drawString(8, 50, line2);
+  if (line3 && strlen(line3) > 0) tft.drawString(8, 70, line3);
 
-  oled.display();
+  tft.drawHLine(4, TFT_HEIGHT - 22, TFT_WIDTH - 8);
+  tft.drawString(10, TFT_HEIGHT - 16, "RMUTL Attendance");
+
+  tft.display(TFT_GOLD, TFT_DARK);
 }
 
 // การ์ดแสดงผลเมื่อสแกนผ่าน (Fallback เมื่อไม่มีบิตแมป)
 void showUserCard(const char* stuId, const char* name) {
-  oled.clear();
-  oled.drawRect(0, 0, 128, 64);
+  tft.clearBuffer();
+  tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
 
-  oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawString(10, 3, "ACCESS GRANTED", 0);
+  tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
+  tft.drawString(10, 5, "ACCESS GRANTED", 0);
 
-  oled.drawString(6, 20, "ID: ");
-  oled.drawString(30, 20, stuId ? stuId : "-");
+  tft.drawString(8, 30, "ID:");
+  tft.drawString(32, 30, stuId ? stuId : "-");
 
-  oled.drawString(6, 34, name ? name : "Student");
+  tft.drawString(8, 48, name ? name : "Student");
 
-  oled.drawHLine(4, 48, 120);
-  oled.drawString(14, 51, "CHECK-IN SUCCESS");
+  tft.drawHLine(4, 75, TFT_WIDTH - 8);
+  tft.drawString(12, 85, "CHECK-IN SUCCESS");
 
-  oled.display();
+  tft.drawHLine(4, TFT_HEIGHT - 26, TFT_WIDTH - 8);
+  tft.drawString(8, TFT_HEIGHT - 18, "[D2:OK | D3:Cancel]");
+
+  tft.display(TFT_GREEN, TFT_DARK);
 }
 
 void showIdleScreen() {
-  oled.clear();
-  oled.drawRect(0, 0, 128, 64);
+  tft.clearBuffer();
+  tft.drawRect(0, 0, TFT_WIDTH, TFT_HEIGHT);
 
-  oled.fillRect(0, 0, 128, 14, 1);
-  oled.drawString(16, 3, "FINGERPRINT IOT", 0);
+  tft.fillRect(0, 0, TFT_WIDTH, 18, 1);
+  tft.drawString(16, 5, "FINGERPRINT IOT", 0);
 
-  oled.drawString(16, 24, "READY FOR SCAN");
-  oled.drawHLine(4, 44, 120);
-  oled.drawString(12, 49, "Place your finger");
+  tft.drawString(14, 38, "READY FOR SCAN");
+  tft.drawHLine(4, 58, TFT_WIDTH - 8);
+  tft.drawString(10, 72, "Place your finger");
+  tft.drawString(10, 88, "on R307 sensor");
 
-  oled.display();
+  tft.drawHLine(4, TFT_HEIGHT - 22, TFT_WIDTH - 8);
+  tft.drawString(14, TFT_HEIGHT - 16, "RMUTL Attendance");
+
+  tft.display(TFT_GOLD, TFT_DARK);
 }
 
 // ==========================================
@@ -957,40 +1032,42 @@ void setup() {
   Serial.begin(115200);
   Serial.setTimeout(50);
   delay(1000);
-  Serial.println("\n[SYSTEM] Starting UNO Q Zephyr Fingerprint & OLED System...");
+  Serial.println("\n[SYSTEM] Starting UNO Q Zephyr Fingerprint & 1.8 TFT SPI System...");
 
   // กำหนดขาปุ่มกด Physical Switch (Active LOW, Internal Pullup)
   pinMode(BTN_CONFIRM_PIN, INPUT_PULLUP);
   pinMode(BTN_RESCAN_PIN, INPUT_PULLUP);
 
-  // เริ่มต้นหน้าจอ OLED SH1106 ผ่าน Software I2C
-  oled.begin();
-  bool oledDetected = oled.isDetected();
-  if (oledDetected) {
-    showUI("BOOTING...", "Initializing OLED", "SH1106 128x64 OK");
-    delay(500);
+  // เริ่มต้นหน้าจอ 1.8" TFT SPI 128x160 (ST7735 v1.1)
+  tft.begin();
+  bool tftDetected = tft.isDetected();
+  if (tftDetected) {
+    showUI("BOOTING...", "Initializing TFT", "ST7735 128x160 OK");
+    delay(400);
   }
 
   // เริ่มต้นเซนเซอร์ลายนิ้วมือ R307 (57600 baud)
   finger.begin(57600);
   bool r307Detected = finger.verifyPassword();
   if (r307Detected) {
-    if (oledDetected) {
-      showUI("HARDWARE OK", "R307 Sensor Ready", "OLED SH1106 Ready");
+    if (tftDetected) {
+      showUI("HARDWARE OK", "R307 Sensor Ready", "TFT ST7735 Ready");
     }
     // เปิดโหมดไฟหายใจ (Breathing LED) นุ่มนวลสวยงาม ไม่กระพริบกวนตา
     finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
   } else {
-    if (oledDetected) {
+    if (tftDetected) {
       showUI("HARDWARE ERROR", "R307 NOT FOUND!", "Check wiring (Pin 0/1)");
     }
   }
-  delay(1000);
+  delay(800);
 
   Serial.print("STATUS:HARDWARE R307=");
   Serial.print(r307Detected ? "READY" : "NOT_FOUND");
   Serial.print(" OLED=");
-  Serial.println(oledDetected ? "READY" : "NOT_FOUND");
+  Serial.print(tftDetected ? "READY" : "NOT_FOUND");
+  Serial.print(" TFT=");
+  Serial.println(tftDetected ? "READY" : "NOT_FOUND");
 
   if (r307Detected) {
     Serial.println("STATUS:R307_READY");
@@ -998,16 +1075,36 @@ void setup() {
     Serial.println("STATUS:R307_NOT_FOUND");
   }
 
-  if (oledDetected) {
+  if (tftDetected) {
     showIdleScreen();
   }
   Serial.println("EVENT:IDLE");
 }
 
-bool handleFrameReceive() {
-  oled.clearBuffer();
+bool handleFrameReceive(const String& startLine = "") {
+  uint16_t fgColor = TFT_WHITE;
+  uint16_t bgColor = TFT_DARK;
+
+  if (startLine.indexOf("THEME=IDLE") >= 0) {
+    fgColor = TFT_GOLD;
+    bgColor = TFT_DARK;
+  } else if (startLine.indexOf("THEME=SUCCESS") >= 0) {
+    fgColor = TFT_GREEN;
+    bgColor = TFT_DARK;
+  } else if (startLine.indexOf("THEME=DENIED") >= 0 || startLine.indexOf("THEME=TIMEOUT") >= 0) {
+    fgColor = TFT_RED;
+    bgColor = TFT_DARK;
+  } else if (startLine.indexOf("THEME=CANCEL") >= 0) {
+    fgColor = TFT_AMBER;
+    bgColor = TFT_DARK;
+  } else if (startLine.indexOf("THEME=CARD") >= 0) {
+    fgColor = TFT_WHITE;
+    bgColor = TFT_DARK;
+  }
+
+  tft.clearBuffer();
   uint32_t lastActivity = millis();
-  while (millis() - lastActivity < 2000) {
+  while (millis() - lastActivity < 3000) {
     if (Serial.available()) {
       lastActivity = millis();
       String line = Serial.readStringUntil('\n');
@@ -1019,10 +1116,10 @@ bool handleFrameReceive() {
           int offset = line.substring(space1, space2).toInt();
           String hex = line.substring(space2 + 1);
           hex.trim();
-          oled.loadFrameChunk(offset, hex.c_str());
+          tft.loadFrameChunk(offset, hex.c_str());
         }
       } else if (line == "FRAME_END") {
-        oled.display();
+        tft.display(fgColor, bgColor);
         Serial.println("FRAME_DONE");
         return true;
       }
@@ -1091,16 +1188,18 @@ void loop() {
       handleClearAll();
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     } else if (cmd.startsWith("FRAME_START")) {
-      handleFrameReceive();
+      handleFrameReceive(cmd);
     } else if (cmd == "PING") {
       Serial.println("RESP:PONG");
     } else if (cmd == "CHECK_R307" || cmd == "CHECK_HARDWARE") {
       bool r307Ok = finger.verifyPassword();
-      bool oledOk = oled.isConnected();
+      bool tftOk = tft.isConnected();
       Serial.print("STATUS:HARDWARE R307=");
       Serial.print(r307Ok ? "READY" : "NOT_FOUND");
       Serial.print(" OLED=");
-      Serial.println(oledOk ? "READY" : "NOT_FOUND");
+      Serial.print(tftOk ? "READY" : "NOT_FOUND");
+      Serial.print(" TFT=");
+      Serial.println(tftOk ? "READY" : "NOT_FOUND");
       if (r307Ok) {
         Serial.println("STATUS:R307_READY");
       } else {
@@ -1154,7 +1253,7 @@ void loop() {
         String line = Serial.readStringUntil('\n');
         line.trim();
         if (line.startsWith("FRAME_START")) {
-          gotCard = handleFrameReceive();
+          gotCard = handleFrameReceive(line);
           if (gotCard) break;
         }
       }
@@ -1189,11 +1288,13 @@ void loop() {
           break;
         } else if (pendingCmd == "CHECK_R307" || pendingCmd == "CHECK_HARDWARE") {
           bool r307Ok = finger.verifyPassword();
-          bool oledOk = oled.isDetected();
+          bool tftOk = tft.isDetected();
           Serial.print("STATUS:HARDWARE R307=");
           Serial.print(r307Ok ? "READY" : "NOT_FOUND");
           Serial.print(" OLED=");
-          Serial.println(oledOk ? "READY" : "NOT_FOUND");
+          Serial.print(tftOk ? "READY" : "NOT_FOUND");
+          Serial.print(" TFT=");
+          Serial.println(tftOk ? "READY" : "NOT_FOUND");
           if (r307Ok) {
             Serial.println("STATUS:R307_READY");
           } else {
@@ -1240,7 +1341,7 @@ void loop() {
           String line = Serial.readStringUntil('\n');
           line.trim();
           if (line.startsWith("FRAME_START")) {
-            handleFrameReceive();
+            handleFrameReceive(line);
             break;
           }
         }
@@ -1259,7 +1360,7 @@ void loop() {
           String line = Serial.readStringUntil('\n');
           line.trim();
           if (line.startsWith("FRAME_START")) {
-            handleFrameReceive();
+            handleFrameReceive(line);
             break;
           }
         }
@@ -1276,7 +1377,7 @@ void loop() {
           String line = Serial.readStringUntil('\n');
           line.trim();
           if (line.startsWith("FRAME_START")) {
-            handleFrameReceive();
+            handleFrameReceive(line);
             break;
           }
         }
@@ -1302,11 +1403,11 @@ void loop() {
     Serial.println("EVENT:TIER1_NO_MATCH");
   }
 
-  // ป้องกันจอ OLED เข้าสู่ Sleep Mode หรือไฟตก (OLED Keep-Alive Watchdog)
+  // ป้องกันจอ TFT เข้าสู่ Sleep Mode หรือไฟตก (TFT Keep-Alive Watchdog)
   static unsigned long lastKeepAlive = 0;
-  if (millis() - lastKeepAlive > 3000) {
+  if (millis() - lastKeepAlive > 5000) {
     lastKeepAlive = millis();
-    oled.keepAlive();
+    tft.keepAlive();
   }
 
   delay(120); // หน่วงเวลาให้นุ่มนวล ไม่แยงตา
