@@ -29,7 +29,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error('❌ [Database Fatal Error] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY in environment variables.');
   console.error('👉 กรุณากำหนดตัวแปร SUPABASE_URL และ SUPABASE_SERVICE_ROLE_KEY บน Server Environment');
-  process.exit(1);
+  throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY/SUPABASE_KEY in environment variables.');
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);

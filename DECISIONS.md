@@ -371,6 +371,13 @@
        - อัปเดตข้อความแนะนำขั้นตอนแบบเรียลไทม์รองรับการลองใหม่ทั้งระดับฮาร์ดแวร์ (Attempt 1..3) และระดับนิ้ว
     4. **TDD Automated Test Suite (`tests/test_enrollment_manager.js`):**
        - เขียนชุดทดสอบ Node.js 7 รายการ ครอบคลุมการเปลี่ยนสถานะของเซสชัน, การรักษานิ้วเดิมเมื่อนิ้วถัดไปล้มเหลว, การสั่ง retry เฉพาะนิ้วเดิม และการคำนวณ Slot ที่ต้องล้างเมื่อกดยกเลิก ผ่านการทดสอบ 100%
+* **ADR-034:** การสร้าง Seam ตัดขาดการเชื่อมต่อเครือข่ายภายนอกสำหรับชุดทดสอบ (Hermetic Unit Testing Seam & Graceful Environment Failure):
+  - **ที่มาและปัญหา (Context & Problem):**
+    ในการรัน `npm test` บนเครื่องพัฒนา ฟังก์ชัน `recordSessionAttendance()` ใน `schedules_manager.js` มีการเรียก Supabase Client อัตโนมัติในพื้นหลังเพื่อบันทึกประวัติการเข้าเรียนขึ้นคลาวด์ ส่งผลให้เกิดคำเตือน `⚠️ [Supabase] บันทึกเวลาเข้าเรียนขึ้น Cloud ไม่สำเร็จ: Unregistered API key` ระหว่างทดสอบ และทำให้ชุดทดสอบพึ่งพาเครือข่ายภายนอก นอกจากนี้ `database.js` มีการเรียก `process.exit(1)` เมื่อขาดตัวแปรแวดล้อม ทำให้ชุดทดสอบหรือโมดูลอื่นที่นำเข้าไม่สามารถจัดการข้อผิดพลาดได้อย่างนุ่มนวล
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Dependency Injection Seam (`schedules_manager.js`):** เพิ่มฟังก์ชัน `setSupabaseClient(client)` เพื่อเปิดช่องทาง Seam สำหรับสลับ Supabase Client หรือปิดการทำงาน (`setSupabaseClient(null)`)
+    2. **Hermetic Test Isolation (`tests/test_schedules_manager.js`):** เรียก `setSupabaseClient(null)` ก่อนรันชุดทดสอบ ทำให้การทดสอบหน่วย (Unit Test) ทำงานบน In-memory Cache 100% โดยไม่แตะต้องเครือข่ายภายนอก ลดระยะเวลาทดสอบลงจาก 1,644ms เหลือเพียง 674ms และปราศจาก Warning ใดๆ
+    3. **Graceful Exception Pattern (`database.js`):** เปลี่ยนจากการเรียก `process.exit(1)` เป็นการโยนข้อยกเว้น `throw new Error(...)` เพื่อให้ฝั่ง Application Bootstrap หรือ Test Suite สามารถดักจับและจัดการข้อผิดพลาดได้อย่างเป็นระบบ
 
 
 

@@ -15,8 +15,12 @@ const {
   DAY_NAMES,
   checkAlreadyCheckedIn,
   recordSessionAttendance,
-  loadAttendanceRecords
+  loadAttendanceRecords,
+  setSupabaseClient
 } = require('../server/schedules_manager');
+
+// Isolate unit tests from network calls to Supabase Cloud
+setSupabaseClient(null);
 
 describe('ISO-8601 Week Calculation (getIsoWeekDetails)', () => {
   test('correctly calculates ISO week for September 16, 2026', () => {

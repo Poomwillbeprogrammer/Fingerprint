@@ -7,6 +7,10 @@ try {
   supabase = require('./database').supabase;
 } catch (e) {}
 
+function setSupabaseClient(client) {
+  supabase = client;
+}
+
 // Initial Seed Path (read-only for cold-start bootstrap when Supabase is completely empty)
 const SEED_FILE = path.join(__dirname, 'room_schedules.seed.json');
 
@@ -939,5 +943,6 @@ module.exports = {
   exportAttendanceMatrixExcel,
   getIsoWeekDetails,
   getWeekRangeText,
-  generateShortName
+  generateShortName,
+  setSupabaseClient
 };
