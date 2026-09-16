@@ -38,6 +38,10 @@
   - **Level 2 (Server Non-Destructive State Machine):** พัฒนาโมดูล `EnrollmentSession` (`server/enrollment_manager.js`) เปลี่ยนสถานะเป็น `FINGER_FAILED` เมื่อนิ้วใดนิ้วหนึ่งไม่ผ่าน โดยรักษานิ้วที่สำเร็จแล้วไว้ ไม่ลบผู้ใช้ใน DB และรองรับ Socket Event `retry_current_finger` เพื่อเริ่มสแกนเฉพาะนิ้วนั้นใหม่อีกครั้ง
   - **Level 3 (Web UI Interactive Retry):** เพิ่มกล่องแจ้งเตือน `#retryActionBox` ใน `users.html` และ `app.js` พร้อมปุ่มกดลองสแกนนิ้วเดิมใหม่ และแสดงจำนวนนิ้วที่บันทึกสำเร็จแล้ว
   - **TDD Verification:** พัฒนาชุดทดสอบ `tests/test_enrollment_manager.js` ผ่านการทดสอบครบถ้วน 7/7 รายการ (รวมชุดทดสอบทั้งระบบ 20/20 ใน `npm test` และ 14/14 ใน Python `unittest`)
+- **Ghost Scan & Tier 2 Freeze Prevention (ADR-042) [เสร็จสมบูรณ์ 100%]:**
+  - **Mandatory Finger Release Wait (`sketch.ino`):** เพิ่มลูปตรวจสอบ `finger.getImage() != FINGERPRINT_NOFINGER` พร้อมข้อความแจ้งเตือน *"Please REMOVE finger"* หลังบันทึกนิ้วที่ 3 ลง Flash สำเร็จ เพื่อรอให้ผู้ใช้ยกนิ้วออกจริง ๆ ก่อนจบฟังก์ชัน `handleEnroll()`
+  - **Post-Enroll Cooldown (`enrollCooldownEndTime`):** หน่วงเวลา Cooldown 2.5 วินาทีใน `loop()` บล็อกการสแกนอัตโนมัติ `scanFingerprint()` ชั่วคราว ป้องกันการสแกนผี (Ghost Scan) จากนิ้วที่กำลังดึงออก ซึ่งเคยทำให้ระบบเข้าใจผิดและเด้งไปค้นหา Tier 2 ใน Database
+  - **Clean UI Recovery:** เพิ่มคำสั่ง `showIdleScreen()` ในขั้นตอนรับ `CANCEL_TIER2` และ Tier 2 Timeout เพื่อกู้คืนหน้าจอพร้อมใช้งานทันที ขจัดปัญหาหน้าจอค้างที่ *"Checking Tier 2..."* อย่างเด็ดขาด
 
 ### 1.2 ระบบคลาวด์ ความปลอดภัย และการจัดการตารางเรียน (Cloud Backend & Attendance Engine)
 - **สถาปัตยกรรม Hybrid Database:** ใช้ Supabase Cloud PostgreSQL เป็นศูนย์กลางข้อมูลหลัก ผสานกับ Local JSON Cache บนเครื่องลูกข่าย

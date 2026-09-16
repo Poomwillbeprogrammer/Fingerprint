@@ -331,6 +331,7 @@ bool tier2Searching = false;
 uint32_t tier2StartTime = 0;
 int tier2CandidateId = 0;
 bool fingerHeld = false;
+uint32_t enrollCooldownEndTime = 0; // Cooldown หลังลงทะเบียนเสร็จ ป้องกันสแกนผี (Ghost Scan)
 
 // ส่งคำสั่ง 0x03 เพื่อเปรียบเทียบลายนิ้วมือ Buffer 1 (Candidate) กับ Buffer 2 (Scanned Finger)
 uint8_t matchCharBuffers(uint16_t &score) {
@@ -598,10 +599,10 @@ void handleEnroll(int id) {
 
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
-    // บันทึกสำเร็จ: แสดงผลบนหน้าจอ
+    // บันทึกสำเร็จ: แสดงผลบนหน้าจอ และแจ้งเตือนให้ผู้ใช้ยกนิ้วออก
     char savedMsg[25];
     snprintf(savedMsg, sizeof(savedMsg), "Saved as ID: #%d", id);
-    showUI("ENROLL SUCCESS!", savedMsg, "Backing up to DB...");
+    showUI("ENROLL SUCCESS!", savedMsg, "Please REMOVE finger");
     
     Serial.print("RESP:ENROLL_OK ID=");
     Serial.println(id);
@@ -609,13 +610,18 @@ void handleEnroll(int id) {
     // ดึง Template 512 Bytes ส่งขึ้น Database ทันที
     extractAndSendTemplate(id);
     
-    delay(1500);
+    // บังคับรอให้ผู้ใช้ยกนิ้วออกจากเซนเซอร์จริง ๆ (Timeout 3.5 วินาที) เพื่อป้องกัน Ghost Scan
+    uint32_t liftWait = millis();
+    while (finger.getImage() != FINGERPRINT_NOFINGER && (millis() - liftWait < 3500)) {
+      delay(40);
+    }
   } else {
     showUI("ENROLL FAILED", "Flash write error", "Try again");
     Serial.println("RESP:ENROLL_FAIL_STORE");
     delay(1500);
   }
 
+  enrollCooldownEndTime = millis() + 2500; // หน่วง Cooldown 2.5 วินาที บล็อกการสแกนหาผู้ใช้ทันที
   fingerHeld = true;
   finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
   Serial.println("EVENT:IDLE");
@@ -793,6 +799,7 @@ void loop() {
       tier2Searching = false;
       fingerHeld = true;
       finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+      showIdleScreen();
       Serial.println("EVENT:NO_MATCH");
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     } else if (cmd.startsWith("DELETE ")) {
@@ -844,10 +851,18 @@ void loop() {
       tier2Searching = false;
       fingerHeld = true;
       finger.LEDcontrol(FINGERPRINT_LED_FLASHING, 25, FINGERPRINT_LED_RED, 2);
+      showIdleScreen();
       Serial.println("EVENT:NO_MATCH");
       finger.LEDcontrol(FINGERPRINT_LED_BREATHING, 100, FINGERPRINT_LED_RED);
     }
     delay(5);
+    return;
+  }
+
+  // หากอยู่ในช่วง Cooldown หลังลงทะเบียนเสร็จ ให้ข้ามการสแกนนิ้ว เพื่อให้ผู้ใช้ดึงมือออกอย่างปลอดภัย
+  if (millis() < enrollCooldownEndTime) {
+    fingerHeld = true;
+    delay(50);
     return;
   }
 
