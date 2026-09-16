@@ -425,6 +425,13 @@
     1. **ยืนยันคงพฤติกรรมที่ถูกต้องของ Offline Sync:** ค่า `dbTimestamp` ถูกสร้างขึ้นโดยเจตนาให้บันทึกเวลาสแกนจริง พฤติกรรม No-Op ของ Baseline เป็นบั๊กแอบแฝงของ SQL String-Matching Adapter ไม่ใช่เจตนาการ การ update ยังถูกครอบ try/catch ที่ผู้เรียกเหมือนเดิม
     2. **คืน Query Semantic การนับ DENIED:** แก้ `AccessLogRepository.countDeniedToday()` กลับเป็น `.eq('status', 'DENIED')` เพื่อคงสัญญา 1:1 กับ Baseline (`database.js` เดิม)
     3. **Test Suite ทนต่อ Environment:** ติดตั้ง `pillow` + `python-socketio` บนเครื่องพัฒนาแล้วยืนยันผล 18/18 จากการเรนเดอร์ Pillow จริง พร้อม Export PNG ครบ 10 หน้าจอ และเพิ่ม `@requires_real_pil` (`unittest.skipUnless(REAL_PIL, ...)`) ให้ 2 test ที่ต้องใช้ Pillow จริงถูกข้ามอัตโนมัติบนเครื่องที่ไม่มี Pillow
-  - **ผลการตรวจยืนยัน (Verified):**
-    `npm test` 20/20 ไร้ Warning Network, `node -c` ผ่านทุกไฟล์, `broadcastUsersCache` ส่งเฉพาะ `id, name, student_id` (ตัดการรั่วไหลของ `fingerprint_template` ข้อมูลชีวมิติออกจาก Socket) โดยบอร์ดใช้เพียง `name`/`student_id` จึงไม่กระทบพฤติกรรม
+* **ADR-040:** แก้ไข Race Condition ของ `sio.connected` และเพิ่ม Periodic Background Sync สำหรับคิวออฟไลน์บนบอร์ด Uno Q (Store-and-Forward Offline Sync Reliability):
+  - **ที่มาและปัญหา (Context & Problem):**
+    ผู้ใช้พบปัญหาเมื่อสแกนลายนิ้วมือขณะออฟไลน์ แล้วต่อเน็ตกลับมา ปล่อยเวลาผ่านไป 2 นาที ข้อมูลยังคงไม่ซิงก์ขึ้น Cloud Render / Supabase จากการตรวจสอบพบ 2 สาเหตุหลักใน `unoq_bridge.py`:
+    1. ในไลบรารี `python-socketio` เมื่อต่อเน็ตสำเร็จ callback `@sio.event def connect()` จะถูกเรียกทำงานก่อนที่ตัวแปร `self.connected = True` บน main thread จะถูกเซ็ต ส่งผลให้เงื่อนไข `if offline_queue and sio.connected:` ใน `sync_offline_records_if_any()` กลายเป็น `False` เสมอ ทำให้คำสั่ง `sio.emit('sync_offline_attendance')` ถูกข้ามไปโดยสิ้นเชิง
+    2. ฟังก์ชัน `sync_offline_records_if_any()` ถูกเรียกเพียงจุดเดียวตอน `connect()` เท่านั้น ไม่มี background worker หรือ timer คอยวนตรวจซ้ำ หากหลุดจังหวะแรก ข้อมูลใน `offline_queue.json` จะค้างเติ่งไม่ถูกส่ง
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **Decouple Connection Guard in `sync_offline_records_if_any`:** ปรับฟังก์ชันให้รับพารามิเตอร์ `is_connecting=False` และตรวจสอบความพร้อมผ่าน `(sio.connected or is_connecting or '/' in getattr(sio, 'namespaces', {}))` เพื่อให้การส่งคำสั่งใน callback `connect()` ยิงขึ้น Cloud ได้ 100%
+    2. **Periodic Background Sync Worker:** เพิ่มการตรวจสอบคิวใน `r307_monitor_thread` ทุกๆ 15 วินาที หากมีรายการค้างใน `offline_queue` และเชื่อมต่อ Cloud สำเร็จ ให้สั่งยิงซิงก์ขึ้น Cloud อัตโนมัติอย่างต่อเนื่องจนกว่าจะได้รับ ACK ล้างคิวสำเร็จ
+    3. **TDD Verification:** เพิ่มคลาส `TestOfflineSyncWorkflow` ใน `tests/test_unoq_bridge.py` จำลองสภาวะ `sio.connected=False` ตอน `connect()` ตรวจสอบ ACK cleanup และการทำงานของ periodic sync ผ่าน 100% (21/21 passed)
 

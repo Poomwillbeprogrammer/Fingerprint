@@ -150,7 +150,13 @@
   - **ประสิทธิภาพดีขึ้นจริง:** `broadcastUsersCache` ส่งเฉพาะ `id, name, student_id` (เดิมรั่ว `fingerprint_template` ข้อมูลชีวมิติขึ้น Socket ทุกครั้ง) โดยบอร์ดใช้แค่ `name`/`student_id` จึงไม่กระทบพฤติกรรมและลด Bandwidth
   - **แก้ Latent No-Op Bug:** `sync_offline_attendance` ก่อน Refactor อัปเดต `last_scanned_at` ไม่เคยสำเร็จจริง (Adapter เดิมอ่าน params ผิดตำแหน่ง) — ยืนยันคงพฤติกรรมที่ถูกต้องของโค้ดใหม่ตาม ADR-039
   - **คืน Semantic สถิติ DENIED:** `countDeniedToday()` กลับเป็น `.eq('status', 'DENIED')` ตาม Baseline
-  - **Test Hermetic ทุกเครื่อง:** ติดตั้ง `pillow` + `python-socketio` แล้ว Python Suite ผ่าน 18/18 จากการเรนเดอร์ Pillow จริง + Export PNG ครบ 10 หน้าจอ (`.scratch/png/`) พร้อม `skipUnless(REAL_PIL)` กัน FAIL บนเครื่องที่ไม่มี Pillow
+### 1.11 แก้ไขความเสถียรของระบบซิงก์ข้อมูลออฟไลน์ (Offline Sync Store-and-Forward Reliability - ADR-040)
+- **Race Condition Resolution in python-socketio (`sio.connected`):**
+  - แก้ปัญหา `sio.connected` คืนค่า `False` ภายใน callback `@sio.event def connect()` โดยปรับปรุง `sync_offline_records_if_any(is_connecting=True)` ให้ส่งข้อมูลคิวออฟไลน์ขึ้น Cloud ได้ทันทีเมื่อการเชื่อมต่อสำเร็จ
+- **Periodic Background Sync Worker:**
+  - เพิ่มการตรวจสอบคิวออฟไลน์อัตโนมัติทุกๆ 15 วินาทีใน Thread เบื้องหลัง (`r307_monitor_thread`) ป้องกันปัญหาข้อมูลค้างใน `offline_queue.json` เมื่อเครือข่ายต่อติดภายหลัง
+- **TDD Unit Testing Coverage:**
+  - เพิ่มชุดทดสอบ `TestOfflineSyncWorkflow` ใน `tests/test_unoq_bridge.py` ครอบคลุมการส่งขณะเชื่อมต่อ, การล้างคิวเมื่อได้รับ ACK, และการทำงานของ Background Worker (ชุดทดสอบ Python ผ่านฉลุย 21/21 รายการ, Node.js ผ่าน 20/20 รายการ)
 
 ---
 

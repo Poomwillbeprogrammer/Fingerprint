@@ -536,9 +536,10 @@ def mcu_reader_thread():
             time.sleep(1)
 
 # 9. Socket.IO Handlers เชื่อมต่อ Render Cloud
-def sync_offline_records_if_any():
+def sync_offline_records_if_any(is_connecting=False):
     global offline_queue
-    if offline_queue and sio.connected:
+    can_emit = (sio.connected or is_connecting or '/' in getattr(sio, 'namespaces', {}))
+    if offline_queue and can_emit:
         print(f'🔄 [Offline Sync] ตรวจพบข้อมูลออฟไลน์ค้างอยู่ {len(offline_queue)} รายการ กำลังซิงก์ขึ้น Cloud...')
         try:
             sio.emit('sync_offline_attendance', offline_queue)
@@ -553,7 +554,7 @@ def connect():
     sio.emit('get_users_cache')
     sio.emit('get_schedules_cache')
     sio.emit('get_today_attendance')
-    sync_offline_records_if_any()
+    sync_offline_records_if_any(is_connecting=True)
 
 @sio.event
 def disconnect():
@@ -666,8 +667,8 @@ def on_bridge_command(cmd):
 is_awaiting_confirmation = False
 
 def r307_monitor_thread():
-    """ตรวจสอบสถานะเซนเซอร์ R307 ทันทีหลังบู๊ต และตรวจเช็คเป็นระยะทุก 15 วินาที (เว้นจังหวะรอกดปุ่มยืนยัน)"""
-    global mcu_sock, is_awaiting_confirmation
+    """ตรวจสอบสถานะเซนเซอร์ R307 ทันทีหลังบู๊ต และตรวจเช็คเป็นระยะทุก 15 วินาที พร้อมตรวจสอบคิวออฟไลน์ (Periodic Sync)"""
+    global mcu_sock, is_awaiting_confirmation, offline_queue
     time.sleep(2.0)
     while True:
         if mcu_sock and not is_awaiting_confirmation:
@@ -675,7 +676,11 @@ def r307_monitor_thread():
                 mcu_sock.sendall(b'CHECK_R307\n')
             except Exception as e:
                 pass
+        # Periodic Background Sync: หากมีคิวออฟไลน์ค้างอยู่ และเชื่อมต่อ Cloud สำเร็จ ให้ส่งขึ้น Cloud อัตโนมัติ
+        if offline_queue and sio.connected:
+            sync_offline_records_if_any()
         time.sleep(15)
+
 
 if __name__ == '__main__':
     print('====================================================')

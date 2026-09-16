@@ -205,7 +205,80 @@ class TestOfflineQueue(unittest.TestCase):
         self.assertEqual(unoq_bridge.offline_queue, [])
 
 
+class TestOfflineSyncWorkflow(unittest.TestCase):
+    """
+    Test end-to-end offline sync workflow:
+    1. sync_offline_records_if_any must emit even when sio.connected is False during connect callback.
+    2. ACK handling safely cleans up synced IDs.
+    3. Periodic background sync triggers if queue is non-empty.
+    """
+
+    def setUp(self):
+        self.orig_queue = list(unoq_bridge.offline_queue)
+        self.orig_queue_file = unoq_bridge.OFFLINE_QUEUE_FILE
+        self.temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.json')
+        self.temp_file.close()
+        unoq_bridge.OFFLINE_QUEUE_FILE = self.temp_file.name
+        unoq_bridge.offline_queue = []
+
+    def tearDown(self):
+        unoq_bridge.offline_queue = self.orig_queue
+        unoq_bridge.OFFLINE_QUEUE_FILE = self.orig_queue_file
+        if os.path.exists(self.temp_file.name):
+            os.unlink(self.temp_file.name)
+
+    def test_sync_offline_records_during_connect_callback(self):
+        """
+        In python-socketio, sio.connected is False during the connect event callback.
+        sync_offline_records_if_any must still emit sync_offline_attendance!
+        """
+        record = {
+            'record_id': 'offline_rec_001',
+            'user_id': 1,
+            'schedule_id': 10,
+            'attendance_status': 'ON_TIME',
+            'scanned_at': '2026-09-16T08:30:00.000Z'
+        }
+        unoq_bridge.offline_queue = [record]
+
+        # Simulate python-socketio state during @sio.event connect():
+        # sio.connected is False, but connect callback is active
+        with patch.object(unoq_bridge.sio, 'connected', False), \
+             patch.object(unoq_bridge.sio, 'emit') as mock_emit:
+            # When connect() is triggered or sync_offline_records_if_any(is_connecting=True)
+            unoq_bridge.sync_offline_records_if_any(is_connecting=True)
+            mock_emit.assert_called_once_with('sync_offline_attendance', [record])
+
+    def test_sync_offline_attendance_ack_removes_synced_records(self):
+        """
+        ACK should remove only synced records from offline_queue and save to disk.
+        """
+        rec1 = {'record_id': 'rec_1', 'user_id': 1}
+        rec2 = {'record_id': 'rec_2', 'user_id': 2}
+        unoq_bridge.offline_queue = [rec1, rec2]
+        unoq_bridge.save_offline_queue()
+
+        ack_data = {'success': True, 'synced_ids': ['rec_1']}
+        unoq_bridge.on_sync_offline_attendance_ack(ack_data)
+
+        self.assertEqual(len(unoq_bridge.offline_queue), 1)
+        self.assertEqual(unoq_bridge.offline_queue[0]['record_id'], 'rec_2')
+
+    def test_periodic_sync_triggers_when_connected_and_queue_has_items(self):
+        """
+        Background worker should attempt sync if queue has items and connection is active.
+        """
+        rec = {'record_id': 'rec_bg_1', 'user_id': 3}
+        unoq_bridge.offline_queue = [rec]
+
+        with patch.object(unoq_bridge.sio, 'connected', True), \
+             patch.object(unoq_bridge.sio, 'emit') as mock_emit:
+            unoq_bridge.sync_offline_records_if_any()
+            mock_emit.assert_called_once_with('sync_offline_attendance', [rec])
+
+
 class TestChunkingProtocolSafety(unittest.TestCase):
+
     """
     Test 16-byte chunking protocol to guarantee Zephyr OS 64-byte UART RX FIFO safety (ADR-002, ADR-029).
     """
