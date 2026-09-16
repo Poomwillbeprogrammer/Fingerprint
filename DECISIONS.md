@@ -433,5 +433,11 @@
   - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
     1. **Decouple Connection Guard in `sync_offline_records_if_any`:** ปรับฟังก์ชันให้รับพารามิเตอร์ `is_connecting=False` และตรวจสอบความพร้อมผ่าน `(sio.connected or is_connecting or '/' in getattr(sio, 'namespaces', {}))` เพื่อให้การส่งคำสั่งใน callback `connect()` ยิงขึ้น Cloud ได้ 100%
     2. **Periodic Background Sync Worker:** เพิ่มการตรวจสอบคิวใน `r307_monitor_thread` ทุกๆ 15 วินาที หากมีรายการค้างใน `offline_queue` และเชื่อมต่อ Cloud สำเร็จ ให้สั่งยิงซิงก์ขึ้น Cloud อัตโนมัติอย่างต่อเนื่องจนกว่าจะได้รับ ACK ล้างคิวสำเร็จ
-    3. **TDD Verification:** เพิ่มคลาส `TestOfflineSyncWorkflow` ใน `tests/test_unoq_bridge.py` จำลองสภาวะ `sio.connected=False` ตอน `connect()` ตรวจสอบ ACK cleanup และการทำงานของ periodic sync ผ่าน 100% (21/21 passed)
+* **ADR-041:** การเพิ่มฟังก์ชันและปุ่มล้างลายนิ้วมือทั้งหมดในเซนเซอร์ R307 ผ่าน Cloud Bridge (Sensor Flash Memory Wipe / CLEAR_ALL Endpoint & UI):
+  - **ที่มาและปัญหา (Context & Problem):**
+    กรณีที่แอดมินลบข้อมูลผู้ใช้งานผ่าน Supabase Database Console โดยตรง แทนที่จะลบผ่านหน้าเว็บแดชบอร์ด ข้อมูลในฐานข้อมูลจะกลายเป็น 0 แต่หน่วยความจำ Flash ของเซนเซอร์ R307 ยังคงเก็บบันทึก Template ลายนิ้วมือไว้ ทำให้เมื่อแตะนิ้วยังคงสแกนติด (`EVENT:MATCH`) และระบบไม่มีปุ่มหรือ Endpoint สำหรับสั่งล้าง Flash Memory ของเซนเซอร์ทั้งหมด
+  - **การแก้ปัญหาและการตัดสินใจ (Decisions):**
+    1. **API Endpoint (`POST /api/device/clear-all`):** เพิ่ม Endpoint ตรวจสอบสิทธิ์ Admin เรียกใช้ `serialController.sendSerialCommand('CLEAR_ALL')` และส่งบรอดแคสต์อัปเดตแคชผู้ใช้
+    2. **Socket.IO Event (`clear_all_fingerprints`):** เพิ่ม Event ใน `serial_controller.js` รองรับการสั่งล้างเซนเซอร์ผ่าน WebSocket สำหรับสิทธิ์ Admin หรือ Bridge
+    3. **Web Dashboard Action Button (`users.html` & `app.js`):** เพิ่มปุ่ม "ล้างลายนิ้วมือในเซนเซอร์" (สีแดง) บนแถบหัวข้อของหน้าจัดการผู้ใช้ พร้อมกล่องข้อความยืนยันล่วงหน้าเพื่อความปลอดภัย ป้องกันการกดพลาด
 

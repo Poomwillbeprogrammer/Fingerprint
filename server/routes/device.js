@@ -75,7 +75,19 @@ function createDeviceRouter({ serialController }) {
     });
   });
 
+  // ล้างลายนิ้วมือทั้งหมดออกจากเซนเซอร์ R307 (Empty Flash Memory)
+  router.post('/clear-all', authRequired, (req, res) => {
+    const sent = serialController.sendSerialCommand('CLEAR_ALL');
+    serialController.broadcastUsersCache();
+    res.json({
+      success: true,
+      sent,
+      message: 'ส่งคำสั่งล้างลายนิ้วมือทั้งหมดในเซนเซอร์ R307 (CLEAR_ALL) เรียบร้อยแล้ว'
+    });
+  });
+
   return router;
 }
 
 module.exports = createDeviceRouter;
+

@@ -798,6 +798,28 @@ if (window.location.pathname.endsWith('users.html')) {
     });
   }
 
+  // ปุ่มล้างลายนิ้วมือทั้งหมดออกจากเซนเซอร์ R307 (Empty Flash Memory)
+  const clearSensorBtn = document.getElementById('clearSensorBtn');
+  if (clearSensorBtn) {
+    clearSensorBtn.addEventListener('click', async () => {
+      if (!confirm('⚠️ คำเตือน: คุณต้องการล้างลายนิ้วมือทั้งหมดออกจากเซนเซอร์ R307 ใช่หรือไม่?\n\nลายนิ้วมือทั้งหมดในชิปเซนเซอร์จะถูกลบถาวร (CLEAR_ALL)')) return;
+      try {
+        clearSensorBtn.disabled = true;
+        const res = await fetch('/api/device/clear-all', { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          alert(data.message || 'ส่งคำสั่งล้างเซนเซอร์เรียบร้อยแล้ว');
+        } else {
+          alert(data.error || 'ดำเนินการไม่สำเร็จ');
+        }
+      } catch (e) {
+        alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+      } finally {
+        clearSensorBtn.disabled = false;
+      }
+    });
+  }
+
   // Modal Handlers
   const modal = document.getElementById('enrollModal');
   const openModalBtn = document.getElementById('openEnrollModalBtn');

@@ -155,8 +155,11 @@
   - แก้ปัญหา `sio.connected` คืนค่า `False` ภายใน callback `@sio.event def connect()` โดยปรับปรุง `sync_offline_records_if_any(is_connecting=True)` ให้ส่งข้อมูลคิวออฟไลน์ขึ้น Cloud ได้ทันทีเมื่อการเชื่อมต่อสำเร็จ
 - **Periodic Background Sync Worker:**
   - เพิ่มการตรวจสอบคิวออฟไลน์อัตโนมัติทุกๆ 15 วินาทีใน Thread เบื้องหลัง (`r307_monitor_thread`) ป้องกันปัญหาข้อมูลค้างใน `offline_queue.json` เมื่อเครือข่ายต่อติดภายหลัง
-- **TDD Unit Testing Coverage:**
-  - เพิ่มชุดทดสอบ `TestOfflineSyncWorkflow` ใน `tests/test_unoq_bridge.py` ครอบคลุมการส่งขณะเชื่อมต่อ, การล้างคิวเมื่อได้รับ ACK, และการทำงานของ Background Worker (ชุดทดสอบ Python ผ่านฉลุย 21/21 รายการ, Node.js ผ่าน 20/20 รายการ)
+### 1.12 ฟังก์ชันล้างลายนิ้วมือทั้งหมดในเซนเซอร์ R307 ผ่านคลาวด์ (Sensor Flash Wipe / CLEAR_ALL - ADR-041)
+- **Direct Flash Memory Wipe (`CLEAR_ALL`):**
+  - เพิ่ม API `POST /api/device/clear-all` และ Socket.IO Event `clear_all_fingerprints` สั่งการผ่าน Cloud Bridge ไปยังเซนเซอร์ R307 ให้ล้างฐานข้อมูล Flash Memory ทันที (`finger.emptyDatabase()`)
+- **Admin Dashboard UI Integration:**
+  - เพิ่มปุ่ม "ล้างลายนิ้วมือในเซนเซอร์" (สีแดง) บนหน้า `users.html` พร้อมกล่องข้อความยืนยันความปลอดภัย ช่วยให้แอดมินล้างหน่วยความจำฮาร์ดแวร์ได้จากหน้าเว็บ แม้มีการลบข้อมูลใน DB โดยตรง
 
 ---
 

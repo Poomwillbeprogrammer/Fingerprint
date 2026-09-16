@@ -928,6 +928,16 @@ function createSerialController({
       io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
     });
 
+    socket.on('clear_all_fingerprints', () => {
+      if (socket.role !== 'admin' && socket.role !== 'bridge') {
+        console.warn(`🚨 [Security] Blocked unauthorized clear_all_fingerprints from ${socket.id}`);
+        return;
+      }
+      console.log('🧹 [Sensor] ได้รับคำสั่งล้างลายนิ้วมือทั้งหมดในเซนเซอร์ R307 (CLEAR_ALL)');
+      sendSerialCommand('CLEAR_ALL');
+      broadcastUsersCache();
+    });
+
     socket.on('register_bridge', async (data) => {
       if (socket.role !== 'bridge') {
         console.warn(`🚨 [Security] Blocked unauthorized register_bridge from ${socket.id}`);
