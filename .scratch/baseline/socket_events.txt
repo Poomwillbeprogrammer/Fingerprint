@@ -1,0 +1,86 @@
+73:    io.emit('sync_users_cache', users || []);
+84:    io.emit('sync_schedules_cache', schedules || []);
+131:      io.emit('serial_status', { connected: true, port: TARGET_PORT, r307_connected: r307Connected, oled_connected: oledConnected });
+141:      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, oled_connected: false, error: err.message });
+150:      io.emit('serial_status', { connected: false, port: TARGET_PORT, r307_connected: false, oled_connected: false });
+324:    io.emit('user_updated');
+394:        io.emit('already_checked_in', {
+428:      io.emit('session_attendance_update', sessionRecord);
+460:    io.emit('new_log', newLogEntry);
+490:  io.emit('user_updated');
+506:    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected, tft_connected: oledConnected });
+512:    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: true, oled_connected: oledConnected });
+518:    io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: false, oled_connected: oledConnected });
+525:    io.emit('enroll_step_update', { status: 'STEP1_WAIT', id: currentEnrollId, fingerNum, totalFingers: 3 });
+528:    io.emit('enroll_step_update', { status: 'REMOVE_FINGER', id: currentEnrollId, fingerNum, totalFingers: 3 });
+533:    io.emit('enroll_step_update', { status: 'STEP2_WAIT', id: currentEnrollId, fingerNum, totalFingers: 3, attempt });
+546:        io.emit('enroll_step_update', {
+560:            io.emit('enroll_step_update', {
+573:        io.emit('enroll_step_update', {
+578:        io.emit('user_updated');
+584:      io.emit('enroll_step_update', { status: 'SUCCESS', id: completedSlot });
+585:      io.emit('user_updated');
+602:    io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
+635:      io.emit('enroll_step_update', {
+649:      io.emit('enroll_step_update', { status: 'FAILED', code, message });
+651:      io.emit('enroll_step_update', { status: 'FAILED', code, message });
+658:    io.emit('user_updated');
+760:        io.emit('template_saved', { id: targetUserId, slotId, success: true });
+761:        io.emit('user_updated');
+783:    io.emit('restore_progress', { id, status: 'SUCCESS', message: `กู้คืน ID #${id} สำเร็จ` });
+789:    io.emit('restore_progress', { id, status: 'FAILED', message: `กู้คืน ID #${id} ไม่สำเร็จ` });
+794:    io.emit('backup_progress', { id, status: 'FAILED', message: `ไม่พบลายนิ้วมือ ID #${id} ในเซนเซอร์` });
+920:    io.emit('user_updated');
+950:    io.emit('cmd_delete_fingerprint', { id, slots: [slot1, slot2, slot3] });
+951:    io.emit('user_updated');
+1052:    io.emit('device_room_updated', { active_device_room: updatedRoom });
+1053:    io.emit('sync_device_room', { room_name: updatedRoom });
+1054:    io.emit('sync_schedules_cache', roomSchedules);
+1068:    io.emit('rooms_updated', schedulesManager.getRooms());
+1069:    io.emit('sync_device_room', { room_name: result.active_device_room });
+1070:    io.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+1176:    io.emit('rooms_updated', schedulesManager.getRooms());
+1177:    io.emit('schedules_updated', saved);
+1181:      io.emit('sync_device_room', { room_name: saved.room_name });
+1182:      io.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+1272:      io.emit('restore_progress', { id: u.id, current: i + 1, total: usersWithTemplate.length, status: 'IN_PROGRESS' });
+1295:    io.emit('restore_progress', { status: 'ALL_COMPLETED', total: usersWithTemplate.length });
+1315:      io.emit('backup_progress', { id: u.id, current: i + 1, total: allUsers.length, status: 'IN_PROGRESS' });
+1333:    io.emit('backup_progress', { status: 'ALL_COMPLETED', total: allUsers.length });
+1346:io.use((socket, next) => {
+1391:io.on('connection', (socket) => {
+1396:  socket.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
+1399:  socket.on('start_enroll', async (data) => {
+1409:      socket.emit('enroll_step_update', {
+1431:      io.emit('enroll_step_update', {
+1439:      socket.emit('enroll_step_update', {
+1450:  socket.on('retry_current_finger', async () => {
+1466:      io.emit('enroll_step_update', {
+1474:      socket.emit('enroll_step_update', {
+1482:  socket.on('cancel_enroll', async (data) => {
+1512:    io.emit('enroll_step_update', { status: 'CANCELLED', message: 'ยกเลิกการลงทะเบียนเรียบร้อย' });
+1516:  socket.on('register_bridge', async (data) => {
+1532:    io.emit('serial_status', { connected: true, port: 'Cloud Bridge (Active)', r307_connected: r307Connected, oled_connected: oledConnected });
+1538:      socket.emit('sync_users_cache', users || []);
+1539:      socket.emit('sync_device_room', { room_name: activeRoom });
+1540:      socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+1545:      socket.emit('sync_today_attendance', todayRecords);
+1552:    socket.on('disconnect', () => {
+1559:        io.emit('serial_status', { connected: false, port: 'Cloud Bridge (Offline)', r307_connected: false, oled_connected: false });
+1565:  socket.on('bridge_sensor_status', (data) => {
+1579:      io.emit('serial_status', { connected: serialConnected, port: displayPort, r307_connected: r307Connected, oled_connected: oledConnected });
+1584:  socket.on('get_users_cache', async () => {
+1587:      socket.emit('sync_users_cache', users || []);
+1594:  socket.on('get_schedules_cache', () => {
+1596:      socket.emit('sync_schedules_cache', schedulesManager.getAllSchedules());
+1603:  socket.on('get_today_attendance', () => {
+1608:      socket.emit('sync_today_attendance', records);
+1615:  socket.on('bridge_serial_data', async (rawLine) => {
+1628:  socket.on('sync_offline_attendance', async (records) => {
+1631:      socket.emit('sync_offline_attendance_ack', { success: false, error: 'Unauthorized' });
+1635:      socket.emit('sync_offline_attendance_ack', { success: true, count: 0, synced_ids: [] });
+1694:            io.emit('session_attendance_update', sessionRecord);
+1728:        io.emit('new_log', logEntry);
+1736:    socket.emit('sync_offline_attendance_ack', {
+1743:      io.emit('offline_sync_completed', { count: syncedIds.length });
+1747:  socket.on('disconnect', () => {

@@ -1,0 +1,9 @@
+183:def render_idle_screen(room_name=None):
+224:def render_denied_screen(is_offline=False):
+258:def render_user_card(student_id, name, sched_info=None):
+331:def render_confirm_success(student_id, name, sched_info=None, is_offline=False):
+373:def render_already_checked_in(name, subject_str):
+417:def render_cancelled_screen():
+451:def render_timeout_screen():
+495:def send_bitmap_to_mcu(buf, initial_wait=0.20, theme='IDLE', force=False):
+841:                        def send_after_boot():

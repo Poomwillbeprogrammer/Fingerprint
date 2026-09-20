@@ -1,0 +1,161 @@
+# 📌 Project Scratchpad & Active Context
+สถานะปัจจุบันของระบบ: **STABLE / PRODUCTION READY 🟢**
+
+---
+
+### 🚀 สรุปสถานะระบบปัจจุบัน (Current Working State)
+* **Arduino UNO Q (STM32 MCU):** เฟิร์มแวร์ C++ เสถียร 100% (`sketch.ino`, `ST7735_TFT.h`, `protocol.h`) ควบคุมเซนเซอร์ R307, หน้าจอ 1.8" TFT SPI (160x128 แนวนอน), ปุ่มกด D2/D3, รายงาน `EVENT:IDLE`, `EVENT:NO_MATCH`, และระบบตรวจจับลายนิ้วมือซ้ำก่อนบันทึก
+* **Uno Q Linux SoC:** สคริปต์ `unoq_bridge.py` และ `unoq_views.py` เรนเดอร์ภาษาไทย Tahoma 160x128 แนวนอน 7 หน้าจอ คมชัด พร้อมแคชตารางห้อง (`active_room.txt`) และประวัติการเช็คชื่อ (`attendance_cache.json`)
+* **Cloud Server (Render):** Node.js Express & Socket.IO เซิร์ฟเวอร์รันปกติที่ `https://fingerprint-hrkp.onrender.com` พร้อมระบบจัดการตารางเรียนแยกห้อง (Multi-room Timetable)
+* **Database (Supabase):** ฐานข้อมูล PostgreSQL ซิงก์รายชื่อผู้ใช้, ตารางเรียน, และประวัติการสแกน (Access Logs) สมบูรณ์
+* **Code Repository:** สาขา `website` บน GitHub ซิงก์ล่าสุดตรงกับระบบที่ติดตั้งจริง
+
+---
+
+### ⚙️ ข้อมูลการเชื่อมต่อที่สำคัญ (Environment Info)
+* **Internal IPC Port:** `127.0.0.1:7500` (Baudrate 115200 bps)
+* **Sensor Baudrate:** 57600 bps (Serial1 บน Pins 0 RX, 1 TX)
+* **TFT Display:** ST7735 1.8" SPI 160x128 Landscape (Pins D8 RST, D9 DC, D10 CS, D11 MOSI, D13 SCK)
+* **Button Confirm (ยืนยัน):** Pin `D2` (ปุ่มฟ้า) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
+* **Button Rescan (สแกนใหม่/ยกเลิก):** Pin `D3` (ปุ่มแดง) ต่อลง GND (Active LOW, `INPUT_PULLUP`)
+* **Font Path บนบอร์ด:** `/home/arduino/tahoma.ttf`
+* **Local Users Cache:** `/home/arduino/users_cache.json`
+* **Local Attendance Cache:** `/home/arduino/attendance_cache.json`
+* **Local Offline Queue:** `/home/arduino/offline_queue.json`
+* **Active Room Cache:** `/home/arduino/active_room.txt`
+
+---
+
+### 🎯 ประวัติการพัฒนางานสำคัญ (Sprint History & Completed Tasks)
+1. **[TASK-1] เพิ่มปุ่มกด Physical Switch ยืนยันการลงเวลา (Confirm D2 & Rescan D3):** ✅ COMPLETED
+   - [x] กำหนด Pin D2 (Confirm) และ D3 (Rescan) ใน `sketch.ino` ด้วย `INPUT_PULLUP`
+   - [x] ปรับ State Machine: สแกนติด ➡️ โชว์ชื่อ ➡️ รอ 10 วิ (ถ้ากด D2 ➡️ บันทึก, ถ้ากด D3 หรือครบ 10 วิ ➡️ ยกเลิกอัตโนมัติ)
+   - [x] ปรับ UI บน OLED ใน `unoq_bridge.py`: แสดงคำแนะนำ `[D2: ยืนยัน | D3: สแกนใหม่]`
+   - [x] หน่วงเวลาแสดงหน้าต่างผลลัพธ์ 3.5 วินาที เพื่อให้ผู้ใช้อ่านชื่อตนเองได้อย่างชัดเจน
+2. **[TASK-2] ปรับปรุงระบบลงทะเบียน 3 นิ้วต่อ 1 ผู้ใช้ (3-Finger Enrollment):** ✅ COMPLETED
+   - [x] คำนวณ Slot Mapping: `Slot1 = (User-1)*3+1`, `Slot2 = (User-1)*3+2`, `Slot3 = (User-1)*3+3`
+   - [x] รองรับผู้ใช้ได้สูงสุด 100 คน (300 Slots) ในหน่วยความจำเซนเซอร์ R307
+   - [x] หน้าเว็บมีระบบแนะนำทีละขั้นตอนสด (Step Guidance)
+3. **[TASK-3] แก้ไขการซิงค์ Template 3 นิ้วลง Database และป้ายสถานะผู้ใช้บนหน้าเว็บ:** ✅ COMPLETED
+   - [x] แก้ไข Slot ID vs User ID Mismatch ใน `TEMPLATE:` handler ของ `server.js`
+   - [x] รวม Template ทั้ง 3 นิ้วลงคอลัมน์ `fingerprint_template` และตั้ง `in_sensor = 1`
+   - [x] ปรับปรุงฟังก์ชัน Backup และ Restore ให้รองรับ 3 Slot ต่อ 1 ผู้ใช้
+   - [x] กู้คืน Template ผู้ใช้ ID #2 (`poppp`) เข้า Supabase สำเร็จ แสดงป้ายสีเขียว **Tier 1** สมบูรณ์
+4. **[TASK-4] ระบบ Auto-Rollback ลบข้อมูลใน DB และเซนเซอร์เมื่อยกเลิกหรือล้มเหลว:** ✅ COMPLETED
+   - [x] สร้างฟังก์ชันกลาง `cleanupFailedEnroll()` ใน `server.js`
+   - [x] สั่ง R307 ลบ Slot 1, 2, 3 ที่บันทึกค้างไว้
+   - [x] รัน `DELETE FROM users WHERE id = ?` ใน Supabase ทันที ไม่ทิ้งข้อมูลขยะ
+   - [x] ผูกเข้ากับเหตุการณ์กดยกเลิกจากหน้าเว็บ, ปุ่ม X, ปิดหน้าต่าง, หมดเวลา (TIMEOUT), หรือสแกนไม่ผ่าน
+5. **[TASK-5] ตรวจจับลายนิ้วมือซ้ำในระดับฮาร์ดแวร์ (Duplicate Fingerprint Rejection):** ✅ COMPLETED
+   - [x] ใน `sketch.ino` ขั้นตอนที่ 1 รัน `finger.fingerSearch(1)` ก่อนสร้างโมเดล
+   - [x] หากพบนิ้วซ้ำ OLED แสดง "DUPLICATE FINGER" และส่ง `RESP:ENROLL_FAIL_DUPLICATE`
+   - [x] Server ค้นหาชื่อเจ้าของนิ้วเดิม และส่งเตือนหน้าเว็บ: `ลายนิ้วมือนี้มีในระบบแล้ว (ตรงกับผู้ใช้ ID #...)`
+   - [x] แก้ปัญหาเว็บค้าง: ลูปรอ 10 วินาทีใน Arduino แทรก `if (Serial.available()) break;` ตัดเข้าสู่คำสั่งใหม่ได้ทันที ไม่ค้างอีกต่อไป
+6. **[TASK-6] ระบบจัดการตารางเรียนแยกห้อง (Multi-Room Timetable) และซิงก์ห้องใช้งาน:** ✅ COMPLETED
+   - [x] รองรับการนำเข้าไฟล์ตารางเรียน Excel (.xlsx) พร้อมระบบวิเคราะห์ห้องเรียนอัจฉริยะ (Smart Room Detection)
+   - [x] สร้างหน้าจัดการตารางเรียน `schedules.html` และระบบสลับห้องประจำการของเครื่อง Uno Q บน Dashboard
+   - [x] ส่งอีเวนต์ `sync_device_room` ซิงก์ชื่อห้องลงบอร์ด Uno Q แบบเรียลไทม์ และบันทึกลง `active_room.json`
+   - [x] หน้าจอ Idle บน OLED แสดงแถบสถานะห้องด้านล่าง: `[ <ชื่อห้อง> ] พร้อมใช้งาน` ตลอดเวลา
+7. **[TASK-7] ปรับการแสดงผลปุ่มกดตามสีจริง (ปุ่มฟ้า/ปุ่มแดง) และขยายชื่อเต็ม 11pt Bold บน OLED:** ✅ COMPLETED
+   - [x] ปรับข้อความแนะนำใต้จอเป็น `[ ปุ่มฟ้า:ยืนยัน | ปุ่มแดง:สแกน ]` ตรงกับสีของปุ่มฮาร์ดแวร์จริง
+   - [x] ขยายขนาดฟอนต์ชื่อ-นามสกุลภาษาไทยเป็น 11pt ตัวหนา คมชัด เต็มความกว้างของหน้าจอ
+   - [x] ตัดรหัสนักศึกษา 13 หลักออกจากหน้าจอ OLED เพื่อป้องกันปัญหาข้อความล้นจอหรือตกขอบ (รหัสยังคงบันทึกลงฐานข้อมูลอย่างครบถ้วน)
+8. **[TASK-8] แคชการลงเวลาประจำวันบนเครื่อง (Local Attendance Cache) ป้องกัน Frame Storm:** ✅ COMPLETED
+   - [x] เพิ่มระบบแคช `attendance_cache.json` และตัวแปร `checked_in_records` บน Uno Q Linux
+   - [x] เมื่อกดปุ่มฟ้า D2 ยืนยัน ตัวบอร์ดจะส่งเฟรมภาพเพียงครั้งเดียว และไม่ส่งซ้ำเมื่อเซิร์ฟเวอร์ตอบกลับ
+   - [x] เพิ่ม Socket handler `get_today_attendance` ใน `server.js` ให้บอร์ดดึงประวัติการเช็คชื่อของวันปัจจุบันมาแคชไว้ตั้งแต่เริ่มเชื่อมต่อ
+9. **[TASK-9] ประสานเวลาบู๊ตบอร์ด (Boot Synchronization) และกู้คืนหน้าจออัตโนมัติเมื่อสแกนไม่ผ่าน:** ✅ COMPLETED
+   - [x] แก้ไขบั๊กหน้าจอค้าง "READY FOR SCAN" ตอนเปิดเครื่องครั้งแรก โดยให้ STM32 ส่ง `EVENT:IDLE` เมื่อจบ `setup()`
+   - [x] เพิ่ม Settling Time 2.0 วินาทีและตัวเฝ้าระวัง (Watchdog 3.5s) ฝั่ง Linux ช่วยการันตีว่าจอจะขึ้นหน้าจอ Idle พร้อมชื่อห้อง 100%
+   - [x] จัดการอีเวนต์ `EVENT:NO_MATCH` หน่วงเวลา 1.6 วินาที โชว์หน้าแจ้งเตือนภาษาไทย "ไม่พบข้อมูลลายนิ้วมือ" 3.0 วินาที แล้วกลับสู่หน้าจอ Idle อัตโนมัติ
+   - [x] ติดตั้งตัวคุมความเร็วการส่งเฟรมภาพ (Frame Pacing Gap 600ms) และ Bitmap Hash Deduplication ป้องกันคำสั่งชนกันบน UART
+10. **[TASK-10] ระบบบันทึกเวลาออฟไลน์และซิงก์ย้อนหลังอัตโนมัติ (Store-and-Forward Offline Attendance Logging):** ✅ COMPLETED
+    - [x] จัดทำคิวออฟไลน์ `offline_queue.json` บน Uno Q Linux เก็บประวัติสแกนพร้อมเวลาจริง (Real-Time Timestamp)
+    - [x] OLED แจ้งสถานะ `บันทึกออฟไลน์ (รอเน็ต)` เมื่อไม่มีเน็ต และปฏิเสธทันที `ไม่พบข้อมูล (โหมดออฟไลน์)` เมื่อเป็น Tier 1 No Match
+    - [x] ระบบ Auto-Sync เบื้องหลังทันทีที่เชื่อมต่อ Wi-Fi สำเร็จ พร้อมกลไก Server ACK ป้องกันข้อมูลสูญหาย
+    - [x] Server บันทึกลง Supabase โดยรักษาวันเวลาสแกนจริง และส่งอีเวนต์อัปเดตหน้า Dashboard แบบเรียลไทม์
+    - [x] หน้าเว็บแสดงป้ายกำกับสีส้ม `[ซิงก์ออฟไลน์]` และสถานะ `Tier 1 (Offline)`
+11. **[TASK-11] ปรับปรุงความปลอดภัยของระบบและการแก้บั๊กทั้งหมด (Security Hardening & Bug Fixes):** ✅ COMPLETED
+    - [x] ลบ Hardcoded Secrets ทั้งหมดใน `database.js` และ `server.js` บังคับอ่านจาก Env
+    - [x] เพิ่ม `authRequired` middleware บนทุก Endpoint ที่เกี่ยวกับตารางเรียนและข้อมูลนักศึกษา
+    - [x] ติดตั้ง Socket.IO Handshake Auth (`io.use`) แยกสิทธิ์ Admin และ Hardware Bridge (`BRIDGE_TOKEN`)
+    - [x] ลบคำใบ้รหัสผ่านหน้า Login, เพิ่ม Rate Limit (5 req/min) และตั้ง Cookie Flags
+    - [x] ส่งออก `loadAttendanceRecords` ใน `schedules_manager.js` แก้บั๊กตาราง Dashboard หมุนค้าง
+    - [x] เพิ่ม Error UI State พร้อมปุ่ม Retry บน Dashboard และ Users table
+    - [x] ปรับ Mobile Responsive Sidebar ให้ยุบเป็น Hamburger Menu บนจอ < 768px
+    - [x] เพิ่ม `favicon.svg` / `favicon.ico` และแก้ข้อความ SQLite ให้เป็น Cloud Database (Supabase)
+12. **[TASK-12] ระบบตรวจสอบสถานะเซนเซอร์ R307 แบบแยกอิสระจาก Bridge และป้ายเตือนบนหน้าเว็บ (Accurate R307 Health Tracking & UI Badges):** ✅ COMPLETED
+    - [x] เพิ่มคำสั่ง `CHECK_R307` ใน `sketch.ino` รัน `finger.verifyPassword()` ตอบกลับ `STATUS:R307_READY` หรือ `STATUS:R307_NOT_FOUND`
+    - [x] ใน `unoq_bridge.py` ตั้งค่าเริ่มต้น `r307_connected = False`, ตรวจสอบสถานะทันทีที่ต่อพอร์ต 7500 และแนบไปกับ `register_bridge`
+    - [x] เพิ่ม Background Thread `r307_monitor_thread` ส่ง `CHECK_R307` ตรวจเช็คสถานะเซนเซอร์อัตโนมัติทุก 30 วินาที
+    - [x] ฝั่ง Server (`server.js`) จัดเก็บ `r307Connected`, ส่งต่อผ่าน Socket `serial_status` และ `/api/device/serial-status`
+    - [x] ติดตั้ง Fail-Fast Guard ใน `start_enroll` ปฏิเสธการลงทะเบียนทันทีพร้อมแจ้งเตือนแอดมินหากไม่พบเซนเซอร์ R307 (ไม่ต้องรอ Timeout 20 วิ)
+    - [x] ปรับปรุง UI หน้าเว็บ (`app.js`, `schedules.js`, HTML) แสดงสถานะ 3 ระดับ: 🟢 Online, 🟠 R307 Not Found (ไฟส้มกระพริบ), 🔴 Offline
+    - [x] เปลี่ยนข้อความเริ่มต้นตอนโหลดหน้าเว็บจาก `R307 (COM12)...` เป็น `กำลังตรวจสอบ...`
+    - [x] เพิ่ม Guard หน้าเว็บสกัดการกดยืนยันฟอร์มลงทะเบียนล่วงหน้าหากไม่พบเซนเซอร์
+13. **[TASK-13] การผสานระบบตารางเรียนเข้ากับ Supabase Cloud Database (ADR-022, ADR-023):** ✅ COMPLETED
+    - [x] บรรจุห้องเรียนตั้งต้นครบ 3 ห้อง (ทค.1-101, ทค.1-301, ทค.1-201 รวม 60 คาบ) ใน `room_schedules.seed.json`
+    - [x] เพิ่มฟังก์ชัน `syncFromSupabase()` ดึงตารางเรียนและประวัติการเช็คชื่อจาก Cloud อัตโนมัติเมื่อเซิร์ฟเวอร์บู๊ต
+    - [x] แก้ไข Scope วิชา: ใช้ `getScheduleById(id)` ค้นหาวิชาจากทุกห้อง ป้องกันข้อผิดพลาดตอน Export Excel และ Offline Sync
+14. **[TASK-14] สถาปัตยกรรม Supabase Single Source of Truth และกำจัดความซ้ำซ้อนของไฟล์ดิสก์ (ADR-024):** ✅ COMPLETED
+    - [x] ยึด Supabase เป็น Single Source of Truth สำหรับตารางเรียน (`room_schedules`) และประวัติการเช็คชื่อ (`session_attendance`)
+    - [x] ยกเลิกการเขียนไฟล์ดิสก์ชั่วคราวซ้ำซ้อนบน Render (`server/data/room_schedules.json` และ `session_attendance.json` ลบออกหมด)
+    - [x] จัดการข้อมูลใน RAM (In-Memory Cache) ให้การตอบสนองเร็วระดับ 0.001 วินาที (Sub-millisecond)
+    - [x] รันชุดทดสอบ Logic 10 ด้าน ผ่านสมบูรณ์ 100%
+15. **[TASK-15] การย้ายสู่จอ 1.8" TFT SPI 160x128 แนวนอน และ 16-Byte Chunking (ADR-029, ADR-030):** ✅ COMPLETED
+    - [x] พัฒนาไดรเวอร์ Zero-dependency ST7735 ควบคุมผ่านฮาร์ดแวร์ SPI (D8, D9, D10, D11, D13)
+    - [x] หมุนหน้าจอ 180° สู่แนวนอน 160x128 (`MADCTL=0x60`) พร้อม Dynamic Color Palette
+    - [x] บิตแพ็กกิ้งภาพ 2,560 ไบต์ แบ่งส่ง 160 ชิ้น (ชิ้นละ 16B) ปลอดภัยต่อ Zephyr 64B FIFO 100%
+16. **[TASK-16] สถาปัตยกรรม Non-blocking `fingerHeld` Loop และ Zero Screen Freeze (ADR-032):** ✅ COMPLETED
+    - [x] ยกเลิก Blocking `while` loop รอปล่อยนิ้วในเฟิร์มแวร์ แทนที่ด้วย State Flag `fingerHeld`
+    - [x] ปรับ `handleDelete` ให้ทำงานแบบ Silent Background ไม่หน่วงจอ TFT
+    - [x] ฟื้นฟู Handshake Pacing 200ms ฝั่ง Python Bridge แก้ปัญหาจอค้างทุกกรณี
+17. **[TASK-17] ระบบลงทะเบียนลายนิ้วมือ 3 นิ้วแบบยืดหยุ่น (Resilient Multi-Level Enrollment - ADR-033):** ✅ COMPLETED
+    - [x] Level 1 (Firmware): In-place Step 2 Retry 3 ครั้งโดยไม่ต้องเริ่ม Step 1 ใหม่
+    - [x] Level 2 (Server): `enrollment_manager.js` Non-destructive failure state รักษา Slot ที่ผ่านแล้ว
+    - [x] Level 3 (Web UI): กล่องแจ้งเตือน `#retryActionBox` พร้อมปุ่มกดลองสแกนนิ้วเดิมใหม่
+    - [x] TDD Unit Tests ครอบคลุม 7 ข้อ ผ่านครบ 100%
+18. **[TASK-18] Hermetic Testing Seam และการจัดการ Error อย่างยืดหยุ่น (ADR-034):** ✅ COMPLETED
+    - [x] เพิ่ม Seam `setSupabaseClient(null)` ใน `schedules_manager.js` ตัด Warning Supabase ใน `npm test`
+    - [x] เปลี่ยน `process.exit(1)` ใน `database.js` เป็น `throw new Error(...)` เพื่อการจัดการข้อผิดพลาดที่ยืดหยุ่น
+19. **[TASK-19] สถาปัตยกรรมเซิร์ฟเวอร์แบบโมดูลาร์ และ Native Supabase Repositories (ADR-035, ADR-036):** ✅ COMPLETED
+    - [x] ย่อย `server.js` จาก 1,777 บรรทัด เหลือ ~155 บรรทัด (Composition Root)
+    - [x] สกัด `middleware/auth.js`, `controllers/serial_controller.js`, และ 5 Domain Routers ใน `routes/`
+    - [x] ยกเลิก `dbAsync` SQL string matching แทนที่ด้วย Native Repositories (`User`, `Admin`, `AccessLog`) ทั้ง 37 จุด
+20. **[TASK-20] แยกโมดูลมุมมองกราฟิก, ไดรเวอร์เฟิร์มแวร์ และการตรวจสอบอิสระ (ADR-037, ADR-038, ADR-039):** ✅ COMPLETED
+    - [x] สกัด `unoq_views.py` พร้อมเครื่องมือ CLI PNG Preview ใน `.scratch/png/` และขยาย Python test เป็น 18 ข้อ
+    - [x] สกัด `ST7735_TFT.h` และ `protocol.h` จาก `sketch.ino` คอมไพล์ได้ไบนารีขนาดเท่าเดิมเป๊ะ 99,344B / 40,920B
+    - [x] ตรวจยืนยันอิสระ (ADR-039): แก้ Latent No-Op Bug ของ Offline Sync, คืน Semantic สถิติ DENIED, และติดตั้ง Guard `@requires_real_pil`
+21. **[TASK-21] สถาปัตยกรรมลงทะเบียนลายนิ้วมือ 3 นิ้วแบบ Event-Driven Handshake ไร้ Blind Timer (ADR-040):** ✅ COMPLETED
+    - [x] ยกเลิก blind timer `setTimeout(1500)` บน Server แทนที่ด้วย State Machine `AWAITING_NEXT`
+    - [x] เฟิร์มแวร์ STM32 ส่งสัญญาณ `RESP:ENROLL_SLOT_DONE` เมื่อบันทึกนิ้วสำเร็จโดยไม่ส่ง `EVENT:IDLE` คั่นกลาง
+    - [x] Fast Template Extraction สตรีมข้อมูลไวใน ~120ms (ลดจาก 4,000ms เดิม)
+    - [x] ติดตั้ง Flag `is_enrolling` บน Uno Q Bridge ป้องกันคำสั่ง `CHECK_R307` แทรกและป้องกันภาพ Idle ทับซ้อน
+    - [x] TDD Unit Tests `tests/test_enrollment_manager.js` ครอบคลุมผ่าน 23/23 ข้อ (100% pass)
+22. **[TASK-22] การแก้ไขข้อมูลผู้ใช้และระบบบังคับรูปแบบรหัสนักศึกษา 12 หลัก (ADR-041):** ✅ COMPLETED
+    - [x] บังคับใช้ RegEx รหัสนักศึกษา 12 หลัก `^\d{11}-\d$` พร้อม Real-time Masking แนะนำการพิมพ์
+    - [x] ป้องกันรหัสนักศึกษาซ้ำทั้งตอนเพิ่ม (`POST /api/users`) และตอนแก้ไข (`PUT /api/users/:id`)
+    - [x] Cascading Update ไปยัง `session_attendance`, `access_logs`, RAM Cache และ `users_cache.json` บนบอร์ด Uno Q
+    - [x] ชุดทดสอบ `tests/test_user_update.js` ผ่านครบ 4/4 ข้อ (100% pass)
+23. **[TASK-23] สถาปัตยกรรมการลบผู้ใช้งานแบบกลุ่มด้วย Checkbox และ UART Pacing (ADR-042):** ✅ COMPLETED
+    - [x] เพิ่ม Checkbox เลือกรายชื่อผู้ใช้แบบ Filter-aware Select All พร้อม Floating Action Bar และ Modal ยืนยันก่อนลบ
+    - [x] ล้าง Slot ลายนิ้วมือ 3 สล็อตต่อคนในเซนเซอร์ R307 ด้วย Hardware UART Pacing (หน่วง 35ms ต่อคำสั่ง)
+    - [x] คงรักษาประวัติการเข้าเรียนในอดีต (`session_attendance`, `access_logs`) ไม่ทำลายข้อมูลเกรดของอาจารย์
+    - [x] ชุดทดสอบ `tests/test_user_bulk_delete.js` ผ่านครบ 3/3 ข้อ (100% pass)
+24. **[TASK-24] สถาปัตยกรรมระบบหลายบัญชี RBAC, Strict Subject Scoping และเกราะป้องกัน DB Conflict (ADR-043):** ✅ COMPLETED
+    - [x] ระบบสิทธิ์ 2 ระดับ: `super_admin` (ควบคุมฮาร์ดแวร์, จัดการระบบ) และ `teacher` (ดูและส่งออก Excel เฉพาะวิชาที่สอน)
+    - [x] Step 0 Pre-flight SQL Migration บนตาราง `admins` เพิ่ม `role`, `instructor_name`, `assigned_subjects` (JSONB)
+    - [x] ผูกสิทธิ์อาจารย์ผ่านรหัสวิชา `subject_code` ป้องกันสิทธิ์หลุดเมื่อ Re-import ตารางสอนภาคเรียนใหม่
+    - [x] Row-existence Check สดจาก DB สกัดกั้น Token ของบัญชีที่ถูกลบ พร้อม Fallback `role || 'super_admin'` ป้องกัน Downtime
+    - [x] ป้องกัน Self-lockout และการลบ Super Admin คนสุดท้าย พร้อมระบบ Manual Attendance Override (`ON_TIME`, `LATE`, `ABSENT`)
+    - [x] แก้ไขบั๊ก Sequencing ID collision ใน `schedules_manager.js` ด้วย `Math.max(0, ...ids) + 1`
+    - [x] ชุดทดสอบ `tests/test_rbac_accounts.js` (12 ข้อ) และ Node Test รวมผ่านครบ 43/43, Python 18/18 (รวม 61 ข้อผ่านฉลุย 100%)
+25. **[TASK-25] การตรวจสอบตรรกะโฟลว์ชาร์ตการทำงานระบบ (Flowchart Logic & Sequence Audit):** ✅ COMPLETED
+    - [x] ตรวจสอบไฟล์ไดอะแกรม `iot_fingerprint.drawio` เทียบกับสถาปัตยกรรมจริงของระบบ
+    - [x] ระบุ 4 ข้อบกพร่องทางตรรกะ (Logic Bugs): ลูกศรกลับทิศของ Already Checked In, การหลุดข้ามเงื่อนไขเวลาเรียน (Out-of-schedule bypass), การคิวดิสก์ออฟไลน์แบบไม่มีเงื่อนไข Wi-Fi, และการขาดเกณฑ์คะแนน Match Score
+    - [x] ตรวจสอบความถูกต้องและสอดคล้องกับ `docs/flowchart_basic_workflow.drawio` ในระบบ
+26. **[TASK-26] การตรวจสอบประวัติ Git Log เชิงลึกและการแก้ปัญหาบัญชีถูก Flag (ADR-044):** ✅ COMPLETED
+    - [x] ตรวจสอบประวัติ 103 Commits ทั้งหมดเพื่อหาสาเหตุที่ระบบ GitHub Automated Abuse Detector ทำการ Flag บัญชี
+    - [x] สรุป 4 ปัจจัย: Native Binary Executables (.node 9.5MB) ใน `node_modules` ยุคแรก, คีย์และ DB ลายนิ้วมือในอดีต, และความถี่การ Push โค้ดด้วย AI
+    - [x] ยื่น Reinstatement Request พร้อมหนังสือชี้แจงภาษาอังกฤษอย่างเป็นทางการต่อ GitHub Support
+    - [x] กำหนดระเบียบ Git Security Hygiene และนโยบายสกัดกั้นไฟล์ไบนารีใน ADR-044

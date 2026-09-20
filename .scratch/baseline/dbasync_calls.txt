@@ -1,0 +1,37 @@
+72:    const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+243:  const candidates = await dbAsync.all(`
+297:    const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [userId]);
+301:    const countRow = await dbAsync.get('SELECT COUNT(*) as count FROM users WHERE in_sensor = 1');
+308:      const lruUser = await dbAsync.get(`
+317:        await dbAsync.run('UPDATE users SET in_sensor = 0 WHERE id = ?', [lruUser.id]);
+323:    await dbAsync.run('UPDATE users SET in_sensor = 1 WHERE id = ?', [userId]);
+366:      let user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [mappedUserId]);
+368:        user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [fingerprint_id]);
+375:        await dbAsync.run("UPDATE users SET last_scanned_at = datetime('now', '+7 hours') WHERE id = ?", [userId]);
+431:    const insertResult = await dbAsync.run(`
+483:      await dbAsync.run('DELETE FROM users WHERE id = ?', [userId]);
+614:          const owner = await dbAsync.get('SELECT name FROM users WHERE id = ?', [mappedOwnerId]);
+735:          const userExists = await dbAsync.get('SELECT id FROM users WHERE id = ?', [mappedUserId]);
+740:            const fallbackUser = await dbAsync.get('SELECT id FROM users WHERE id = ?', [slotId]);
+746:        const existingUser = await dbAsync.get('SELECT id, fingerprint_template FROM users WHERE id = ?', [targetUserId]);
+758:        await dbAsync.run('UPDATE users SET fingerprint_template = ?, in_sensor = 1 WHERE id = ?', [combinedTemplate, targetUserId]);
+808:    const admin = await dbAsync.get('SELECT * FROM admins WHERE username = ?', [username]);
+853:    const admin = await dbAsync.get('SELECT * FROM admins WHERE id = ?', [req.admin.id]);
+861:    await dbAsync.run('UPDATE admins SET password_hash = ? WHERE id = ?', [newHash, req.admin.id]);
+875:    const users = await dbAsync.all('SELECT * FROM users ORDER BY id ASC');
+893:    const existingStudent = await dbAsync.get('SELECT id, name FROM users WHERE student_id = ?', [cleanStudentId]);
+901:    const allExisting = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+915:    await dbAsync.run(
+937:    await dbAsync.run('DELETE FROM users WHERE id = ?', [id]);
+965:    const logs = await dbAsync.all(`
+1007:    const totalUsers = (await dbAsync.get('SELECT COUNT(*) as count FROM users')).count;
+1008:    const totalLogs = (await dbAsync.get('SELECT COUNT(*) as count FROM access_logs')).count;
+1009:    const grantedToday = (await dbAsync.get(`
+1013:    const deniedToday = (await dbAsync.get(`
+1228:  const user = await dbAsync.get('SELECT * FROM users WHERE id = ?', [id]);
+1264:  const usersWithTemplate = await dbAsync.all('SELECT id, fingerprint_template FROM users WHERE fingerprint_template IS NOT NULL AND length(fingerprint_template) >= 512');
+1307:  const allUsers = await dbAsync.all('SELECT id FROM users ORDER BY id ASC');
+1536:      const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+1586:      const users = await dbAsync.all('SELECT id, name, student_id FROM users');
+1662:            await dbAsync.run("UPDATE users SET last_scanned_at = ? WHERE id = ?", [dbTimestamp, userId]);
+1698:        const insertResult = await dbAsync.run(`
